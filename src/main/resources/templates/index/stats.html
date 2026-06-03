@@ -1,0 +1,88 @@
+<!-- summary cards -->
+<div class="stats-row" style="grid-template-columns:repeat(4,1fr)">
+  <div class="stat-card">
+    <div class="stat-label">路由总数</div>
+    <div class="stat-value" th:text="${#lists.size(routes)}">0</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">已启用</div>
+    <div class="stat-value" th:text="${enabledCount}">0</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">定时抓取</div>
+    <div class="stat-value" th:text="${scheduledCount}">0</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">运行时间</div>
+    <div class="stat-value" th:text="${uptime}">—</div>
+  </div>
+</div>
+
+<!-- empty state guidance -->
+<div th:if="${!hasData}"
+     style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r);
+            padding:20px 24px;display:flex;align-items:center;gap:16px;box-shadow:var(--sh);">
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)"
+       stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;">
+    <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/>
+    <line x1="12" y1="16" x2="12.01" y2="16"/>
+  </svg>
+  <div style="font-size:13px;color:var(--muted);line-height:1.6;">
+    暂无抓取数据。请在左侧选择分类，为路由配置<strong style="color:var(--text);">定时抓取</strong>，
+    或点击操作列的 <strong style="color:var(--text);">↺</strong> 立即触发一次抓取。
+  </div>
+</div>
+
+<!-- per-route metrics table -->
+<div class="card" style="padding:0;overflow-x:auto;">
+  <div class="card-head" style="padding:14px 20px;">
+    <span class="card-title">路由数据</span>
+  </div>
+  <table class="rtable" style="margin:0;">
+    <thead>
+      <tr>
+        <th style="padding-left:20px;">路径</th>
+        <th>分类</th>
+        <th>状态</th>
+        <th>已存条目</th>
+        <th>最后抓取</th>
+        <th>定时</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr th:each="stat : ${routeStats}">
+        <td class="path-cell" style="padding-left:20px;">
+          <!-- concrete paths link to items browser -->
+          <a th:if="${!#strings.contains(stat.config.path, ':')}"
+             class="stats-path-link"
+             th:hx-vals="${'{&quot;path&quot;:&quot;' + stat.config.path + '&quot;}'}"
+             hx-get="/index/items"
+             hx-target="#main-content"
+             hx-swap="innerHTML"
+             th:text="${stat.config.path}">path</a>
+          <span th:if="${#strings.contains(stat.config.path, ':')}"
+                class="stats-path-tpl"
+                th:text="${stat.config.path}">path</span>
+        </td>
+        <td>
+          <span class="cat-chip" th:text="${stat.category}">—</span>
+        </td>
+        <td>
+          <span th:class="${stat.config.enabled} ? 'pill on' : 'pill off'"
+                th:text="${stat.config.enabled} ? '开' : '关'">开</span>
+        </td>
+        <td>
+          <span th:if="${stat.itemCount > 0}" class="stats-num" th:text="${stat.itemCount}">0</span>
+          <span th:if="${stat.itemCount == 0}" class="stats-dash">—</span>
+        </td>
+        <td class="stats-time" th:text="${stat.lastFetched}">—</td>
+        <td>
+          <span th:if="${stat.config.scheduleMinutes > 0}"
+                class="pill sched"
+                th:text="'⏱ ' + ${stat.config.scheduleMinutes} + 'm'"></span>
+          <span th:if="${stat.config.scheduleMinutes == 0}" class="stats-dash">—</span>
+        </td>
+      </tr>
+    </tbody>
+  </table>
+</div>

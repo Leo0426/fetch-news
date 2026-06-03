@@ -1,0 +1,30 @@
+services:
+  fetch-news:
+    build: .
+    ports:
+      - "8080:8080"
+
+    volumes:
+      # All persistent data lives here on the host — never inside the image.
+      # The directory is created automatically by Docker on first run.
+      - ./data:/data
+
+    environment:
+      # ── JVM memory ──────────────────────────────────────────────────────────
+      # Tune to your host. Spring Boot auto-sizes within these bounds.
+      JAVA_OPTS: "-Xms128m -Xmx512m"
+
+      # ── Ollama host override ─────────────────────────────────────────────────
+      # When set, overrides the host stored in data/ai-config.json.
+      # Leave empty to use whatever is saved in the config file.
+      #
+      # Mac / Windows:  http://host.docker.internal:11434
+      # Linux:          http://host.docker.internal:11434  (requires extra_hosts below)
+      OLLAMA_HOST: ""
+
+    # Linux only: allows containers to resolve host.docker.internal → host machine.
+    # Safe to leave on Mac/Windows where Docker Desktop handles this automatically.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+    restart: unless-stopped

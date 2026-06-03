@@ -1,0 +1,144 @@
+<div class="logs-view" id="logs-view">
+
+  <!-- summary cards -->
+  <div class="stats-row" style="grid-template-columns:repeat(4,1fr);margin-bottom:20px;">
+    <div class="stat-card">
+      <div class="stat-label">总记录数</div>
+      <div class="stat-value" th:text="${total}">0</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">今日抓取</div>
+      <div class="stat-value" th:text="${todayCount}">0</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">今日失败</div>
+      <div class="stat-value"
+           th:style="${errorCount > 0} ? 'color:var(--warn)' : 'color:var(--green)'"
+           th:text="${errorCount}">0</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">当前页</div>
+      <div class="stat-value" th:text="${page + 1} + '/' + ${totalPages}">1/1</div>
+    </div>
+  </div>
+
+  <!-- filter bar -->
+  <div class="card" style="padding:14px 20px;margin-bottom:16px;">
+    <form hx-get="/index/logs"
+          hx-target="#main-content"
+          hx-swap="innerHTML"
+          style="display:flex;gap:10px;align-items:center;">
+      <input class="rt-search"
+             type="text"
+             name="q"
+             placeholder="按路由路径过滤…"
+             th:value="${filter}"
+             style="flex:1;max-width:360px;">
+      <input type="hidden" name="page" value="0">
+      <button type="submit" class="btn-small">过滤</button>
+      <a th:if="${filter != null and !#strings.isEmpty(filter)}"
+         hx-get="/index/logs"
+         hx-target="#main-content"
+         hx-swap="innerHTML"
+         href="javascript:void(0)"
+         style="font-size:12px;color:var(--subtle);text-decoration:underline;">清除</a>
+    </form>
+  </div>
+
+  <!-- log table -->
+  <div th:if="${#lists.isEmpty(entries)}"
+       style="padding:48px 0;color:var(--muted);font-size:13px;text-align:center;">
+    暂无抓取记录
+  </div>
+
+  <div th:if="${not #lists.isEmpty(entries)}" class="card" style="padding:0;overflow-x:auto;">
+    <table class="rtable" style="margin:0;">
+      <thead>
+        <tr>
+          <th style="padding-left:20px;white-space:nowrap;">时间</th>
+          <th>路由</th>
+          <th>状态</th>
+          <th style="text-align:right;">耗时</th>
+          <th style="text-align:right;">条目</th>
+          <th style="text-align:right;">新增</th>
+          <th style="padding-right:20px;">错误信息</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr th:each="e : ${entries}"
+            th:class="${!e.ok} ? 'health-row-err' : ''">
+
+          <td style="padding-left:20px;white-space:nowrap;font-size:12px;color:var(--subtle);"
+              th:text="${e.formattedTime()}">—</td>
+
+          <td>
+            <span class="stats-path-link"
+                  style="cursor:pointer;"
+                  th:text="${e.routePath()}"
+                  th:hx-get="${'/index/logs?q=' + e.routePath()}"
+                  hx-target="#main-content"
+                  hx-swap="innerHTML">—</span>
+          </td>
+
+          <td>
+            <span th:if="${e.ok}"  class="pill on">✓ 成功</span>
+            <span th:if="${!e.ok}" class="pill off">✕ 失败</span>
+          </td>
+
+          <td style="text-align:right;font-size:12px;font-variant-numeric:tabular-nums;">
+            <span th:if="${e.durationMs() < 1000}" th:text="${e.durationMs()} + ' ms'">—</span>
+            <span th:if="${e.durationMs() >= 1000}"
+                  th:text="${#numbers.formatDecimal(e.durationMs() / 1000.0, 1, 1)} + ' s'">—</span>
+          </td>
+
+          <td style="text-align:right;font-size:12px;" th:text="${e.itemCount()}">—</td>
+
+          <td style="text-align:right;font-size:12px;"
+              th:style="${e.newItemCount() > 0} ? 'color:var(--green);text-align:right;font-size:12px;' : 'text-align:right;font-size:12px;color:var(--muted);'"
+              th:text="${e.newItemCount() > 0} ? '+' + ${e.newItemCount()} : '—'">—</td>
+
+          <td style="padding-right:20px;max-width:260px;">
+            <span th:if="${e.errorDetail() != null}"
+                  class="health-err-text"
+                  th:title="${e.errorDetail()}"
+                  th:text="${#strings.abbreviate(e.errorDetail(), 80)}">—</span>
+          </td>
+
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- pagination -->
+  <div th:if="${totalPages > 1}"
+       style="display:flex;gap:6px;justify-content:center;margin-top:18px;flex-wrap:wrap;">
+
+    <button th:disabled="${page == 0}"
+            th:class="${page == 0} ? 'btn-small disabled' : 'btn-small'"
+            hx-get="/index/logs"
+            hx-target="#main-content"
+            hx-swap="innerHTML"
+            th:hx-vals="${'{&quot;page&quot;:' + (page - 1) + (filter != null and !#strings.isEmpty(filter) ? ',&quot;q&quot;:&quot;' + filter + '&quot;' : '') + '}'}"
+            >← 上一页</button>
+
+    <th:block th:each="p : ${pageWindow}">
+      <span th:if="${p == -1}" style="padding:4px 2px;color:var(--muted);">…</span>
+      <button th:if="${p != -1}"
+              th:class="${p == page} ? 'btn-small active' : 'btn-small'"
+              hx-get="/index/logs"
+              hx-target="#main-content"
+              hx-swap="innerHTML"
+              th:hx-vals="${'{&quot;page&quot;:' + p + (filter != null and !#strings.isEmpty(filter) ? ',&quot;q&quot;:&quot;' + filter + '&quot;' : '') + '}'}"
+              th:text="${p + 1}">1</button>
+    </th:block>
+
+    <button th:disabled="${page >= totalPages - 1}"
+            th:class="${page >= totalPages - 1} ? 'btn-small disabled' : 'btn-small'"
+            hx-get="/index/logs"
+            hx-target="#main-content"
+            hx-swap="innerHTML"
+            th:hx-vals="${'{&quot;page&quot;:' + (page + 1) + (filter != null and !#strings.isEmpty(filter) ? ',&quot;q&quot;:&quot;' + filter + '&quot;' : '') + '}'}"
+            >下一页 →</button>
+  </div>
+
+</div>

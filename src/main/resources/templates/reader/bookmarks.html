@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>收藏夹</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/admin.css">
+  <style>
+    body { background: var(--bg); }
+    .bm-wrap { max-width: 1120px; margin: 0 auto; padding: 28px 20px 60px; }
+
+    .bm-head {
+      display: flex; justify-content: space-between; align-items: flex-end;
+      margin-bottom: 28px; padding-bottom: 16px;
+      border-bottom: 2px solid var(--border);
+    }
+    .bm-title { font-size: 22px; font-weight: 750; color: var(--text); letter-spacing: -.3px; }
+    .bm-count { font-size: 13px; color: var(--subtle); margin-top: 3px; }
+    .bm-nav   { display: flex; gap: 14px; align-items: center; }
+    .bm-link  { font-size: 12px; color: var(--accent); text-decoration: none; font-weight: 500; }
+    .bm-link:hover { text-decoration: underline; }
+
+    .bm-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+      gap: 8px;
+    }
+
+    .bm-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-left: 3px solid #f59e0b;
+      border-radius: var(--r); padding: 11px 14px 11px 12px;
+      transition: border-color .12s, box-shadow .12s;
+    }
+    .bm-card:hover {
+      border-color: #f59e0b;
+      box-shadow: 0 2px 8px rgba(245,158,11,.1);
+    }
+    .bm-card-title {
+      display: block; font-size: 13px; font-weight: 500;
+      line-height: 1.45; color: var(--text); text-decoration: none;
+      margin-bottom: 8px; transition: color .1s;
+    }
+    .bm-card-title:hover { color: var(--accent); }
+    .bm-card-meta { display: flex; align-items: center; gap: 6px; }
+    .bm-src {
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 3px; padding: 1px 5px;
+      font-size: 10px; font-weight: 700; letter-spacing: .03em; color: var(--muted);
+    }
+    .bm-date { font-size: 11px; color: var(--subtle); }
+    .bm-remove {
+      margin-left: auto; font-size: 10px; font-weight: 600;
+      color: var(--subtle); background: none; border: 1px solid var(--border);
+      border-radius: 3px; padding: 2px 7px; cursor: pointer;
+      transition: color .1s, border-color .1s;
+    }
+    .bm-remove:hover { color: var(--warn); border-color: var(--warn); }
+
+    .bm-empty {
+      padding: 48px 0; text-align: center;
+      color: var(--subtle); font-size: 14px; line-height: 2;
+    }
+
+    @media (max-width: 600px) {
+      .bm-grid { grid-template-columns: 1fr; }
+      .bm-head { flex-direction: column; align-items: flex-start; gap: 8px; }
+    }
+  </style>
+  <script src="/htmx.min.js"></script>
+</head>
+<body>
+<div class="bm-wrap">
+
+  <div class="bm-head">
+    <div>
+      <div class="bm-title">★ 收藏夹</div>
+      <div class="bm-count" th:text="${#lists.size(items)} + ' 条收藏'">0 条收藏</div>
+    </div>
+    <div class="bm-nav">
+      <a href="/reader" class="bm-link">← 返回速览</a>
+      <a href="/index" class="bm-link">路由配置 →</a>
+    </div>
+  </div>
+
+  <div th:if="${#lists.isEmpty(items)}" class="bm-empty">
+    还没有收藏任何文章<br>
+    <span style="font-size:12px;">在速览页点击文章卡片右下角的书签图标即可收藏</span>
+  </div>
+
+  <div th:if="${not #lists.isEmpty(items)}" class="bm-grid">
+    <div th:each="item : ${items}" class="bm-card">
+
+      <a class="bm-card-title"
+         th:href="${item.link()}"
+         th:text="${not #strings.isEmpty(item.title())} ? ${item.title()} : ${item.link()}"
+         target="_blank" rel="noopener noreferrer">标题</a>
+
+      <div class="bm-card-meta">
+        <span class="bm-src" th:text="${item.sourceLabel()}">来源</span>
+        <span class="bm-date" th:text="${item.formattedAge()}">收藏时间</span>
+        <!-- HTMX delete: returns empty HTML → HTMX removes the card via outerHTML swap -->
+        <form style="display:contents">
+          <input type="hidden" name="link" th:value="${item.link()}">
+          <button type="button" class="bm-remove"
+                  hx-delete="/reader/bookmark"
+                  hx-target="closest .bm-card"
+                  hx-swap="outerHTML"
+                  hx-include="closest form"
+                  hx-confirm="确认取消收藏？">
+            取消收藏
+          </button>
+        </form>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,27 @@
+# Version control
+.git
+.gitignore
+
+# Gradle cache and build output
+.gradle/
+build/
+
+# Local data files — must never be baked into the image
+*.db
+*.db-shm
+*.db-wal
+ai-config.json
+route-config.json
+
+# IDE
+.idea/
+*.iml
+*.xml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docs (not needed at runtime)
+docs/
+*.md

@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>路由控制台</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/admin.css">
+  <script src="/htmx.min.js"></script>
+  <script defer src="/alpine.min.js"></script>
+</head>
+<body x-data="{ modal: false, activePage: 'stats', pageTitle: '数据统计', sbOpen: false }"
+      @htmx:after-swap.window="if ($event.detail.target.id === 'modal-inner') modal = true"
+      @closemodal.window="modal = false"
+      @keydown.escape.window="sbOpen = false; modal = false">
+
+  <div class="app">
+    <!-- ── Sidebar ──────────────────────────────────────────── -->
+    <nav class="sidebar" :class="sbOpen && 'sb-open'" @click="sbOpen = false">
+      <div class="sb-brand">
+        <div class="sb-logo">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="18" height="18">
+            <rect x="1" y="7" width="11" height="2.2" rx="1.1" fill="white"/>
+            <rect x="1" y="12" width="8.5" height="1.8" rx="0.9" fill="white" opacity="0.8"/>
+            <rect x="1" y="17" width="9.5" height="1.8" rx="0.9" fill="white" opacity="0.8"/>
+            <circle cx="21.5" cy="23.5" r="1.7" fill="white"/>
+            <path d="M 18 23.5 A 3.5 3.5 0 0 0 21.5 20" stroke="white" stroke-width="1.7" fill="none" stroke-linecap="round"/>
+            <path d="M 15 23.5 A 6.5 6.5 0 0 0 21.5 17" stroke="white" stroke-width="1.7" fill="none" stroke-linecap="round" opacity="0.65"/>
+          </svg>
+        </div>
+        <div>
+          <div class="sb-name">fetch-news</div>
+          <div class="sb-ver" th:text="'v' + ${version}">v0.1.0</div>
+        </div>
+      </div>
+
+      <div class="sb-nav">
+        <div class="nav-label">概览</div>
+        <a class="nav-item" :class="{ active: activePage === 'stats' }"
+           hx-get="/index/stats"
+           hx-target="#main-content"
+           hx-swap="innerHTML"
+           @click="activePage = 'stats'; pageTitle = '数据统计'"
+           href="javascript:void(0)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="12" width="4" height="9"/><rect x="10" y="7" width="4" height="14"/>
+            <rect x="17" y="3" width="4" height="18"/>
+          </svg>
+          数据统计
+        </a>
+
+        <div class="nav-label" style="margin-top:10px;">阅读</div>
+        <a class="nav-item" href="/reader" target="_blank">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
+            <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
+          </svg>
+          今日速览
+        </a>
+
+        <div class="nav-label" style="margin-top:10px;">工具</div>
+        <a class="nav-item" :class="{ active: activePage === 'ai' }"
+           hx-get="/index/ai"
+           hx-target="#main-content"
+           hx-swap="innerHTML"
+           @click="activePage = 'ai'; pageTitle = 'AI 设置'"
+           href="javascript:void(0)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"/>
+          </svg>
+          AI 设置
+        </a>
+        <a class="nav-item" :class="{ active: activePage === 'health' }"
+           hx-get="/index/health"
+           hx-target="#main-content"
+           hx-swap="innerHTML"
+           @click="activePage = 'health'; pageTitle = 'Feed 健康'"
+           href="javascript:void(0)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+          </svg>
+          Feed 健康
+        </a>
+        <a class="nav-item" :class="{ active: activePage === 'logs' }"
+           hx-get="/index/logs"
+           hx-target="#main-content"
+           hx-swap="innerHTML"
+           @click="activePage = 'logs'; pageTitle = '抓取日志'"
+           href="javascript:void(0)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+            <line x1="16" y1="13" x2="8" y2="13"/>
+            <line x1="16" y1="17" x2="8" y2="17"/>
+            <polyline points="10 9 9 9 8 9"/>
+          </svg>
+          抓取日志
+        </a>
+
+        <div class="nav-label" style="margin-top:10px;">分类</div>
+        <th:block th:each="cat : ${categoryList}">
+          <a class="nav-item"
+             :class="{ active: activePage === 'cat:' + $el.dataset.cat }"
+             th:attr="data-cat=${cat.name}"
+             th:hx-get="'/index/category?name=' + ${cat.name}"
+             hx-target="#main-content"
+             hx-swap="innerHTML"
+             @click="activePage = 'cat:' + $el.dataset.cat; pageTitle = $el.dataset.cat"
+             href="javascript:void(0)">
+            <span th:text="${cat.name}">分类</span>
+            <span class="nav-badge" th:text="${cat.count}">0</span>
+            <span th:if="${failingCategories != null and failingCategories.contains(cat.name)}"
+                  class="health-dot health-dot--err"
+                  style="margin-left:3px;flex-shrink:0;"
+                  title="该分类下有路由抓取失败"></span>
+          </a>
+        </th:block>
+      </div>
+
+      <div class="sb-footer">
+        <div class="sb-status-head">
+          <span class="dot-live"></span>
+          <span>系统运行正常</span>
+        </div>
+        <div class="sb-row">
+          <span>运行时间</span>
+          <span class="sb-row-val" th:text="${uptime}">—</span>
+        </div>
+        <div class="sb-row">
+          <span>路由总数</span>
+          <span class="sb-row-val" th:text="${#lists.size(routes)}">0</span>
+        </div>
+        <div class="sb-row">
+          <span>版本</span>
+          <span class="sb-row-val" th:text="${version}">—</span>
+        </div>
+      </div>
+    </nav>
+
+    <!-- ── Sidebar overlay (mobile) ─────────────────────────── -->
+    <div class="sidebar-overlay" :class="sbOpen && 'sb-open'" @click="sbOpen = false"></div>
+
+    <!-- ── Main ─────────────────────────────────────────────── -->
+    <div class="app-main">
+      <header class="topbar">
+        <button class="hamburger" @click="sbOpen = !sbOpen" aria-label="菜单">☰</button>
+        <span class="topbar-title" x-text="pageTitle">数据统计</span>
+        <span class="ver-tag" th:text="'v' + ${version}">v0.1.0</span>
+      </header>
+
+      <div class="content" id="main-content" th:insert="~{index/stats}"></div>
+    </div>
+  </div>
+
+  <!-- ── Modal overlay ───────────────────────────────────────── -->
+  <div class="modal-back" x-show="modal" x-cloak @click.self="modal = false">
+    <div class="modal" @click.stop>
+      <div id="modal-inner">
+        <!-- loaded via HTMX -->
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>

@@ -1,0 +1,136 @@
+<th:block th:fragment="modal">
+  <div class="modal-head">
+    <span class="modal-ttl"
+          th:text="${isNew} ? '新建挂载' : ${selected.path}">路由设置</span>
+    <button class="modal-x" type="button" @click="modal = false">✕</button>
+  </div>
+
+  <div class="modal-body">
+    <form hx-post="/index/routes"
+          hx-target="#modal-inner"
+          hx-swap="innerHTML"
+          x-data="{ srcPath: [[${isNew} ? '' : ${selected.sourcePath}]] }">
+
+      <div class="field-row">
+        <div class="field">
+          <span>挂载路径</span>
+          <input name="path" type="text"
+                 autocomplete="off"
+                 th:readonly="${!isNew}"
+                 th:value="${isNew} ? '' : ${selected.path}"
+                 th:placeholder="${isNew} ? '/my-hn' : ''">
+        </div>
+        <div class="field">
+          <span>来源路由</span>
+          <select name="sourcePath"
+                  th:disabled="${!isNew and selected.path == selected.sourcePath}"
+                  x-model="srcPath">
+            <option th:each="r : ${sourceRoutes}"
+                    th:value="${r.path}"
+                    th:selected="${!isNew and r.path == selected.sourcePath}"
+                    th:text="${r.path}"></option>
+          </select>
+          <input th:if="${!isNew and selected.path == selected.sourcePath}"
+                 type="hidden" name="sourcePath"
+                 th:value="${selected.sourcePath}">
+        </div>
+      </div>
+
+      <!-- feedUrl: shown when source is /rss -->
+      <div class="field" x-show="srcPath === '/rss'" x-cloak>
+        <span>Feed URL</span>
+        <input name="feedUrl" type="url" autocomplete="off"
+               placeholder="https://example.com/feed.xml"
+               th:value="${!isNew and selected.feedUrl() != null} ? ${selected.feedUrl()} : ''">
+        <span class="field-hint">RSS 2.0 或 Atom 订阅地址</span>
+      </div>
+
+      <div class="field-row">
+        <div class="field">
+          <span>路由缓存（秒）</span>
+          <input name="routeCacheTtlSeconds" type="number" min="1" step="1"
+                 th:value="${isNew} ? 300 : ${selected.routeCacheTtlSeconds}">
+        </div>
+        <div class="field">
+          <span>详情缓存（秒）</span>
+          <input name="detailCacheTtlSeconds" type="number" min="1" step="1"
+                 th:value="${isNew} ? 1800 : ${selected.detailCacheTtlSeconds}">
+        </div>
+      </div>
+
+      <div class="field-row">
+        <div class="field">
+          <span>定时间隔（分钟）</span>
+          <input name="scheduleMinutes" type="number" min="0" step="1"
+                 placeholder="0"
+                 th:value="${isNew} ? 0 : ${selected.scheduleMinutes}"
+                 th:readonly="${!isNew and !selected.isSchedulable()}">
+          <span class="field-hint"
+                th:if="${!isNew and !selected.isSchedulable()}">参数化路由不支持定时抓取</span>
+          <span class="field-hint"
+                th:if="${isNew or selected.isSchedulable()}"
+                th:text="${(isNew or selected.scheduleMinutes == 0)} ? '0 = 不启用' : '每 ' + ${selected.scheduleMinutes} + ' 分钟'"
+                th:class="${(!isNew and selected.scheduleMinutes > 0 and (isNew or selected.scheduleCron == null))} ? 'field-hint ok' : 'field-hint'"></span>
+        </div>
+        <div class="field">
+          <span>Cron 表达式（优先）</span>
+          <input name="scheduleCron" type="text"
+                 autocomplete="off"
+                 placeholder="0 0 8 * * *"
+                 th:value="${isNew or selected.scheduleCron == null} ? '' : ${selected.scheduleCron}"
+                 th:readonly="${!isNew and !selected.isSchedulable()}">
+          <span th:if="${!isNew and selected.scheduleCron != null}"
+                th:text="'有效 · ' + ${selected.scheduleCron}"
+                class="field-hint ok"></span>
+          <span class="field-hint"
+                th:if="${isNew or selected.scheduleCron == null}">秒 分 时 日 月 周 · 留空则用间隔</span>
+        </div>
+      </div>
+
+      <label class="toggle-row">
+        <input name="enabled" type="checkbox" value="true"
+               th:checked="${isNew or selected.enabled}">
+        启用路由
+      </label>
+
+      <div class="form-acts">
+        <button class="btn primary" type="submit"
+                th:text="${isNew} ? '添加挂载' : '保存'">保存</button>
+        <button class="btn" type="button" @click="modal = false">取消</button>
+        <span th:if="${message != null}" class="form-msg ok" th:text="${message}">已保存</span>
+        <span th:if="${error != null}"   class="form-msg err" th:text="${error}">保存失败</span>
+      </div>
+
+    </form>
+  </div>
+
+  <!-- fetch log -->
+  <div class="log-section"
+       th:if="${!isNew and recentLogs != null and not #lists.isEmpty(recentLogs)}">
+    <div class="log-head">
+      <span class="log-title">最近抓取</span>
+      <span class="log-sub" th:text="'共 ' + ${#lists.size(recentLogs)} + ' 条'"></span>
+    </div>
+    <table class="log-table">
+      <thead>
+        <tr>
+          <th>时间</th><th>耗时</th><th>条目</th><th>新增</th><th>状态</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr th:each="e : ${recentLogs}"
+            th:class="${e.ok} ? '' : 'log-row-err'">
+          <td th:text="${e.formattedTime()}"></td>
+          <td th:text="${e.durationMs} + ' ms'"></td>
+          <td th:text="${e.itemCount}"></td>
+          <td th:text="${e.newItemCount > 0} ? '+' + ${e.newItemCount} : '—'"></td>
+          <td>
+            <span th:if="${e.ok}"  class="pill on"  style="font-size:10px;">ok</span>
+            <span th:if="${!e.ok}" class="pill off" style="font-size:10px;cursor:help;"
+                  th:title="${e.errorDetail}">err</span>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</th:block>

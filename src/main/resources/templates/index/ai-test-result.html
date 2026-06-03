@@ -1,0 +1,54 @@
+<!-- Inline connectivity test result, swapped into #ai-test-result -->
+<div style="border:1px solid var(--border);border-radius:var(--r);padding:14px 16px;display:grid;gap:10px;background:var(--surface2);">
+
+  <!-- server row -->
+  <div style="display:flex;align-items:center;gap:8px;font-size:13px;">
+    <span th:if="${status.serverReachable()}"
+          style="color:var(--green);font-weight:700;">✓</span>
+    <span th:unless="${status.serverReachable()}"
+          style="color:var(--warn);font-weight:700;">✗</span>
+    <span th:if="${status.serverReachable()}">
+      服务器可达
+      <code style="background:var(--border);padding:1px 5px;border-radius:3px;font-size:11px;"
+            th:text="'v' + ${status.serverVersion()}">v?</code>
+    </span>
+    <span th:unless="${status.serverReachable()}"
+          style="color:var(--warn);"
+          th:text="'服务器不可达：' + ${status.error()}">—</span>
+  </div>
+
+  <!-- model row (only when server is up) -->
+  <div th:if="${status.serverReachable()}"
+       style="display:flex;align-items:flex-start;gap:8px;font-size:13px;">
+    <span th:if="${status.modelAvailable()}"
+          style="color:var(--green);font-weight:700;">✓</span>
+    <span th:unless="${status.modelAvailable()}"
+          style="color:var(--warn);font-weight:700;">✗</span>
+    <div style="display:grid;gap:6px;">
+      <span th:if="${status.modelAvailable()}"
+            th:text="'模型 ' + ${configuredModel} + ' 已就绪'">—</span>
+      <span th:unless="${status.modelAvailable()}"
+            style="color:var(--warn);"
+            th:text="'模型 ' + ${configuredModel} + ' 未找到'">—</span>
+
+      <!-- available models list -->
+      <div th:if="${!status.availableModels().isEmpty()}"
+           style="display:flex;flex-wrap:wrap;gap:4px;">
+        <span style="color:var(--subtle);font-size:11px;align-self:center;">可用：</span>
+        <th:block th:each="m : ${status.availableModels()}">
+          <code th:text="${m}"
+                th:style="${m == configuredModel or #strings.startsWith(m, configuredModel + ':')}
+                           ? 'background:var(--accent-bg);color:var(--accent);padding:1px 6px;border-radius:3px;font-size:11px;border:1px solid var(--accent)'
+                           : 'background:var(--border);padding:1px 6px;border-radius:3px;font-size:11px;'">model</code>
+        </th:block>
+      </div>
+      <div th:if="${status.availableModels().isEmpty()}"
+           style="font-size:11px;color:var(--subtle);">
+        服务器上暂无已下载模型，请先运行
+        <code style="background:var(--border);padding:1px 5px;border-radius:3px;"
+              th:text="'ollama pull ' + ${configuredModel}">ollama pull llama3.2</code>
+      </div>
+    </div>
+  </div>
+
+</div>

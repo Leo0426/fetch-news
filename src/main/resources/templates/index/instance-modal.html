@@ -1,0 +1,162 @@
+<div class="modal-head">
+  <span class="modal-ttl"
+        th:text="${isFeedUrl} ? '添加 RSS 订阅' : '添加实例'">添加实例</span>
+  <button class="modal-x" type="button" @click="modal = false">✕</button>
+</div>
+
+<!-- ── feedUrl mode (generic /rss route) ──────────────────────────────── -->
+<th:block th:if="${isFeedUrl}">
+  <div class="modal-body">
+    <form hx-post="/index/routes" hx-target="#modal-inner" hx-swap="innerHTML">
+      <input type="hidden" name="sourcePath" th:value="${sourcePath}">
+
+      <div class="field">
+        <span>挂载路径</span>
+        <input name="path" type="text" autocomplete="off"
+               placeholder="/my-blog" spellcheck="false">
+        <span class="field-hint">自定义访问路径，例如 /v2ex 或 /blog/sspai</span>
+      </div>
+
+      <div class="field">
+        <span>Feed URL</span>
+        <input name="feedUrl" type="url" autocomplete="off"
+               placeholder="https://example.com/feed.xml" spellcheck="false">
+        <span class="field-hint">RSS 2.0 或 Atom 格式的订阅地址</span>
+      </div>
+
+      <div class="field-row">
+        <div class="field">
+          <span>路由缓存（秒）</span>
+          <input name="routeCacheTtlSeconds" type="number" min="1" step="1"
+                 th:value="${defaultRouteTtl}">
+        </div>
+        <div class="field">
+          <span>详情缓存（秒）</span>
+          <input name="detailCacheTtlSeconds" type="number" min="1" step="1"
+                 th:value="${defaultDetailTtl}">
+        </div>
+      </div>
+
+      <div class="field">
+        <span>定时抓取（分钟）</span>
+        <input name="scheduleMinutes" type="number" min="0" step="1" value="0">
+        <span class="field-hint">0 = 不启用</span>
+      </div>
+
+      <label class="toggle-row">
+        <input name="enabled" type="checkbox" value="true" checked>
+        启用路由
+      </label>
+
+      <div class="form-acts">
+        <button class="btn primary" type="submit">添加</button>
+        <button class="btn" type="button" @click="modal = false">取消</button>
+      </div>
+    </form>
+  </div>
+</th:block>
+
+<!-- ── param mode (parameterized routes like /hn/:feed) ───────────────── -->
+<th:block th:if="${!isFeedUrl}">
+  <!--
+    x-data reads param names from hidden .param-name inputs rendered by Thymeleaf,
+    builds the concrete path live, and binds it to the hidden form field.
+  -->
+  <div class="modal-body" x-data="instanceApp()">
+
+    <!-- Thymeleaf writes the source path + one hidden input per param name -->
+    <input class="instance-source" type="hidden" th:value="${sourcePath}">
+    <input th:each="p : ${params}" class="param-name" type="hidden" th:value="${p}">
+
+    <div class="field">
+      <span>路由模板</span>
+      <input type="text" readonly
+             style="font-family:monospace;font-size:12.5px;"
+             th:value="${sourcePath}">
+    </div>
+
+    <!-- One text input per :param -->
+    <template x-for="p in paramNames" :key="p">
+      <div class="field">
+        <span x-text="':' + p"></span>
+        <input type="text"
+               :placeholder="p"
+               x-model.trim="vals[p]"
+               autocomplete="off"
+               spellcheck="false">
+      </div>
+    </template>
+
+    <div class="field">
+      <span>生成路径</span>
+      <input type="text" readonly
+             style="font-family:monospace;font-size:12.5px;"
+             :value="generatedPath">
+      <span class="field-hint"
+            :class="isComplete ? 'ok' : ''"
+            x-text="isComplete ? '路径完整，可以保存' : '请填写所有参数'"></span>
+    </div>
+
+    <form hx-post="/index/routes" hx-target="#modal-inner" hx-swap="innerHTML">
+      <!-- The hidden path input is kept in sync by Alpine -->
+      <input type="hidden" name="path" :value="generatedPath">
+      <input type="hidden" name="sourcePath" th:value="${sourcePath}">
+
+      <div class="field-row">
+        <div class="field">
+          <span>路由缓存（秒）</span>
+          <input name="routeCacheTtlSeconds" type="number" min="1" step="1"
+                 th:value="${defaultRouteTtl}">
+        </div>
+        <div class="field">
+          <span>详情缓存（秒）</span>
+          <input name="detailCacheTtlSeconds" type="number" min="1" step="1"
+                 th:value="${defaultDetailTtl}">
+        </div>
+      </div>
+
+      <div class="field">
+        <span>定时抓取（分钟）</span>
+        <input name="scheduleMinutes" type="number" min="0" step="1" value="0">
+        <span class="field-hint">0 = 不启用</span>
+      </div>
+
+      <label class="toggle-row">
+        <input name="enabled" type="checkbox" value="true" checked>
+        启用路由
+      </label>
+
+      <div class="form-acts">
+        <button class="btn primary" type="submit" :disabled="!isComplete">添加</button>
+        <button class="btn" type="button" @click="modal = false">取消</button>
+      </div>
+    </form>
+  </div>
+
+  <script>
+    function instanceApp() {
+      return {
+        source: '',
+        paramNames: [],
+        vals: {},
+        init() {
+          this.source = this.$el.querySelector('.instance-source').value;
+          this.paramNames = Array.from(this.$el.querySelectorAll('.param-name'))
+            .map(el => el.value).filter(v => v.length > 0);
+          this.vals = Object.fromEntries(this.paramNames.map(p => [p, '']));
+        },
+        get generatedPath() {
+          let p = this.source;
+          for (const k of this.paramNames) {
+            p = p.replace(':' + k, this.vals[k] || (':' + k));
+          }
+          return p;
+        },
+        get isComplete() {
+          return this.paramNames.length > 0 &&
+                 this.paramNames.every(p => (this.vals[p] || '').length > 0);
+        }
+      };
+    }
+  </script>
+</th:block>

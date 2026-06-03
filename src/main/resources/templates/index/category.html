@@ -1,0 +1,166 @@
+<div class="cat-view" id="cat-view">
+
+  <div class="cat-header">
+    <div class="cat-header-left">
+      <span class="cat-title" th:text="${category}">分类</span>
+      <span class="cat-count"
+            th:text="'共 ' + ${#lists.size(routes)} + ' 个路由'"></span>
+    </div>
+    <button type="button" class="btn primary"
+            hx-get="/index/routes/new"
+            hx-target="#modal-inner"
+            hx-swap="innerHTML">
+      ＋ 新建挂载
+    </button>
+  </div>
+
+  <div th:if="${#lists.isEmpty(routes)}"
+       style="padding:48px 0;color:var(--muted);font-size:13px;text-align:center;">
+    该分类下暂无路由
+  </div>
+
+  <div th:if="${not #lists.isEmpty(routes)}" class="card" style="padding:0;">
+    <table class="rtable" style="margin:0;">
+      <thead>
+        <tr>
+          <th style="padding-left:20px;">路径</th>
+          <th>说明 / 来源</th>
+          <th>状态</th>
+          <th>定时</th>
+          <th style="width:130px;padding-right:20px;">操作</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr th:each="route : ${routes}">
+          <td class="path-cell" style="padding-left:20px;">
+            <span th:if="${route.path == route.sourcePath}"
+                  class="path-chip"
+                  th:text="${route.path}"></span>
+            <span th:if="${route.path != route.sourcePath}"
+                  class="path-chip instance"
+                  th:text="${route.path}"></span>
+          </td>
+          <td>
+            <div class="desc-strategy-wrap">
+              <span th:if="${descriptions[route.path] != null}"
+                    class="desc-cell"
+                    th:text="${descriptions[route.path]}"></span>
+              <span th:if="${descriptions[route.path] == null and route.path != route.sourcePath}"
+                    class="src-cell"
+                    th:text="'→ ' + ${route.sourcePath}"></span>
+              <span th:if="${descriptions[route.path] == null and route.path == route.sourcePath}"
+                    class="src-cell">—</span>
+              <span th:if="${strategies[route.sourcePath] != null}"
+                    th:class="'strategy-badge ' + ${strategies[route.sourcePath] == 'RSS 代理' ? 'strategy-rss' : (strategies[route.sourcePath] == 'JSON API' ? 'strategy-json' : (strategies[route.sourcePath] == 'HTML 解析' ? 'strategy-html' : 'strategy-generic'))}"
+                    th:text="${strategies[route.sourcePath]}"></span>
+              <span th:if="${fetchDetails[route.sourcePath] != null}"
+                    class="fetch-detail"
+                    th:text="${fetchDetails[route.sourcePath]}"></span>
+            </div>
+          </td>
+          <td>
+            <!-- enabled toggle pill -->
+            <div style="display:flex;align-items:center;gap:5px;">
+              <button type="button"
+                      th:class="${route.enabled} ? 'pill on' : 'pill off'"
+                      th:text="${route.enabled} ? '开' : '关'"
+                      style="cursor:pointer;border:none;"
+                      hx-post="/index/routes/toggle"
+                      hx-target="#cat-view"
+                      hx-swap="outerHTML"
+                      th:hx-vals="${'{&quot;path&quot;:&quot;' + route.path + '&quot;,&quot;category&quot;:&quot;' + category + '&quot;}'}">
+              </button>
+              <!-- health dot: ok / err / none (no history) -->
+              <span th:if="${healthMap[route.path] != null and healthMap[route.path].healthy()}"
+                    class="health-dot health-dot--ok" title="最近抓取正常"></span>
+              <span th:if="${healthMap[route.path] != null and !healthMap[route.path].healthy()}"
+                    class="health-dot health-dot--err"
+                    th:title="${'最近失败: ' + healthMap[route.path].lastError()}"></span>
+              <span th:if="${healthMap[route.path] == null and !#strings.contains(route.path, ':')}"
+                    class="health-dot health-dot--none" title="暂无抓取记录"></span>
+            </div>
+          </td>
+          <td>
+            <span th:if="${route.scheduleMinutes > 0}"
+                  class="pill sched"
+                  th:text="'⏱ ' + ${route.scheduleMinutes} + 'm'"></span>
+            <span th:if="${route.scheduleMinutes == 0}"
+                  style="color:var(--subtle);font-size:12px;">—</span>
+          </td>
+          <td style="padding-right:20px;">
+            <div class="acts">
+              <!-- Add instance: parameterized routes and generic RSS route -->
+              <button th:if="${#strings.contains(route.path, ':') or strategies[route.path] == '通用 RSS'}"
+                      type="button" class="act" title="添加实例"
+                      hx-get="/index/routes/instance"
+                      hx-target="#modal-inner"
+                      hx-swap="innerHTML"
+                      th:hx-vals="${'{&quot;source&quot;:&quot;' + route.path + '&quot;}'}">
+                ＋
+              </button>
+              <!-- Fetch now: concrete paths only -->
+              <button th:if="${!#strings.contains(route.path, ':')}"
+                      type="button" class="act" title="立即抓取"
+                      hx-post="/index/routes/fetch"
+                      hx-target="#cat-view"
+                      hx-swap="outerHTML"
+                      th:hx-vals="${'{&quot;path&quot;:&quot;' + route.path + '&quot;,&quot;category&quot;:&quot;' + category + '&quot;}'}">
+                ↺
+              </button>
+              <!-- RSS link: concrete paths -->
+              <a th:if="${!#strings.contains(route.path, ':')}"
+                 class="act" title="打开 RSS"
+                 th:href="${route.path}" target="_blank" rel="noopener">
+                RSS
+              </a>
+              <!-- Copy RSS URL: concrete paths -->
+              <button th:if="${!#strings.contains(route.path, ':')}"
+                      type="button" class="act" title="复制 RSS 链接"
+                      th:attr="data-path=${route.path}"
+                      onclick="copyRss(this)">
+                ⎘
+              </button>
+              <button type="button" class="act" title="编辑设置"
+                      hx-get="/index/routes/edit"
+                      hx-target="#modal-inner"
+                      hx-swap="innerHTML"
+                      th:hx-vals="${'{&quot;path&quot;:&quot;' + route.path + '&quot;}'}">
+                ✏
+              </button>
+              <!-- Browse items: only for concrete paths -->
+              <button th:if="${!#strings.contains(route.path, ':')}"
+                      type="button" class="act" title="浏览数据"
+                      hx-get="/index/items"
+                      hx-target="#main-content"
+                      hx-swap="innerHTML"
+                      th:hx-vals="${'{&quot;path&quot;:&quot;' + route.path + '&quot;}'}">
+                ▤
+              </button>
+              <button type="button" class="act del" title="删除配置"
+                      hx-delete="/index/routes"
+                      hx-target="#cat-view"
+                      hx-swap="outerHTML"
+                      th:hx-vals="${'{&quot;path&quot;:&quot;' + route.path + '&quot;,&quot;category&quot;:&quot;' + category + '&quot;}'}"
+                      hx-confirm="确认删除此路由的配置？">
+                ✕
+              </button>
+            </div>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+</div>
+
+<script>
+function copyRss(btn) {
+  var url = location.origin + btn.dataset.path;
+  navigator.clipboard.writeText(url).then(function() {
+    var orig = btn.textContent;
+    btn.textContent = '✓';
+    btn.style.color = 'var(--green)';
+    setTimeout(function() { btn.textContent = orig; btn.style.color = ''; }, 1500);
+  });
+}
+</script>
