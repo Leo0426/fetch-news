@@ -1,0 +1,86 @@
+<!-- AI 配置 section, loaded into #main-content via HTMX -->
+
+<!-- stat cards -->
+<div class="stats-row" style="grid-template-columns:repeat(5,1fr);margin-bottom:16px;">
+  <div class="stat-card">
+    <div class="stat-label">状态</div>
+    <div class="stat-value" style="font-size:15px;">
+      <span th:class="${config.enabled()} ? 'pill on' : 'pill off'"
+            th:text="${config.enabled()} ? '开' : '关'">关</span>
+    </div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Ollama Host</div>
+    <div class="stat-value" style="font-size:13px;word-break:break-all;"
+         th:text="${config.host()}">http://localhost:11434</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">模型</div>
+    <div class="stat-value" style="font-size:15px;" th:text="${config.model()}">llama3.2</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">已缓存提取数</div>
+    <div class="stat-value" th:text="${extractCount}">0</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">已缓存摘要数</div>
+    <div class="stat-value" th:text="${summaryCount}">0</div>
+  </div>
+</div>
+
+<!-- config form -->
+<div class="card">
+  <div class="card-head">
+    <span class="card-title">Ollama 连接配置</span>
+  </div>
+  <div style="padding:20px;">
+
+    <form hx-post="/index/ai"
+          hx-target="#main-content"
+          hx-swap="innerHTML">
+
+      <div class="toggle-row" style="margin-bottom:16px;">
+        <input type="checkbox" name="enabled" id="ai-enabled"
+               th:checked="${config.enabled()}">
+        <label for="ai-enabled" style="font-size:13px;font-weight:600;cursor:pointer;">
+          定时爬取后自动提取全文
+        </label>
+      </div>
+
+      <div class="field-row" style="margin-bottom:14px;">
+        <div class="field">
+          <span>Host</span>
+          <input name="host" type="text" autocomplete="off"
+                 placeholder="http://localhost:11434"
+                 th:value="${config.host()}">
+          <span class="field-hint">Ollama 服务地址，本地默认 http://localhost:11434</span>
+        </div>
+        <div class="field">
+          <span>Model</span>
+          <input name="model" type="text" autocomplete="off"
+                 placeholder="llama3.2"
+                 th:value="${config.model()}">
+          <span class="field-hint">已拉取的模型名，例如 llama3.2、qwen2.5、gemma3</span>
+        </div>
+      </div>
+
+      <!-- save feedback -->
+      <div th:if="${message != null}"
+           class="form-msg ok" style="margin-bottom:10px;"
+           th:text="${message}"></div>
+
+      <div class="form-acts">
+        <button class="btn primary" type="submit">保存</button>
+        <button class="btn" type="button"
+                hx-get="/index/ai/test"
+                hx-target="#ai-test-result"
+                hx-swap="innerHTML"
+                hx-indicator="#ai-test-result">测试连接</button>
+      </div>
+    </form>
+
+    <!-- inline test result (empty until button is clicked) -->
+    <div id="ai-test-result" style="margin-top:14px;"></div>
+
+  </div>
+</div>

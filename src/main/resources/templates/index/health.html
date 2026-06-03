@@ -1,0 +1,109 @@
+<div class="health-view" id="health-view">
+
+  <!-- summary cards -->
+  <div class="stats-row" style="grid-template-columns:repeat(4,1fr);margin-bottom:20px;">
+    <div class="stat-card">
+      <div class="stat-label">有定时</div>
+      <div class="stat-value" th:text="${totalCount}">0</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">全部正常</div>
+      <div class="stat-value"
+           th:style="${healthyCount == totalCount and totalCount > 0} ? 'color:var(--green)' : ''"
+           th:text="${healthyCount}">0</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">有失败</div>
+      <div class="stat-value"
+           th:style="${failingCount > 0} ? 'color:var(--warn)' : ''"
+           th:text="${failingCount}">0</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">从未抓取</div>
+      <div class="stat-value"
+           th:style="${neverCount > 0} ? 'color:var(--subtle)' : ''"
+           th:text="${neverCount}">0</div>
+    </div>
+  </div>
+
+  <!-- route health table -->
+  <div th:if="${#maps.isEmpty(healthMap)}"
+       style="padding:48px 0;color:var(--muted);font-size:13px;text-align:center;">
+    暂无抓取记录——请先为路由启用定时抓取
+  </div>
+
+  <div th:if="${not #maps.isEmpty(healthMap)}" class="card" style="padding:0;overflow-x:auto;">
+    <div class="card-head">
+      <span class="card-title">路由健康状态</span>
+      <span style="font-size:11px;color:var(--subtle);">基于最近 10 次抓取</span>
+    </div>
+    <table class="rtable" style="margin:0;">
+      <thead>
+        <tr>
+          <th style="padding-left:20px;">路径</th>
+          <th>状态</th>
+          <th>最近抓取</th>
+          <th>成功率</th>
+          <th>均耗时</th>
+          <th style="padding-right:20px;">错误信息</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr th:each="entry : ${healthMap}"
+            th:with="h=${entry.value}"
+            th:class="${h.everFetched() and !h.healthy()} ? 'health-row-err' : ''">
+
+          <td style="padding-left:20px;">
+            <a th:if="${not #strings.contains(entry.key, ':')}"
+               class="stats-path-link"
+               hx-get="/index/items"
+               hx-target="#main-content"
+               hx-swap="innerHTML"
+               th:hx-vals="${'{&quot;path&quot;:&quot;' + entry.key + '&quot;}'}"
+               th:text="${entry.key}">path</a>
+            <span th:if="${#strings.contains(entry.key, ':')}"
+                  class="stats-path-tpl"
+                  th:text="${entry.key}">path</span>
+          </td>
+
+          <!-- status badge -->
+          <td>
+            <span th:if="${!h.everFetched()}"
+                  class="pill" style="background:var(--surface2);color:var(--subtle);">—</span>
+            <span th:if="${h.everFetched() and h.healthy()}"
+                  class="pill on">✓ 正常</span>
+            <span th:if="${h.everFetched() and !h.healthy()}"
+                  class="pill off">✕ 失败</span>
+          </td>
+
+          <td class="stats-time" th:text="${h.formattedAge()}">—</td>
+
+          <!-- success rate bar -->
+          <td>
+            <div th:if="${h.recentRuns() > 0}" class="health-rate-wrap">
+              <div class="health-rate-bar">
+                <div class="health-rate-fill"
+                     th:style="'width:' + ${h.successPercent()} + '%;background:' + ${h.barColor()}"></div>
+              </div>
+              <span class="health-rate-num"
+                    th:text="${h.recentOk()} + '/' + ${h.recentRuns()}"></span>
+            </div>
+            <span th:if="${h.recentRuns() == 0}" class="stats-dash">—</span>
+          </td>
+
+          <td class="stats-time" th:text="${h.formattedDuration()}">—</td>
+
+          <!-- error detail (truncated, full in title tooltip) -->
+          <td style="padding-right:20px;max-width:220px;">
+            <span th:if="${h.lastError() != null}"
+                  class="health-err-text"
+                  th:title="${h.lastError()}"
+                  th:text="${#strings.abbreviate(h.lastError(), 60)}">—</span>
+            <span th:if="${h.lastError() == null}" class="stats-dash">—</span>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+</div>

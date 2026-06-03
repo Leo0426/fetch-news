@@ -1,0 +1,38 @@
+plugins {
+    id 'java'
+    id 'org.springframework.boot' version "${springBootVersion}"
+    id 'io.spring.dependency-management' version '1.1.7'
+}
+
+group = 'app'
+version = '1.0.0-SNAPSHOT'
+
+dependencies {
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-thymeleaf'
+    implementation 'com.fasterxml.jackson.core:jackson-databind'
+    implementation 'org.jsoup:jsoup:1.21.2'
+    implementation 'com.github.ben-manes.caffeine:caffeine:3.2.3'
+    implementation 'org.xerial:sqlite-jdbc:3.47.1.0'
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'io.rest-assured:rest-assured:6.0.0'
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(25)
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.compilerArgs << '-parameters'
+    options.release = 25
+}
+
+tasks.withType(Test).configureEach {
+    useJUnitPlatform()
+    systemProperty 'fetch-news.route-config', layout.buildDirectory.file('test-route-config.json').get().asFile.absolutePath
+    systemProperty 'fetch-news.db', layout.buildDirectory.file('test-feed-store.db').get().asFile.absolutePath
+}

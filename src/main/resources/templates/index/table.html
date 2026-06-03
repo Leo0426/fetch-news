@@ -1,0 +1,137 @@
+<div th:fragment="routeTable"
+     id="routes-table"
+     th:attr="hx-swap-oob=${outOfBand} ? 'outerHTML:#routes-table'">
+
+  <div class="toolbar">
+    <input class="search-box" type="search" placeholder="搜索路由路径…"
+           name="q" id="route-q"
+           hx-get="/index/routes/table"
+           hx-trigger="input changed delay:300ms, search"
+           hx-target="#routes-table"
+           hx-swap="outerHTML"
+           hx-include="#route-filter">
+    <div class="filter-btns" id="route-filter">
+      <button type="button" class="fbtn on"
+              onclick="filterRoutes(this,'all')"
+              name="filter" value="all">全部</button>
+      <button type="button" class="fbtn"
+              onclick="filterRoutes(this,'enabled')"
+              name="filter" value="enabled">已启用</button>
+      <button type="button" class="fbtn"
+              onclick="filterRoutes(this,'disabled')"
+              name="filter" value="disabled">已禁用</button>
+      <button type="button" class="fbtn"
+              onclick="filterRoutes(this,'scheduled')"
+              name="filter" value="scheduled">定时</button>
+    </div>
+  </div>
+
+  <table class="rtable">
+    <thead>
+      <tr>
+        <th>路径</th>
+        <th>说明 / 来源</th>
+        <th>状态</th>
+        <th>定时</th>
+        <th style="width:100px">操作</th>
+      </tr>
+    </thead>
+    <tbody>
+      <th:block th:each="group : ${groups}">
+        <tr class="cat-row">
+          <td colspan="5" th:text="${group.category}"></td>
+        </tr>
+        <tr th:each="route : ${group.routes}">
+          <td class="path-cell">
+            <span th:if="${route.path == route.sourcePath}"
+                  class="path-chip"
+                  th:text="${route.path}"></span>
+            <span th:if="${route.path != route.sourcePath}"
+                  class="path-chip instance"
+                  th:text="${route.path}"></span>
+          </td>
+          <td>
+            <div class="desc-strategy-wrap">
+              <span th:if="${descriptions[route.path] != null}"
+                    class="desc-cell"
+                    th:text="${descriptions[route.path]}"></span>
+              <span th:if="${descriptions[route.path] == null and route.path != route.sourcePath}"
+                    class="src-cell"
+                    th:text="'→ ' + ${route.sourcePath}"></span>
+              <span th:if="${descriptions[route.path] == null and route.path == route.sourcePath}"
+                    class="src-cell">—</span>
+              <span th:if="${strategies[route.sourcePath] != null}"
+                    th:class="'strategy-badge ' + ${strategies[route.sourcePath] == 'RSS 代理' ? 'strategy-rss' : (strategies[route.sourcePath] == 'JSON API' ? 'strategy-json' : (strategies[route.sourcePath] == 'HTML 解析' ? 'strategy-html' : 'strategy-generic'))}"
+                    th:title="${fetchDetails[route.sourcePath]}"
+                    th:text="${strategies[route.sourcePath]}"></span>
+            </div>
+          </td>
+          <td>
+            <span th:class="${route.enabled} ? 'pill on' : 'pill off'"
+                  th:text="${route.enabled} ? '开' : '关'">开</span>
+          </td>
+          <td>
+            <span th:if="${route.scheduleMinutes > 0}"
+                  class="pill sched"
+                  th:text="'⏱ ' + ${route.scheduleMinutes} + 'm'"></span>
+            <span th:if="${route.scheduleMinutes == 0}"
+                  style="color:var(--subtle);font-size:12px;">—</span>
+          </td>
+          <td>
+            <div class="acts">
+              <!-- Add Instance: parameterized routes and generic RSS route -->
+              <button th:if="${#strings.contains(route.path, ':') or strategies[route.path] == '通用 RSS'}"
+                      type="button" class="act" title="添加实例"
+                      hx-get="/index/routes/instance"
+                      hx-target="#modal-inner"
+                      hx-swap="innerHTML"
+                      th:hx-vals="${'{&quot;source&quot;:&quot;' + route.path + '&quot;}'}">
+                ＋
+              </button>
+              <!-- RSS: shown only for concrete (non-parameterized) routes -->
+              <a th:if="${!#strings.contains(route.path, ':')}"
+                 class="act" title="RSS"
+                 th:href="${route.path}" target="_blank" rel="noopener">
+                RSS
+              </a>
+              <button type="button" class="act" title="编辑设置"
+                      hx-get="/index/routes/edit"
+                      hx-target="#modal-inner"
+                      hx-swap="innerHTML"
+                      th:hx-vals="${'{&quot;path&quot;:&quot;' + route.path + '&quot;}'}">
+                ✏
+              </button>
+              <button th:if="${!#strings.contains(route.path, ':')}"
+                      type="button" class="act" title="浏览数据"
+                      hx-get="/index/items"
+                      hx-target="#main-content"
+                      hx-swap="innerHTML"
+                      th:hx-vals="${'{&quot;path&quot;:&quot;' + route.path + '&quot;}'}">
+                ▤
+              </button>
+              <button type="button" class="act del" title="删除配置"
+                      hx-delete="/index/routes"
+                      hx-target="#routes-table"
+                      hx-swap="outerHTML"
+                      th:hx-vals="${'{&quot;path&quot;:&quot;' + route.path + '&quot;}'}"
+                      hx-confirm="确认删除此路由的配置？">
+                ✕
+              </button>
+            </div>
+          </td>
+        </tr>
+      </th:block>
+    </tbody>
+  </table>
+
+  <script>
+    function filterRoutes(btn, filter) {
+      document.querySelectorAll('.fbtn').forEach(b => b.classList.remove('on'));
+      btn.classList.add('on');
+      htmx.ajax('GET', '/index/routes/table?q=' +
+        encodeURIComponent(document.getElementById('route-q').value || '') +
+        '&filter=' + filter,
+        { target: '#routes-table', swap: 'outerHTML' });
+    }
+  </script>
+</div>

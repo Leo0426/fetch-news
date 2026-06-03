@@ -1,0 +1,119 @@
+<div class="items-view">
+
+  <div class="items-header">
+    <div class="items-header-left">
+      <span class="items-path" th:text="${routePath}"></span>
+      <span class="items-count"
+            th:text="${total == 0} ? '暂无数据' : |第 ${startItem}–${endItem} 条，共 ${total} 条|"></span>
+    </div>
+    <div class="items-header-right">
+      <!-- Batch AI summarize (concrete paths only, AI must be enabled) -->
+      <th:block th:if="${aiEnabled and not #strings.contains(routePath, ':')}">
+        <form style="display:contents">
+          <input type="hidden" name="path" th:value="${routePath}">
+          <button type="button" class="btn"
+                  hx-post="/index/items/summarize-batch"
+                  hx-target="#batch-sum-msg"
+                  hx-swap="innerHTML"
+                  hx-include="closest form"
+                  hx-indicator="#batch-spin">
+            ✦ 批量生成摘要
+          </button>
+          <span id="batch-spin" class="htmx-indicator"
+                style="font-size:11px;color:var(--muted);align-self:center;">提交中…</span>
+        </form>
+        <span id="batch-sum-msg" style="font-size:12px;align-self:center;"></span>
+      </th:block>
+      <a class="btn" th:href="${routePath}" target="_blank" rel="noopener">RSS ↗</a>
+      <button type="button" class="btn"
+              hx-get="/index/stats"
+              hx-target="#main-content"
+              hx-swap="innerHTML">← 返回</button>
+    </div>
+  </div>
+
+  <div th:if="${#lists.isEmpty(items)}"
+       style="padding:48px 0;color:var(--muted);font-size:13px;text-align:center;">
+    暂无缓存数据
+  </div>
+
+  <div th:if="${not #lists.isEmpty(items)}" class="card" style="padding:0;overflow-x:auto;">
+    <table class="items-table">
+      <thead>
+        <tr>
+          <th>标题 / AI 摘要</th>
+          <th>作者</th>
+          <th>发布时间</th>
+          <th>收录时间</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr th:each="item : ${items}">
+          <td class="col-title">
+            <a th:href="${item.link}"
+               th:text="${not #strings.isEmpty(item.title)} ? ${item.title} : ${item.link}"
+               target="_blank" rel="noopener">title</a>
+
+            <!-- Existing AI summary -->
+            <div th:if="${summaries[item.link] != null}"
+                 class="item-summary"
+                 th:text="${summaries[item.link]}"></div>
+
+            <!-- Generate button (AI enabled, no summary yet) -->
+            <div th:if="${aiEnabled and summaries[item.link] == null}"
+                 class="item-summary-gen">
+              <input type="hidden" name="link" th:value="${item.link}">
+              <input type="hidden" name="title" th:value="${not #strings.isEmpty(item.title)} ? ${item.title} : ''">
+              <button type="button" class="sum-gen-btn"
+                      hx-post="/index/items/summarize"
+                      hx-target="closest .item-summary-gen"
+                      hx-swap="outerHTML"
+                      hx-include="closest .item-summary-gen"
+                      hx-indicator="next .sum-spinner">
+                ✦ 生成摘要
+              </button>
+              <span class="sum-spinner htmx-indicator"
+                    style="font-size:11px;color:var(--muted);">生成中…</span>
+            </div>
+          </td>
+          <td class="col-meta"
+              th:text="${not #strings.isEmpty(item.author)} ? ${item.author} : '—'"></td>
+          <td class="col-meta" th:text="${item.formattedPubDate()}"></td>
+          <td class="col-meta" th:text="${item.formattedFirstSeen()}"></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div th:if="${totalPages > 1}" class="pager">
+      <!-- prev -->
+      <button type="button" class="pager-btn"
+              hx-get="/index/items"
+              th:hx-vals="${'{&quot;path&quot;:&quot;' + routePath + '&quot;,&quot;page&quot;:' + (page - 1) + '}'}"
+              hx-target="#main-content"
+              hx-swap="innerHTML"
+              th:disabled="${page == 0}">←</button>
+
+      <!-- numbered pages -->
+      <th:block th:each="p : ${pageWindow}">
+        <span th:if="${p == -1}" class="pager-ellipsis">…</span>
+        <button th:if="${p != -1}"
+                type="button"
+                th:class="${p == page} ? 'pager-btn pager-num active' : 'pager-btn pager-num'"
+                hx-get="/index/items"
+                th:hx-vals="${'{&quot;path&quot;:&quot;' + routePath + '&quot;,&quot;page&quot;:' + p + '}'}"
+                hx-target="#main-content"
+                hx-swap="innerHTML"
+                th:text="${p + 1}">1</button>
+      </th:block>
+
+      <!-- next -->
+      <button type="button" class="pager-btn"
+              hx-get="/index/items"
+              th:hx-vals="${'{&quot;path&quot;:&quot;' + routePath + '&quot;,&quot;page&quot;:' + (page + 1) + '}'}"
+              hx-target="#main-content"
+              hx-swap="innerHTML"
+              th:disabled="${page >= totalPages - 1}">→</button>
+    </div>
+  </div>
+
+</div>

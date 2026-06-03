@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title th:text="${query.isEmpty()} ? '搜索' : '搜索：' + ${query}">搜索</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/admin.css">
+  <style>
+    body { background: var(--bg); }
+  </style>
+</head>
+<body>
+<div class="rd-wrap">
+
+  <div class="rd-head">
+    <div class="rd-title">搜索</div>
+    <div style="display:flex;gap:14px;align-items:center;">
+      <a href="/reader" class="rd-admin">← 返回速览</a>
+      <a href="/index" class="rd-admin">路由配置 →</a>
+    </div>
+  </div>
+
+  <form action="/reader/search" method="get" class="rd-search-form">
+    <input class="rd-search-input" type="search" name="q"
+           th:value="${query}"
+           placeholder="搜索标题和摘要…"
+           autocomplete="off" autofocus>
+    <button type="submit" class="rd-search-submit">搜索</button>
+  </form>
+
+  <!-- result count -->
+  <div th:if="${not query.isEmpty()}" class="rd-result-meta">
+    <th:block th:if="${#lists.isEmpty(items)}">
+      未找到与 <strong th:text="${query}"></strong> 相关的内容
+    </th:block>
+    <th:block th:if="${not #lists.isEmpty(items)}">
+      共找到 <strong th:text="${#lists.size(items)}"></strong> 条与
+      <strong th:text="${query}"></strong> 相关的内容
+    </th:block>
+  </div>
+
+  <!-- empty query hint -->
+  <div th:if="${query.isEmpty()}" class="rd-empty">
+    输入关键词搜索标题和 AI 摘要
+  </div>
+
+  <!-- no results -->
+  <div th:if="${not query.isEmpty() and #lists.isEmpty(items)}" class="rd-empty">
+    暂无匹配结果<br>
+    <span style="font-size:12px;">尝试更短或不同的关键词，或等待更多内容被抓取</span>
+  </div>
+
+  <!-- results grid -->
+  <div th:if="${not #lists.isEmpty(items)}" class="rd-grid">
+    <div th:each="item : ${items}" class="rd-card">
+      <a class="rd-card-title"
+         th:href="${item.link()}"
+         th:text="${item.title()}"
+         target="_blank" rel="noopener noreferrer">标题</a>
+      <p th:if="${item.hasSummary()}"
+         class="rd-summary"
+         th:text="${item.summary()}"></p>
+      <div class="rd-card-meta">
+        <span class="rd-src" th:text="${item.sourceLabel()}">来源</span>
+        <span class="rd-age" th:text="${item.formattedAge()}">1 小时前</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
