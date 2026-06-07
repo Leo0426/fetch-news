@@ -10,7 +10,7 @@ import app.routes.ArxivRoute;
 import app.routes.GenericRssRoute;
 import app.routes.BBCNewsRoute;
 import app.routes.BilibiliVideoRoute;
-import app.routes.Cctv7Route;
+import app.routes.CctvNewsRoute;
 import app.routes.CnblogsRoute;
 import app.routes.DiygodRoute;
 import app.routes.GithubIssuesRoute;
@@ -157,11 +157,11 @@ public class AppRuntime {
                         "新华网最新新闻",
                         "中文媒体", "HTML 解析",
                         "解析 news.cn 首页三区块：快讯 #latest ul li a、深度 #depth ul li a、文字列表 .list-txt ul li a；发布时间从 URL 路径正则 /yyyymmdd/ 提取"),
-                new Route("/cctv/7",
-                        new Cctv7Route(defaultFetchClient),
-                        "CCTV-7 国防军事频道最新节目",
-                        "中文媒体", "HTML 解析",
-                        "解析 tv.cctv.com/cctv7/ 首页轮播区 div.pindao19777_ind01 li.swiper-slide 和热门区 div.pindao19777_ind04 ul.con_list li；发布时间从 URL 路径 /yyyy/mm/dd/ 提取"),
+                new Route("/cctv/news/:category",
+                        new CctvNewsRoute(defaultFetchClient, cacheService, objectMapper),
+                        "央视新闻各分类 — :category 可选值: news/china/world/society/law/ent/tech/life/edu",
+                        "中文媒体", "JSONP API",
+                        "调用 news.cctv.com JSONP API，按条目 ID 前缀分发：ART→文章全文(getXinwenNextArticleInfo)、PHO→图片集(contentinfo)、VIDE→HLS 视频(getHttpVideoInfo)；发布时间从 focus_date 字段解析"),
                 // ── social / product ──────────────────────────────────────────
                 new Route("/reddit/r/:subreddit",
                         new RedditRoute(defaultFetchClient, objectMapper),
