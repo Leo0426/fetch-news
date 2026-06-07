@@ -5,6 +5,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.Map;
 
 /**
  * Fetches upstream content with Java's built-in HTTP client.
@@ -47,11 +48,16 @@ public class DefaultFetchClient implements FetchClient {
      */
     @Override
     public String get(String url) throws Exception {
-        HttpRequest request = HttpRequest.newBuilder(URI.create(url))
+        return get(url, Map.of());
+    }
+
+    @Override
+    public String get(String url, Map<String, String> extraHeaders) throws Exception {
+        HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(url))
                 .timeout(timeout)
-                .header("User-Agent", userAgent)
-                .GET()
-                .build();
+                .header("User-Agent", userAgent);
+        extraHeaders.forEach(builder::setHeader);
+        HttpRequest request = builder.GET().build();
         Exception lastFailure = null;
         for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
             try {
