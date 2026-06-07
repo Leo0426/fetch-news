@@ -9,6 +9,7 @@ import app.core.RouteRegistry;
 import app.routes.ArxivRoute;
 import app.routes.GenericRssRoute;
 import app.routes.BBCNewsRoute;
+import app.routes.BbcLearningEnglishRoute;
 import app.routes.BilibiliDynamicRoute;
 import app.routes.TwitterUserRoute;
 import app.routes.BilibiliVideoRoute;
@@ -128,11 +129,16 @@ public class AppRuntime {
                         "学术", "RSS 代理",
                         "代理 rss.arxiv.org/rss/:category 官方 RSS 2.0，标准字段解析"),
                 // ── media ─────────────────────────────────────────────────────
-                new Route("/bbc/news/:category",
-                        new BBCNewsRoute(defaultFetchClient),
-                        "BBC News RSS — :category can be world, technology, business, health, etc.",
-                        "英文媒体", "RSS 代理",
-                        "代理 feeds.bbci.co.uk/news/:category/rss.xml 官方 RSS 2.0，标准字段解析"),
+                new Route("/bbc/news/:channel",
+                        new BBCNewsRoute(defaultFetchClient, objectMapper, cacheService),
+                        "BBC News 全文 — :channel 如 world、technology、world-asia、chinese、traditionalchinese",
+                        "英文媒体", "RSS + 全文",
+                        "从 BBC RSS 获取列表，再从每篇文章页 __NEXT_DATA__/__INITIAL_DATA__ 提取全文 block 树并渲染 HTML；支持中文频道(chinese/traditionalchinese)；详情页用 CacheService 缓存"),
+                new Route("/bbc/learningenglish/:channel",
+                        new BbcLearningEnglishRoute(defaultFetchClient, cacheService),
+                        "BBC英语学习 — :channel 如 take-away-english、media-english、lingohack",
+                        "英文媒体", "HTML 解析",
+                        "抓取 bbc.co.uk/learningenglish/chinese/features/:channel 列表，逐篇从 .widget-richtext 提取全文；详情页 CacheService 缓存"),
                 // ── Chinese media ─────────────────────────────────────────────
                 new Route("/sspai/articles",
                         new SspaiRoute(defaultFetchClient),
