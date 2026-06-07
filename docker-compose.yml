@@ -21,6 +21,12 @@ services:
       # No login required — these cookies are set when you visit bilibili.com.
       BILIBILI_COOKIE: ""
 
+      # ── Twitter/X cookie ────────────────────────────────────────────────────
+      # Required for Twitter GraphQL API access.
+      # Copy from browser DevTools → Application → Cookies → x.com.
+      # Must include at minimum: auth_token=<value>; ct0=<value>
+      TWITTER_COOKIE: ""
+
       # ── Ollama host override ─────────────────────────────────────────────────
       # When set, overrides the host stored in data/ai-config.json.
       # Leave empty to use whatever is saved in the config file.
