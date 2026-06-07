@@ -253,7 +253,8 @@ public class AdminResource {
             @RequestParam int detailCacheTtlSeconds,
             @RequestParam(defaultValue = "0") int scheduleMinutes,
             @RequestParam(required = false) String scheduleCron,
-            @RequestParam(required = false) String feedUrl) {
+            @RequestParam(required = false) String feedUrl,
+            @RequestParam(defaultValue = "false") boolean isNew) {
         try {
             String cron = (scheduleCron == null || scheduleCron.isBlank()) ? null : scheduleCron.trim();
             String url  = (feedUrl      == null || feedUrl.isBlank())      ? null : feedUrl.trim();
@@ -269,13 +270,18 @@ public class AdminResource {
             validateSourceRoute(config);
             RouteConfig saved = runtime.routeConfigStore().save(config);
             List<RouteConfig> updated = routes();
-            String modal = templates.routeModal(updated, saved.path(), false, "已保存", null);
             String table = templates.routeTable(updated, null, null, true);
+            if (isNew) {
+                return ResponseEntity.ok()
+                        .contentType(MediaType.TEXT_HTML)
+                        .header("HX-Trigger", "closemodal")
+                        .body(table);
+            }
+            String modal = templates.routeModal(updated, saved.path(), false, "已保存", null);
             return ResponseEntity.ok()
                     .contentType(MediaType.TEXT_HTML)
                     .body(modal + table);
         } catch (RouteException e) {
-            boolean isNew = !runtime.routeRegistry().paths().contains(path);
             String modal = templates.routeModal(routes(), path, isNew, null, e.getMessage());
             return ResponseEntity.status(HttpStatus.valueOf(e.error().statusCode()))
                     .contentType(MediaType.TEXT_HTML)

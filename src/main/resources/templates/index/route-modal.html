@@ -10,6 +10,7 @@
           hx-target="#modal-inner"
           hx-swap="innerHTML"
           x-data="{ srcPath: [[${isNew} ? '' : ${selected.sourcePath}]] }">
+      <input type="hidden" name="isNew" th:value="${isNew}">
 
       <div class="field-row">
         <div class="field">
