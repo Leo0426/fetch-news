@@ -1,5 +1,6 @@
 package app.routes;
 
+import app.core.CacheService;
 import app.core.Feed;
 import app.core.FeedItem;
 import app.core.FetchClient;
@@ -12,35 +13,31 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 
 /**
- * Route that returns recent videos from a Bilibili UP主 (user).
+ * Route for a Bilibili UP主's latest uploaded videos.
  *
  * <p>Path: /bilibili/user/video/:uid
+ *
+ * <p>Uses the WBI-signed {@code /x/space/wbi/arc/search} endpoint.
+ * Set {@code BILIBILI_COOKIE} env var (buvid3=...; SESSDATA=...) to
+ * avoid rate-limiting.
  */
 public class BilibiliVideoRoute implements RouteHandler {
+
     private static final String API_URL =
-            "https://api.bilibili.com/x/space/arc/search?mid=%s&ps=30&pn=1&order=pubdate&jsonp=jsonp";
+            "https://api.bilibili.com/x/space/wbi/arc/search";
+    private static final String BASE_PARAMS =
+            "tid=0&pn=1&ps=30&keyword=&order=pubdate&platform=web" +
+            "&web_location=1550101&order_avoided=true";
 
-    private final FetchClient fetchClient;
+    private final BilibiliHelper helper;
     private final ObjectMapper objectMapper;
-    private final Map<String, String> baseHeaders;
 
-    private static final String BROWSER_UA =
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 " +
-            "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
-
-    public BilibiliVideoRoute(FetchClient fetchClient, ObjectMapper objectMapper) {
-        this.fetchClient = fetchClient;
+    public BilibiliVideoRoute(FetchClient fetchClient, ObjectMapper objectMapper,
+                               CacheService cacheService) {
+        this.helper       = new BilibiliHelper(fetchClient, objectMapper, cacheService);
         this.objectMapper = objectMapper;
-        String cookie = System.getenv("BILIBILI_COOKIE");
-        var headers = new java.util.HashMap<String, String>();
-        headers.put("User-Agent", BROWSER_UA);
-        headers.put("Referer", "https://www.bilibili.com");
-        headers.put("Origin", "https://www.bilibili.com");
-        if (cookie != null && !cookie.isBlank()) headers.put("Cookie", cookie);
-        this.baseHeaders = java.util.Collections.unmodifiableMap(headers);
     }
 
     @Override
@@ -49,34 +46,35 @@ public class BilibiliVideoRoute implements RouteHandler {
         if (uid == null || uid.isBlank()) {
             throw new RouteException(RouteError.INVALID_PARAMETER, "uid is required");
         }
-        String url = String.format(API_URL, uid);
-        String json = fetchClient.get(url, baseHeaders);
+
+        String params  = helper.wbiSign("mid=" + uid + "&" + BASE_PARAMS);
+        String url     = API_URL + "?" + params;
+        String json    = helper.get(url, "https://space.bilibili.com/" + uid);
+
         try {
             JsonNode root = objectMapper.readTree(json);
             int code = root.path("code").asInt(-1);
             if (code != 0) {
                 throw new RouteException(RouteError.UPSTREAM_REQUEST_FAILED,
-                        "Bilibili API error: " + root.path("message").asText("unknown"));
+                        "Bilibili API error " + code + ": " + root.path("message").asText("unknown"));
             }
             JsonNode vlist = root.path("data").path("list").path("vlist");
             if (!vlist.isArray()) {
-                throw new RouteException(RouteError.UPSTREAM_INVALID_CONTENT, "unexpected Bilibili API response");
+                throw new RouteException(RouteError.UPSTREAM_INVALID_CONTENT,
+                        "unexpected Bilibili API response");
             }
             List<FeedItem> items = new ArrayList<>();
             for (JsonNode v : vlist) {
-                FeedItem item = toItem(v, uid);
+                FeedItem item = toItem(v);
                 if (item != null) items.add(item);
             }
-            if (items.isEmpty()) {
-                throw new RouteException(RouteError.EMPTY_FEED);
-            }
-            // use author name from first video if available
+            if (items.isEmpty()) throw new RouteException(RouteError.EMPTY_FEED);
+
             String author = items.getFirst().author();
             String title  = author != null ? author + " 的 Bilibili 视频" : "Bilibili UID " + uid;
-            return new Feed(
-                    title,
+            return new Feed(title,
                     "https://space.bilibili.com/" + uid,
-                    "Bilibili UP主 UID " + uid + " 的最新视频",
+                    "Bilibili UP主 UID " + uid + " 的最新投稿",
                     items);
         } catch (RouteException e) {
             throw e;
@@ -85,22 +83,28 @@ public class BilibiliVideoRoute implements RouteHandler {
         }
     }
 
-    private FeedItem toItem(JsonNode v, String uid) {
-        String bvid   = v.path("bvid").asText(null);
-        String title  = v.path("title").asText(null);
+    private FeedItem toItem(JsonNode v) {
+        String bvid  = v.path("bvid").asText(null);
+        String title = v.path("title").asText(null);
         if (title == null || bvid == null) return null;
 
-        String author = v.path("author").asText(null);
-        String desc   = v.path("description").asText(null);
-        long created  = v.path("created").asLong(0);
-        String link   = "https://www.bilibili.com/video/" + bvid;
-        String body   = desc != null && !desc.isBlank()
-                ? "<p>" + escapeHtml(desc) + "</p>"
-                : null;
-        return new FeedItem(title, link, body, created > 0 ? Instant.ofEpochSecond(created) : null, author, List.of());
-    }
+        String author  = BilibiliHelper.nullIfBlank(v.path("author").asText(null));
+        String desc    = v.path("description").asText(null);
+        String pic     = v.path("pic").asText(null);
+        long   created = v.path("created").asLong(0);
+        String link    = "https://www.bilibili.com/video/" + bvid;
 
-    private String escapeHtml(String text) {
-        return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
+        var sb = new StringBuilder();
+        if (pic != null && !pic.isBlank()) {
+            sb.append("<img src=\"").append(pic).append("\"><br>");
+        }
+        if (desc != null && !desc.isBlank()) {
+            sb.append("<p>").append(BilibiliHelper.escapeHtml(desc)).append("</p>");
+        }
+        String description = sb.isEmpty() ? null : sb.toString();
+
+        return new FeedItem(title, link, description,
+                created > 0 ? Instant.ofEpochSecond(created) : null,
+                author, List.of());
     }
 }

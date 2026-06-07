@@ -9,6 +9,7 @@ import app.core.RouteRegistry;
 import app.routes.ArxivRoute;
 import app.routes.GenericRssRoute;
 import app.routes.BBCNewsRoute;
+import app.routes.BilibiliDynamicRoute;
 import app.routes.BilibiliVideoRoute;
 import app.routes.CctvNewsRoute;
 import app.routes.CnblogsRoute;
@@ -175,10 +176,15 @@ public class AppRuntime {
                         "代理 producthunt.com/feed?category=undefined 官方 RSS 2.0，标准字段解析"),
                 // ── video ─────────────────────────────────────────────────────
                 new Route("/bilibili/user/video/:uid",
-                        new BilibiliVideoRoute(defaultFetchClient, objectMapper),
-                        "Bilibili UP主最新视频 — path param: :uid (用户 UID)",
+                        new BilibiliVideoRoute(defaultFetchClient, objectMapper, cacheService),
+                        "Bilibili UP主最新投稿 — :uid 为用户 UID",
+                        "视频", "JSON API (WBI)",
+                        "调用 WBI 签名端点 /x/space/wbi/arc/search；从 vlist 取 bvid、封面(pic)、标题、简介、作者、发布时间(UNIX秒)；需 BILIBILI_COOKIE"),
+                new Route("/bilibili/user/dynamic/:uid",
+                        new BilibiliDynamicRoute(defaultFetchClient, objectMapper, cacheService),
+                        "Bilibili UP主动态 — :uid 为用户 UID",
                         "视频", "JSON API",
-                        "调用 Bilibili space/arc/search API，从 vlist 数组取 bvid、标题、UP主名(author)、简介、发布时间(UNIX秒)；链接拼接 bilibili.com/video/:bvid"),
+                        "调用 /x/polymer/web-dynamic/v1/feed/space；按 type 分发：AV→视频封面+简介、DRAW→图文、WORD→纯文字、ARTICLE/OPUS→文章、FORWARD→转发；话题提取为 categories；需 BILIBILI_COOKIE"),
                 // ── generic ───────────────────────────────────────────────────
                 new Route("/rss",
                         new GenericRssRoute(defaultFetchClient),
