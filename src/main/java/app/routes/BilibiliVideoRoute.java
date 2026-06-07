@@ -12,6 +12,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Route that returns recent videos from a Bilibili UP主 (user).
@@ -24,10 +25,22 @@ public class BilibiliVideoRoute implements RouteHandler {
 
     private final FetchClient fetchClient;
     private final ObjectMapper objectMapper;
+    private final Map<String, String> baseHeaders;
+
+    private static final String BROWSER_UA =
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 " +
+            "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 
     public BilibiliVideoRoute(FetchClient fetchClient, ObjectMapper objectMapper) {
         this.fetchClient = fetchClient;
         this.objectMapper = objectMapper;
+        String cookie = System.getenv("BILIBILI_COOKIE");
+        var headers = new java.util.HashMap<String, String>();
+        headers.put("User-Agent", BROWSER_UA);
+        headers.put("Referer", "https://www.bilibili.com");
+        headers.put("Origin", "https://www.bilibili.com");
+        if (cookie != null && !cookie.isBlank()) headers.put("Cookie", cookie);
+        this.baseHeaders = java.util.Collections.unmodifiableMap(headers);
     }
 
     @Override
@@ -37,7 +50,7 @@ public class BilibiliVideoRoute implements RouteHandler {
             throw new RouteException(RouteError.INVALID_PARAMETER, "uid is required");
         }
         String url = String.format(API_URL, uid);
-        String json = fetchClient.get(url);
+        String json = fetchClient.get(url, baseHeaders);
         try {
             JsonNode root = objectMapper.readTree(json);
             int code = root.path("code").asInt(-1);

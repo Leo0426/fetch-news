@@ -14,6 +14,13 @@ services:
       # Tune to your host. Spring Boot auto-sizes within these bounds.
       JAVA_OPTS: "-Xms128m -Xmx512m"
 
+      # ── Bilibili cookie ─────────────────────────────────────────────────────
+      # Required to bypass Bilibili's rate-limiting on the space API.
+      # Grab from browser DevTools → Application → Cookies → api.bilibili.com.
+      # Minimum needed: buvid3=<value>; buvid4=<value>
+      # No login required — these cookies are set when you visit bilibili.com.
+      BILIBILI_COOKIE: ""
+
       # ── Ollama host override ─────────────────────────────────────────────────
       # When set, overrides the host stored in data/ai-config.json.
       # Leave empty to use whatever is saved in the config file.
