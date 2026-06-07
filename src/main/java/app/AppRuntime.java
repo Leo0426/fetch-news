@@ -10,6 +10,7 @@ import app.routes.ArxivRoute;
 import app.routes.GenericRssRoute;
 import app.routes.BBCNewsRoute;
 import app.routes.BilibiliDynamicRoute;
+import app.routes.TwitterUserRoute;
 import app.routes.BilibiliVideoRoute;
 import app.routes.CctvNewsRoute;
 import app.routes.CnblogsRoute;
@@ -164,6 +165,11 @@ public class AppRuntime {
                         "中文媒体", "JSONP API",
                         "调用 news.cctv.com JSONP API，按条目 ID 前缀分发：ART→文章全文(getXinwenNextArticleInfo)、PHO→图片集(contentinfo)、VIDE→HLS 视频(getHttpVideoInfo)；发布时间从 focus_date 字段解析"),
                 // ── social / product ──────────────────────────────────────────
+                new Route("/twitter/user/:id",
+                        new TwitterUserRoute(defaultFetchClient, objectMapper, cacheService),
+                        "Twitter/X 用户时间线 — :id 为用户名(如 elonmusk)或 +数字ID(如 +44196397)",
+                        "社区", "GraphQL API",
+                        "调用 X GraphQL /i/api/graphql/{queryId}/UserTweets；GQL query ID 从 Twitter JS 动态解析并缓存 24h，失败时回退 hardcoded fallback；需 TWITTER_COOKIE(含 auth_token+ct0)"),
                 new Route("/reddit/r/:subreddit",
                         new RedditRoute(defaultFetchClient, objectMapper),
                         "Reddit hot posts for a subreddit — path param: :subreddit",
