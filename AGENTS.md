@@ -232,3 +232,63 @@ Test file: `src/test/java/app/RssLiteResourceTest.java`
 - No comments explaining what the code does — only comments explaining non-obvious constraints or workarounds.
 - No multi-paragraph Javadoc on obvious methods.
 - English for all code and comments.
+
+---
+
+## Route Review Checklist
+
+### Route Registration
+
+- Route path must start with `/` and use `:param` for variable segments (e.g., `/github/release/:owner/:repo`).
+- Register the route in `AppRuntime` — nowhere else.
+- Provide exactly ONE category string per `Route(...)` constructor call.
+- Do not create separate config or doc files for a route. Put the description in the `Route` constructor.
+- Do not add routes to any deprecated or legacy router file.
+
+### Code Style
+
+- Use `camelCase` for all variable and method names.
+- Use specific imports, not wildcard imports (`import app.core.*` is banned).
+- Keep imports sorted (IDE autoformat on save).
+- Avoid `String.format(...)` for plain strings with no substitution — use a string literal.
+- Parse a JSoup `Document` once, then reuse `$` (the `Document`). Do not call `Jsoup.parse()` again on the same content.
+- Define helper methods at class level, not inside `handle()` or inside loops.
+- Do not explicitly pass `null` for a `FeedItem` field that simply doesn't exist — `null` is the natural absent value; omit the assignment.
+- Use only fields defined on `FeedItem`: `title`, `link`, `description`, `pubDate`, `author`, `categories`. Do not add phantom fields.
+- Prefer `startsWith()` over `contains()` when checking a string prefix.
+- Combine optional-value chains with `||`-equivalent patterns (e.g., `Optional.ofNullable(a).orElse(b)` or ternary) rather than multi-step `if` blocks.
+- Use `try-with-resources` for anything that implements `Closeable`.
+
+### Data Handling
+
+- **Cache detail pages**: when a route fetches N article detail pages inside a loop, wrap each fetch in `cacheService.getDetailPage(url, () -> client.get(url))`.
+- **description** = main article body HTML only. Do NOT put `title`, `author`, `pubDate`, or tag text inside `description`.
+- **categories** = tags/labels extracted from the source. Do not embed them in `description`.
+- **pubDate**: always populate when the source provides a date. Use `DateParser` utilities.
+- Do NOT use `Instant.now()` as a fallback for `pubDate`. Leave it `null` if the source has no date.
+- Do not manually trim or truncate titles. The rendering layer handles that.
+- Every item's `link` must be unique — it is used as the RSS `<guid>`. Do not fall back to the feed URL.
+- The feed-level `link` in `new Feed(title, link, ...)` must point to a human-readable webpage, not an API endpoint.
+
+### API and Data Fetching
+
+- Prefer stable source APIs and native RSS/Atom feeds over HTML scraping. Check network traffic before writing a scraper.
+- Jackson's `ObjectMapper.readTree()` already parses JSON — do not call `JSON.parse` or double-decode.
+- Only fetch the first page of results. Do not add pagination or "load more" logic.
+- Do not add a `limit` query parameter to routes — `limit=N` is already handled by `RssLiteResource`.
+- Use path parameters (`:param`) for route configuration. Do not read route-specific options from query parameters.
+- Do not implement tag/category filtering inside a route handler. Users apply filters via common parameters.
+- If an API requires a token or hash that changes over time, extract it dynamically from the upstream page rather than hardcoding it.
+- All outbound HTTP must go through the injected `FetchClient`. Never construct a raw `HttpClient` inside a route handler.
+
+### Error Handling
+
+- Throw `new RouteException(RouteError.X, "clear message")` with an actionable message that explains what went wrong.
+- Use `INVALID_PARAMETER` for missing/malformed path params; `UPSTREAM_REQUEST_FAILED` for HTTP/network errors; `UPSTREAM_INVALID_CONTENT` for unparseable responses; `EMPTY_FEED` when the handler produces zero items.
+- Do not catch `RouteException` and re-wrap it — let it propagate.
+- Do not return an empty item list with a fake message item to avoid the empty-feed check.
+
+### Concurrency
+
+- Avoid sequential `client.get()` calls inside a loop when items can be fetched concurrently. Prefer `CompletableFuture` + `CacheService.getDetailPage()` or a structured virtual-thread approach.
+- Do not share mutable state between route handler invocations. `RouteHandler` instances are singletons.
