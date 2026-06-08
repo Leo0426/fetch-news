@@ -1,5 +1,7 @@
 package app.routes;
 
+import app.CredentialConfig;
+import app.CredentialConfigStore;
 import app.core.CacheService;
 import app.core.Feed;
 import app.core.RouteContext;
@@ -67,7 +69,9 @@ class BilibiliVideoRouteTest {
 
     private static BilibiliVideoRoute route(String videoJson) {
         CacheService cache = new CacheService(Duration.ofMinutes(5), Duration.ofMinutes(30));
-        return new BilibiliVideoRoute(mockFetcher(videoJson), MAPPER, cache);
+        CredentialConfigStore creds = new CredentialConfigStore(
+                java.nio.file.Path.of("build/test-creds.json"), MAPPER);
+        return new BilibiliVideoRoute(mockFetcher(videoJson), MAPPER, cache, creds);
     }
 
     private RouteContext ctx(String uid) {

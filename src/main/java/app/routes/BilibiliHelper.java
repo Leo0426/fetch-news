@@ -1,5 +1,6 @@
 package app.routes;
 
+import app.CredentialConfigStore;
 import app.core.CacheService;
 import app.core.FetchClient;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -40,41 +41,41 @@ class BilibiliHelper {
     private final FetchClient fetchClient;
     private final ObjectMapper objectMapper;
     private final CacheService cacheService;
-    private final Map<String, String> baseHeaders;
+    private final CredentialConfigStore credStore;
 
-    BilibiliHelper(FetchClient fetchClient, ObjectMapper objectMapper, CacheService cacheService) {
-        this.fetchClient   = fetchClient;
-        this.objectMapper  = objectMapper;
-        this.cacheService  = cacheService;
+    BilibiliHelper(FetchClient fetchClient, ObjectMapper objectMapper,
+                   CacheService cacheService, CredentialConfigStore credStore) {
+        this.fetchClient  = fetchClient;
+        this.objectMapper = objectMapper;
+        this.cacheService = cacheService;
+        this.credStore    = credStore;
+    }
 
-        String cookie = System.getenv("BILIBILI_COOKIE");
+    /** Builds base request headers using the current global Bilibili cookie. */
+    Map<String, String> baseHeaders() {
+        String cookie = credStore.getBilibiliCookie();
         var h = new HashMap<String, String>();
         h.put("User-Agent", BROWSER_UA);
         h.put("Referer",    "https://www.bilibili.com");
         h.put("Origin",     "https://www.bilibili.com");
         if (cookie != null && !cookie.isBlank()) h.put("Cookie", cookie);
-        this.baseHeaders = Collections.unmodifiableMap(h);
+        return Collections.unmodifiableMap(h);
     }
-
-    Map<String, String> baseHeaders() { return baseHeaders; }
 
     // ── per-UID cookie support ────────────────────────────────────────────────
 
     /**
-     * Returns the cookie for a specific UID.
-     * Checks {@code BILIBILI_COOKIE_{uid}} first; falls back to global
-     * {@code BILIBILI_COOKIE}. Returns {@code null} if neither is set.
+     * Returns the cookie for a specific UID via the credential store.
+     * Priority: {@code BILIBILI_COOKIE_{uid}} env var → stored per-UID cookie
+     * → global cookie.
      */
-    static String cookieForUid(String uid) {
-        String specific = System.getenv("BILIBILI_COOKIE_" + uid);
-        if (specific != null && !specific.isBlank()) return specific;
-        String global = System.getenv("BILIBILI_COOKIE");
-        return (global != null && !global.isBlank()) ? global : null;
+    String cookieForUid(String uid) {
+        return credStore.getBilibiliCookieForUid(uid);
     }
 
-    /** Returns true if any cookie (per-UID or global) is available for the UID. */
-    static boolean hasCookieForUid(String uid) {
-        return cookieForUid(uid) != null;
+    /** Returns true if any cookie is available for the UID. */
+    boolean hasCookieForUid(String uid) {
+        return credStore.hasBilibiliCookieForUid(uid);
     }
 
     /** Builds request headers with the UID-specific cookie and the given Referer. */
@@ -84,7 +85,7 @@ class BilibiliHelper {
         h.put("Referer",    referer);
         h.put("Origin",     "https://www.bilibili.com");
         String cookie = cookieForUid(uid);
-        if (cookie != null) h.put("Cookie", cookie);
+        if (cookie != null && !cookie.isBlank()) h.put("Cookie", cookie);
         return Collections.unmodifiableMap(h);
     }
 
@@ -97,14 +98,14 @@ class BilibiliHelper {
 
     /** Returns base headers with Referer overridden to the given URL. */
     Map<String, String> refererHeaders(String referer) {
-        var h = new HashMap<>(baseHeaders);
+        var h = new HashMap<>(baseHeaders());
         h.put("Referer", referer);
         return Collections.unmodifiableMap(h);
     }
 
     /** Fetches a URL using base headers. */
     String get(String url) throws Exception {
-        return fetchClient.get(url, baseHeaders);
+        return fetchClient.get(url, baseHeaders());
     }
 
     /** Fetches a URL using base headers with an overridden Referer. */
@@ -143,7 +144,7 @@ class BilibiliHelper {
     // ── WBI key derivation ────────────────────────────────────────────────────
 
     private String fetchMixinKey() throws Exception {
-        String navJson = fetchClient.get(NAV_URL, baseHeaders);
+        String navJson = fetchClient.get(NAV_URL, baseHeaders());
         JsonNode nav   = objectMapper.readTree(navJson);
         String imgUrl  = nav.path("data").path("wbi_img").path("img_url").asText();
         String subUrl  = nav.path("data").path("wbi_img").path("sub_url").asText();

@@ -1,6 +1,7 @@
 package app.routes;
 
 import app.core.CacheService;
+import app.CredentialConfigStore;
 import app.core.Feed;
 import app.core.FeedItem;
 import app.core.FetchClient;
@@ -35,8 +36,9 @@ public class BilibiliVideoRoute implements RouteHandler {
     private final ObjectMapper objectMapper;
 
     public BilibiliVideoRoute(FetchClient fetchClient, ObjectMapper objectMapper,
-                               CacheService cacheService) {
-        this.helper       = new BilibiliHelper(fetchClient, objectMapper, cacheService);
+                               CacheService cacheService,
+                                         CredentialConfigStore credStore) {
+        this.helper       = new BilibiliHelper(fetchClient, objectMapper, cacheService, credStore);
         this.objectMapper = objectMapper;
     }
 
