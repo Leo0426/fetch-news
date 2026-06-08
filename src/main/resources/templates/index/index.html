@@ -10,7 +10,7 @@
   <script defer src="/alpine.min.js"></script>
 </head>
 <body x-data="{ modal: false, activePage: 'stats', pageTitle: '数据统计', sbOpen: false }"
-      @htmx:after-swap.window="if ($event.detail.target.id === 'modal-inner') modal = true"
+      @htmx:after-swap.window="if ($event.detail.target.id === 'modal-inner' && $event.detail.target.innerHTML.trim() !== '') modal = true"
       @closemodal.window="modal = false"
       @keydown.escape.window="sbOpen = false; modal = false">
 
