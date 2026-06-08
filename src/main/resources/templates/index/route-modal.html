@@ -110,44 +110,45 @@
       </div>
 
     </form>
-  </div>
 
-  <!-- Bilibili UID Cookie (shown only for concrete /bilibili/followings/* routes) -->
-  <div th:if="${cookieUid != null}"
-       style="border-top:1px solid var(--border-color);padding:16px 20px 4px;">
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
-      <span style="background:#fb7299;color:#fff;padding:1px 7px;border-radius:4px;font-size:11px;">B站</span>
-      <span style="font-size:13px;font-weight:600;">Bilibili Cookie</span>
-      <span style="font-size:12px;color:var(--text-secondary);">
-        UID <code th:text="${cookieUid}"></code> 专属凭据
-      </span>
-    </div>
-
-    <form hx-post="/index/credentials/uid-cookie"
-          hx-target="#cookie-save-result"
-          hx-swap="innerHTML">
-      <input type="hidden" name="uid" th:value="${cookieUid}">
-
-      <div class="field" style="margin-bottom:10px;">
-        <textarea name="cookie" rows="3" autocomplete="off"
-                  style="font-family:monospace;font-size:11px;resize:vertical;"
-                  placeholder="完整 Cookie 字符串（动态路由）或 SESSDATA=xxx（视频/专栏路由）"
-                  th:text="${cookieStored}"></textarea>
-        <span class="field-hint">
-          获取方式：打开
-          <a th:href="'https://api.vc.bilibili.com/dynamic_svr/v1/dynamic_svr/dynamic_new?uid=0&amp;type=8'"
-             target="_blank" style="color:var(--accent);">B站动态 API</a>
-          → DevTools → Network → dynamic_new → 复制 Cookie header
+    <!-- Bilibili UID Cookie — shown inside modal-body for concrete /bilibili/followings/* routes -->
+    <div th:if="${cookieUid != null}"
+         style="margin-top:16px;border-top:1px solid var(--border-color);padding-top:14px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+        <span style="background:#fb7299;color:#fff;padding:1px 7px;border-radius:4px;font-size:11px;">B站</span>
+        <span style="font-size:13px;font-weight:600;">Bilibili Cookie</span>
+        <span style="font-size:12px;color:var(--text-secondary);">
+          UID <code th:text="${cookieUid}"></code> 专属凭据
         </span>
       </div>
 
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
-        <button class="btn primary" type="submit" style="font-size:12px;padding:5px 14px;">
-          保存 Cookie
-        </button>
-        <span id="cookie-save-result" style="font-size:12px;"></span>
-      </div>
-    </form>
+      <form hx-post="/index/credentials/uid-cookie"
+            hx-target="#cookie-save-result"
+            hx-swap="innerHTML">
+        <input type="hidden" name="uid" th:value="${cookieUid}">
+
+        <div class="field" style="margin-bottom:10px;">
+          <textarea name="cookie" rows="3" autocomplete="off"
+                    style="font-family:monospace;font-size:11px;resize:vertical;"
+                    placeholder="完整 Cookie 字符串（动态路由）或 SESSDATA=xxx（视频/专栏路由）"
+                    th:text="${cookieStored}"></textarea>
+          <span class="field-hint">
+            获取方式：打开
+            <a th:href="'https://api.vc.bilibili.com/dynamic_svr/v1/dynamic_svr/dynamic_new?uid=0&amp;type=8'"
+               target="_blank" style="color:var(--accent);">B站动态 API</a>
+            → DevTools → Network → dynamic_new → 复制 Cookie header
+          </span>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:10px;">
+          <button class="btn primary" type="submit" style="font-size:12px;padding:5px 14px;">
+            保存 Cookie
+          </button>
+          <span id="cookie-save-result" style="font-size:12px;"></span>
+        </div>
+      </form>
+    </div>
+
   </div>
 
   <!-- fetch log -->
