@@ -274,23 +274,10 @@ public class AdminResource {
                     label);
             validateSourceRoute(config);
             runtime.routeConfigStore().save(config);
-            List<RouteConfig> updated = routes();
-            if (isNew) {
-                // Retarget to #main-content so the stats section refreshes regardless of which
-                // page the user was on.  HX-Trigger closes the modal simultaneously.
-                String stats = templates.statsSection(updated);
-                return ResponseEntity.ok()
-                        .contentType(MediaType.TEXT_HTML)
-                        .header("HX-Trigger", "closemodal")
-                        .header("HX-Retarget", "#main-content")
-                        .header("HX-Reswap", "innerHTML")
-                        .body(stats);
-            }
-            String table = templates.routeTable(updated, null, null, true);
             return ResponseEntity.ok()
                     .contentType(MediaType.TEXT_HTML)
-                    .header("HX-Trigger", "closemodal")
-                    .body(table);
+                    .header("HX-Trigger", "{\"closemodal\": true, \"routeSaved\": true}")
+                    .body("");
         } catch (RouteException e) {
             String modal = templates.routeModal(routes(), path, isNew, null, e.getMessage());
             return ResponseEntity.status(HttpStatus.valueOf(e.error().statusCode()))

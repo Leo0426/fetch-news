@@ -1,4 +1,8 @@
-<div class="cat-view" id="cat-view">
+<div class="cat-view" id="cat-view"
+     hx-get="/index/category"
+     hx-trigger="routeSaved from:body"
+     hx-swap="outerHTML"
+     th:hx-vals="${'{&quot;name&quot;:&quot;' + category + '&quot;}'}">
 
   <div class="cat-header">
     <div class="cat-header-left">
