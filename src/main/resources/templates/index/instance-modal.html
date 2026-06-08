@@ -9,6 +9,7 @@
   <div class="modal-body">
     <form hx-post="/index/routes" hx-target="#modal-inner" hx-swap="innerHTML">
       <input type="hidden" name="sourcePath" th:value="${sourcePath}">
+      <input type="hidden" name="isNew" value="true">
 
       <div class="field">
         <span>挂载路径</span>
@@ -41,6 +42,12 @@
         <span>定时抓取（分钟）</span>
         <input name="scheduleMinutes" type="number" min="0" step="1" value="0">
         <span class="field-hint">0 = 不启用</span>
+      </div>
+
+      <div class="field">
+        <span>别名 <span class="field-hint" style="display:inline;">(可选，显示在 UI 中替代路径)</span></span>
+        <input name="alias" type="text" autocomplete="off"
+               placeholder="如：我的订阅">
       </div>
 
       <label class="toggle-row">
@@ -101,6 +108,7 @@
       <!-- The hidden path input is kept in sync by Alpine -->
       <input type="hidden" name="path" :value="generatedPath">
       <input type="hidden" name="sourcePath" th:value="${sourcePath}">
+      <input type="hidden" name="isNew" value="true">
 
       <div class="field-row">
         <div class="field">
@@ -119,6 +127,12 @@
         <span>定时抓取（分钟）</span>
         <input name="scheduleMinutes" type="number" min="0" step="1" value="0">
         <span class="field-hint">0 = 不启用</span>
+      </div>
+
+      <div class="field">
+        <span>别名 <span class="field-hint" style="display:inline;">(可选，显示在 UI 中替代路径)</span></span>
+        <input name="alias" type="text" autocomplete="off"
+               placeholder="如：我的哔哩哔哩动态">
       </div>
 
       <label class="toggle-row">

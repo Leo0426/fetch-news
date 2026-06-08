@@ -256,10 +256,12 @@ public class AdminResource {
             @RequestParam(defaultValue = "0") int scheduleMinutes,
             @RequestParam(required = false) String scheduleCron,
             @RequestParam(required = false) String feedUrl,
+            @RequestParam(required = false) String alias,
             @RequestParam(defaultValue = "false") boolean isNew) {
         try {
-            String cron = (scheduleCron == null || scheduleCron.isBlank()) ? null : scheduleCron.trim();
-            String url  = (feedUrl      == null || feedUrl.isBlank())      ? null : feedUrl.trim();
+            String cron  = (scheduleCron == null || scheduleCron.isBlank()) ? null : scheduleCron.trim();
+            String url   = (feedUrl      == null || feedUrl.isBlank())      ? null : feedUrl.trim();
+            String label = (alias        == null || alias.isBlank())        ? null : alias.trim();
             RouteConfig config = new RouteConfig(
                     path,
                     sourcePath == null || sourcePath.isBlank() ? path : sourcePath,
@@ -268,7 +270,8 @@ public class AdminResource {
                     detailCacheTtlSeconds,
                     scheduleMinutes,
                     cron,
-                    url);
+                    url,
+                    label);
             validateSourceRoute(config);
             RouteConfig saved = runtime.routeConfigStore().save(config);
             List<RouteConfig> updated = routes();
@@ -303,7 +306,7 @@ public class AdminResource {
         runtime.routeConfigStore().save(new RouteConfig(
                 cur.path(), cur.sourcePath(), !cur.enabled(),
                 cur.routeCacheTtlSeconds(), cur.detailCacheTtlSeconds(),
-                cur.scheduleMinutes(), cur.scheduleCron(), cur.feedUrl()));
+                cur.scheduleMinutes(), cur.scheduleCron(), cur.feedUrl(), cur.alias()));
         return templates.categorySection(routes(), category);
     }
 

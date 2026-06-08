@@ -1,7 +1,7 @@
 <th:block th:fragment="modal">
   <div class="modal-head">
     <span class="modal-ttl"
-          th:text="${isNew} ? '新建挂载' : ${selected.path}">路由设置</span>
+          th:text="${isNew} ? '新建挂载' : (${selected.alias()} != null ? ${selected.alias()} : ${selected.path})">路由设置</span>
     <button class="modal-x" type="button" @click="modal = false">✕</button>
   </div>
 
@@ -86,6 +86,13 @@
           <span class="field-hint"
                 th:if="${isNew or selected.scheduleCron == null}">秒 分 时 日 月 周 · 留空则用间隔</span>
         </div>
+      </div>
+
+      <div class="field">
+        <span>别名 <span class="field-hint" style="display:inline;">(可选，显示在 UI 中替代路径)</span></span>
+        <input name="alias" type="text" autocomplete="off"
+               placeholder="如：我的哔哩哔哩动态"
+               th:value="${isNew or selected.alias() == null} ? '' : ${selected.alias()}">
       </div>
 
       <label class="toggle-row">
