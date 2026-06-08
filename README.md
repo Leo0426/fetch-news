@@ -1,263 +1,79 @@
 # fetch-news
 
-[中文文档](README_CN.md)
+信息爆炸时代的个人信息过滤器。自托管 RSS 聚合服务，精选高质量信息源，接入本地 Ollama 做翻译和摘要。
 
-> **Personal use only.** This is a personal information aggregation project, built and maintained for individual use.
+每个路由都输出标准 RSS，可直接用任意订阅器消费；内置 Web 阅读器，支持按分类浏览、AI 摘要一键生成、书签收藏。
 
-A self-hosted news aggregator that works like RSSHub but keeps everything local — feeds, state, and AI — with no cloud subscriptions, no tracking, and no per-API-call costs.
+![路由管理](docs/bbc.png)
 
-**Spring Boot 4 · SQLite · Ollama · Java 25**
+![文章阅读器](docs/bbc-items.png)
 
----
+![凭据配置](docs/credentials.png)
 
-## Roadmap
+## 信息源
 
-- [ ] **Push notifications** — WeChat / Feishu webhook integration for digest delivery
-- [ ] **Export to Markdown** — one-click export of articles or digests to `.md` files
+| 分类 | 路由 | 来源 |
+|------|------|------|
+| 技术博客 | `/techcrunch` | TechCrunch |
+| 技术博客 | `/wired/latest` | WIRED |
+| 技术博客 | `/mritd/blog` | mritd |
+| 技术博客 | `/microsoft/devops` | Microsoft DevOps Blog |
+| 技术博客 | `/diygod/blog` | DIYGod |
+| 编程 | `/github/releases/:owner/:repo` | GitHub Releases |
+| 编程 | `/hn/:feed` | Hacker News（top / new / best / ask / show / job） |
+| 编程 | `/cnblogs/post` | 博客园精华 |
+| 学术 | `/arxiv/:category` | arXiv（cs.AI / cs.LG / cs.CV 等） |
+| 英文媒体 | `/bbc/news/:channel` | BBC News 全文 |
+| 英文媒体 | `/bbc/learningenglish/:channel` | BBC 英语学习 |
+| 中文媒体 | `/sspai/articles` | 少数派 |
+| 中文媒体 | `/36kr/news` | 36氪 |
+| 中文媒体 | `/huanqiu/news` | 环球网 |
+| 中文媒体 | `/huanqiu/tech/:section` | 环球网科技 |
+| 中文媒体 | `/xinhua/news` | 新华网 |
+| 中文媒体 | `/cctv/news/:category` | 央视新闻 |
+| 社区 | `/twitter/user/:id` | Twitter/X 用户时间线 |
+| 社区 | `/producthunt/daily` | Product Hunt 每日精选 |
+| 视频 | `/bilibili/user/video/:uid` | B站 UP主视频 |
+| 视频 | `/bilibili/user/dynamic/:uid` | B站 UP主动态 |
+| 视频 | `/bilibili/followings/dynamic/:uid` | B站关注动态（全量） |
+| 视频 | `/bilibili/followings/video/:uid` | B站关注视频动态 |
+| 视频 | `/bilibili/followings/article/:uid` | B站关注专栏 |
+| 通用 | `/rss` | 任意 RSS 2.0 / Atom 源 |
 
----
+## AI 摘要
 
-## Why fetch-news
+通过本地 Ollama 接入，在管理后台配置 host 和模型即可。抓取完成后自动对文章做摘要，英文内容可配合模型做翻译。默认模型 `llama3.2`，无需外部 API，数据不出本机。
 
-| | fetch-news | Typical cloud reader |
-|---|---|---|
-| Data ownership | Your machine, your SQLite file | Vendor's servers |
-| AI summaries | Local Ollama, zero API cost | Paid cloud API |
-| Offline reading | Cached fallback, always available | Depends on connectivity |
-| Infrastructure | Single JAR + one file | Managed subscription |
-| Customisation | Add a route = one Java class | Limited or none |
+## 运行
 
----
+**Docker（推荐）**
 
-## Feature highlights
-
-### Reader
-
-- **Digest view** — all recent items grouped by source, switchable between 24 h / 48 h / 3 d / 7 d windows
-- **Read / Unread** — per-article state stored in the browser; filter to show only unread
-- **Bookmarks** — save articles server-side (SQLite); dedicated bookmarks page with one-click removal
-- **Full-text search** — instant search across every cached title and AI summary
-- **AI summaries** — generate 2–3 sentence Chinese summaries on demand or in bulk via local Ollama; cached forever so the model is only called once per article
-
-### Route config (`/index`)
-
-- **Route management** — enable/disable, set cache TTLs, schedule background fetches per route
-- **Cron scheduling** — per-route cron expressions (`0 0 8 * * *`) or simple minute intervals
-- **Feed health dashboard** — per-route success rate bar, average fetch time, last error, never-fetched indicator
-- **Items browser** — paginated view of every stored article, inline AI summary generation
-- **Mount aliases** — expose a fixed path for a parameterised route (e.g. `/my-hn` → `/hn/top`)
-- **Generic RSS/Atom** — mount any external feed URL via `/rss` + `feedUrl` in config
-
-### Infrastructure
-
-- **Zero external services** — SQLite for everything: feed items, bookmarks, AI cache, fetch logs
-- **Offline fallback** — when an upstream source fails, the last cached items are served silently
-- **Docker-ready** — one command to start; all data lives in a host-mounted `./data/` directory
-- **OLLAMA_HOST env var** — point to a remote Ollama instance without editing any config file
-
----
-
-## Quick start
-
-```shell
-# Local development
-./gradlew bootRun
-```
-
-```shell
-# Docker (builds image and starts with external data mount)
+```bash
 docker compose up -d
 ```
 
-The app listens on <http://localhost:8080>.  
-Route config: <http://localhost:8080/index>  
-Reader: <http://localhost:8080/reader>  
-Bookmarks: <http://localhost:8080/reader/bookmarks>
+访问 `http://localhost:8080`，后台管理在 `http://localhost:8080/index`。
 
----
+**本地开发**
 
-## Docker deployment
-
-All persistent data is stored in `./data/` on the host — the container itself is stateless.
-
-```
-./data/
-  feed-store.db       ← articles, bookmarks, AI summaries, fetch logs
-  route-config.json   ← route schedules and enable/disable state
-  ai-config.json      ← Ollama host, model, enabled flag
+```bash
+./gradlew bootRun   # 需要 JDK 25
 ```
 
-To use a local Ollama instance from inside Docker, set `OLLAMA_HOST` in `docker-compose.yml`:
+## 凭据配置
 
-```yaml
-environment:
-  OLLAMA_HOST: "http://host.docker.internal:11434"
-```
+在 `docker-compose.yml` 中按需填写：
 
-To rebuild after a code change:
+- `BILIBILI_COOKIE` — B站公开路由（无需登录，填 buvid3/buvid4 即可）
+- `BILIBILI_COOKIE_<uid>` — 关注动态路由，需已登录账号的完整 Cookie
+- `TWITTER_COOKIE` — Twitter 路由，需 `auth_token` + `ct0`
+- `OLLAMA_HOST` — Docker 内访问宿主机 Ollama 时填 `http://host.docker.internal:11434`
 
-```shell
-docker compose build --no-cache && docker compose up -d
-```
+## 后续计划
 
----
+- [ ] 推送到微信和飞书（定时/触发式）
+- [ ] 一键聚合推送，生成公众号文章
 
-## Routes
+## 技术栈
 
-### Tech blogs
-
-| Path | Description |
-|---|---|
-| `/techcrunch` | TechCrunch latest articles |
-| `/wired/latest` | WIRED latest stories |
-| `/zed/blog` | Zed editor blog |
-| `/mritd/blog` | mritd 技术博客 |
-| `/microsoft/devops` | Microsoft DevOps Blog |
-| `/diygod/blog` | DIYGod 个人博客 |
-
-### Programming
-
-| Path | Description |
-|---|---|
-| `/hn/:feed` | Hacker News — `:feed` = `top` / `new` / `best` / `ask` / `show` / `job` |
-| `/github/releases/:owner/:repo` | GitHub releases for any public repository |
-| `/github/issues/:owner/:repo` | Open GitHub issues for any public repository |
-| `/github/stars/:user` | Recently starred repositories by a GitHub user |
-| `/stackoverflow/tag/:tag` | Stack Overflow questions for a tag |
-| `/cnblogs/post` | 博客园 (cnblogs) featured blog posts |
-
-### Academic
-
-| Path | Description |
-|---|---|
-| `/arxiv/:category` | arXiv preprints — `:category` e.g. `cs.AI`, `cs.LG`, `math.CO` |
-
-### English media
-
-| Path | Description |
-|---|---|
-| `/bbc/news/:category` | BBC News — `:category` e.g. `world`, `technology`, `business`, `health` |
-
-### Chinese media
-
-| Path | Description |
-|---|---|
-| `/sspai/articles` | 少数派最新文章 |
-| `/36kr/news` | 36氪最新资讯 |
-| `/huanqiu/news` | 环球网最新新闻 |
-| `/xinhua/news` | 新华网最新新闻 |
-| `/cctv/7` | CCTV-7 国防军事频道最新节目 |
-
-### Community & product
-
-| Path | Description |
-|---|---|
-| `/reddit/r/:subreddit` | Reddit hot posts for a subreddit |
-| `/producthunt/daily` | Product Hunt daily featured products |
-
-### Video
-
-| Path | Description |
-|---|---|
-| `/bilibili/user/video/:uid` | Bilibili UP主最新视频 — `:uid` 为用户 UID |
-
-### Generic
-
-| Path | Description |
-|---|---|
-| `/rss` | Any RSS 2.0 or Atom feed — set `feedUrl` in route config to point at the target feed |
-
----
-
-All routes return RSS 2.0 by default. Append `?format=json` for JSON and `?limit=N` to cap item count.
-
-```shell
-curl http://localhost:8080/hn/top
-curl http://localhost:8080/arxiv/cs.AI
-curl http://localhost:8080/github/releases/spring-projects/spring-boot
-curl 'http://localhost:8080/hn/top?format=json&limit=5'
-```
-
----
-
-## Adding a route
-
-A route is a single class implementing `RouteHandler`, registered in `AppRuntime`. The interface has one method:
-
-```java
-Feed fetch(RouteContext ctx) throws Exception;
-```
-
-No annotations, no framework magic. Register it in `AppRuntime` with a path, description, and category — it immediately appears in the route config page (`/index`) and is available for scheduling.
-
----
-
-## Configuration
-
-All data paths are overridable via system properties (defaults shown):
-
-```shell
-./gradlew bootRun \
-  -Dfetch-news.db=./feed-store.db \
-  -Dfetch-news.route-config=./route-config.json \
-  -Dfetch-news.ai-config=./ai-config.json
-```
-
-The `OLLAMA_HOST` environment variable overrides the host stored in `ai-config.json` without modifying the file.
-
----
-
-## Architecture
-
-```
-HTTP Request
-  → Spring MVC Controller (RssLiteResource / ReaderResource)
-    → RouteConfigStore       — enabled check, TTL resolution
-    → RouteRegistry          — path-pattern matching
-    → CacheService           — per-entry TTL cache (Caffeine)
-    → FeedFetcher            — invoke handler, persist items, log fetch
-      → RouteHandler         — fetch + parse upstream source
-        → FetchClient        — Java HttpClient with retry
-        → JSoup / Jackson    — HTML / XML / JSON parsing
-      → FeedStore            — SQLite: items, bookmarks, AI cache, fetch log
-    → FeedRenderer           — RSS 2.0 or JSON output
-  → HTTP Response
-
-Background
-  → FetchScheduler           — ticks every 60 s, evaluates cron/interval per route
-  → ArticleExtractor         — fetches full text, calls Ollama, caches in SQLite
-  → ArticleSummarizer        — generates Chinese summary, caches in SQLite
-```
-
-**Key design decisions:**
-
-- `RouteHandler` is a single-method interface — adding a source is one class, no annotations.
-- Explicit route registration in `AppRuntime` — all routes visible in one place.
-- `FeedRenderer` interface — adding Atom or other formats requires only a new implementation.
-- `FeedFetcher` centralises fetch-persist-log shared by HTTP endpoint and scheduler.
-- `CacheService` is route-config-aware — TTL set per route, not globally.
-
----
-
-## Build
-
-```shell
-./gradlew build   # compile + test
-./gradlew bootJar # fat JAR only → build/libs/fetch-news-*.jar
-```
-
----
-
-## Tech stack
-
-| Layer | Technology |
-|---|---|
-| Framework | Spring Boot 4 / Spring MVC |
-| Templates | Thymeleaf + HTMX + Alpine.js |
-| HTTP client | Java built-in `HttpClient` |
-| Parsing | JSoup (HTML/XML) · Jackson (JSON) |
-| Cache | Caffeine — in-memory, per-route TTL |
-| Persistence | SQLite via `sqlite-jdbc` |
-| AI | Ollama (local) — extract + summarise |
-| Build | Gradle |
-| Java | 25 |
+Spring Boot · Thymeleaf + HTMX + Alpine.js · JSoup · SQLite · Caffeine · Ollama · Java 25

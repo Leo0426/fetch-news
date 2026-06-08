@@ -8,34 +8,29 @@ import app.core.RouteConfigStore;
 import app.core.RouteRegistry;
 import app.routes.ArxivRoute;
 import app.routes.GenericRssRoute;
-import app.routes.BBCNewsRoute;
-import app.routes.BbcLearningEnglishRoute;
-import app.routes.BilibiliDynamicRoute;
-import app.routes.BilibiliFollowingsArticleRoute;
-import app.routes.BilibiliFollowingsDynamicRoute;
-import app.routes.BilibiliFollowingsVideoRoute;
-import app.routes.BilibiliVideoRoute;
-import app.routes.TwitterUserRoute;
 import app.routes.CctvNewsRoute;
 import app.routes.CnblogsRoute;
 import app.routes.DiygodRoute;
-import app.routes.GithubIssuesRoute;
-import app.routes.GithubReleaseRoute;
-import app.routes.GithubStarsRoute;
 import app.routes.HackerNewsRoute;
-import app.routes.HuanqiuRoute;
-import app.routes.HuanqiuTechRoute;
 import app.routes.MritdRoute;
 import app.routes.MsDevOpsRoute;
 import app.routes.ProductHuntRoute;
-import app.routes.RedditRoute;
 import app.routes.SspaiRoute;
-import app.routes.StackOverflowRoute;
 import app.routes.TechCrunchRoute;
 import app.routes.ThirtySixKrRoute;
 import app.routes.WiredRoute;
 import app.routes.XinhuaRoute;
-import app.routes.ZedBlogRoute;
+import app.routes.bbc.BBCNewsRoute;
+import app.routes.bbc.BbcLearningEnglishRoute;
+import app.routes.bilibili.BilibiliDynamicRoute;
+import app.routes.bilibili.BilibiliFollowingsArticleRoute;
+import app.routes.bilibili.BilibiliFollowingsDynamicRoute;
+import app.routes.bilibili.BilibiliFollowingsVideoRoute;
+import app.routes.bilibili.BilibiliVideoRoute;
+import app.routes.github.GithubReleaseRoute;
+import app.routes.huanqiu.HuanqiuRoute;
+import app.routes.huanqiu.HuanqiuTechRoute;
+import app.routes.twitter.TwitterUserRoute;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.nio.file.Path;
@@ -67,11 +62,6 @@ public class AppRuntime {
         FetchClient defaultFetchClient = new DefaultFetchClient();
         this.routeRegistry = new RouteRegistry(List.of(
                 // ── tech blogs ────────────────────────────────────────────────
-                new Route("/zed/blog",
-                        new ZedBlogRoute(defaultFetchClient, cacheService),
-                        "Latest posts from the Zed editor blog",
-                        "技术博客", "HTML 解析",
-                        "解析 zed.dev/blog 列表页，选 a[href^=/blog/]（需含 h2）卡片，取 h2 标题和 h2 后首段摘要；无发布时间"),
                 new Route("/techcrunch",
                         new TechCrunchRoute(defaultFetchClient),
                         "TechCrunch latest articles",
@@ -102,27 +92,12 @@ public class AppRuntime {
                         new GithubReleaseRoute(defaultFetchClient, objectMapper),
                         "GitHub releases for any public repository — path params: :owner, :repo",
                         "编程", "JSON API",
-                        "调用 GitHub REST /repos/:owner/:repo/releases，取版本号(tag_name/name)、release notes(body)、发布时间(published_at)、作者；跳过草稿"),
-                new Route("/github/issues/:owner/:repo",
-                        new GithubIssuesRoute(defaultFetchClient, objectMapper),
-                        "Open GitHub issues for any public repository — path params: :owner, :repo",
-                        "编程", "JSON API",
-                        "调用 GitHub REST /repos/:owner/:repo/issues?state=open，取标题、正文(截1000字)、标签(labels)、作者(user.login)、创建时间；跳过 PR"),
-                new Route("/github/stars/:user",
-                        new GithubStarsRoute(defaultFetchClient, objectMapper),
-                        "Recently starred repositories by a GitHub user — path param: :user",
-                        "编程", "JSON API",
-                        "调用 GitHub REST /users/:user/starred?sort=created，取仓库名(full_name)、描述、主语言(language)、star数、最近推送时间(pushed_at)"),
+                        "调用 GitHub REST /repos/:owner/:repo/releases，取版本号(tag_name/name)、release notes(body)、发布时间(published_at)"),
                 new Route("/hn/:feed",
-                        new HackerNewsRoute(defaultFetchClient, cacheService, objectMapper),
+                        new HackerNewsRoute(defaultFetchClient),
                         "Hacker News feed — :feed can be top, new, best, ask, show, or job",
-                        "编程", "JSON API",
-                        "Firebase API 取 story ID 列表，逐条调 item API，取标题、链接、作者(by)、发布时间(UNIX秒)、得分(score)、评论数(descendants)；仅保留 type=story/job"),
-                new Route("/stackoverflow/tag/:tag",
-                        new StackOverflowRoute(defaultFetchClient),
-                        "Stack Overflow questions for a tag — path param: :tag",
-                        "编程", "RSS 代理",
-                        "代理 stackoverflow.com/feeds/tag/:tag 官方 Atom，标准字段解析"),
+                        "编程", "HTML 解析",
+                        "解析 news.ycombinator.com 页面 .athing 行：标题(.titleline>a)、来源域名(.sitestr)、作者(.hnuser)、发布时间(.age[title] ISO)、得分(.score)、评论数；单次请求"),
                 new Route("/cnblogs/post",
                         new CnblogsRoute(defaultFetchClient),
                         "博客园 (cnblogs) featured blog posts",
@@ -182,11 +157,6 @@ public class AppRuntime {
                         "Twitter/X 用户时间线 — :id 为用户名(如 elonmusk)或 +数字ID(如 +44196397)",
                         "社区", "GraphQL API",
                         "调用 X GraphQL /i/api/graphql/{queryId}/UserTweets；GQL query ID 从 Twitter JS 动态解析并缓存 24h，失败时回退 hardcoded fallback；需 TWITTER_COOKIE(含 auth_token+ct0)"),
-                new Route("/reddit/r/:subreddit",
-                        new RedditRoute(defaultFetchClient, objectMapper),
-                        "Reddit hot posts for a subreddit — path param: :subreddit",
-                        "社区", "JSON API",
-                        "调用 reddit.com/r/:subreddit/hot.json，从 children[].data 取标题、链接/permalink、作者、得分(score)、评论数；自发帖附 selftext(截500字)"),
                 new Route("/producthunt/daily",
                         new ProductHuntRoute(defaultFetchClient),
                         "Product Hunt daily featured products",

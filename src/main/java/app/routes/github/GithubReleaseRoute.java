@@ -1,4 +1,4 @@
-package app.routes;
+package app.routes.github;
 
 import app.core.Feed;
 import app.core.FeedItem;

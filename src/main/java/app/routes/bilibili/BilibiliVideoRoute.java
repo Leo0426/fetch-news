@@ -1,4 +1,4 @@
-package app.routes;
+package app.routes.bilibili;
 
 import app.core.CacheService;
 import app.CredentialConfigStore;

@@ -7,9 +7,40 @@
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/admin.css">
   <script src="/htmx.min.js"></script>
+  <script>
+    document.addEventListener('alpine:init', () => {
+      Alpine.data('appShell', () => ({
+        modal: false,
+        activePage: 'stats',
+        pageTitle: '数据统计',
+        sbOpen: false,
+        init() {
+          const hash = window.location.hash.slice(1);
+          if (!hash || hash === 'stats') return;
+          const pageMap = {
+            ai:          ['/index/ai',          'AI 设置'],
+            credentials: ['/index/credentials', '凭据配置'],
+            health:      ['/index/health',      'Feed 健康'],
+            logs:        ['/index/logs',        '抓取日志']
+          };
+          if (hash.startsWith('cat=')) {
+            const cat = decodeURIComponent(hash.slice(4));
+            this.activePage = 'cat:' + cat;
+            this.pageTitle  = cat;
+            htmx.ajax('GET', '/index/category?name=' + encodeURIComponent(cat),
+                      {target: '#main-content', swap: 'innerHTML'});
+          } else if (pageMap[hash]) {
+            this.activePage = hash;
+            this.pageTitle  = pageMap[hash][1];
+            htmx.ajax('GET', pageMap[hash][0], {target: '#main-content', swap: 'innerHTML'});
+          }
+        }
+      }));
+    });
+  </script>
   <script defer src="/alpine.min.js"></script>
 </head>
-<body x-data="{ modal: false, activePage: 'stats', pageTitle: '数据统计', sbOpen: false }"
+<body x-data="appShell()"
       @htmx:after-swap.window="if ($event.detail.target.id === 'modal-inner' && $event.detail.target.innerHTML.trim() !== '') modal = true"
       @closemodal.window="modal = false"
       @keydown.escape.window="sbOpen = false; modal = false">
@@ -40,7 +71,7 @@
            hx-get="/index/stats"
            hx-target="#main-content"
            hx-swap="innerHTML"
-           @click="activePage = 'stats'; pageTitle = '数据统计'"
+           @click="activePage = 'stats'; pageTitle = '数据统计'; window.location.hash = 'stats'"
            href="javascript:void(0)">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <rect x="3" y="12" width="4" height="9"/><rect x="10" y="7" width="4" height="14"/>
@@ -63,7 +94,7 @@
            hx-get="/index/ai"
            hx-target="#main-content"
            hx-swap="innerHTML"
-           @click="activePage = 'ai'; pageTitle = 'AI 设置'"
+           @click="activePage = 'ai'; pageTitle = 'AI 设置'; window.location.hash = 'ai'"
            href="javascript:void(0)">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"/>
@@ -74,7 +105,7 @@
            hx-get="/index/credentials"
            hx-target="#main-content"
            hx-swap="innerHTML"
-           @click="activePage = 'credentials'; pageTitle = '凭据配置'"
+           @click="activePage = 'credentials'; pageTitle = '凭据配置'; window.location.hash = 'credentials'"
            href="javascript:void(0)">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
@@ -86,7 +117,7 @@
            hx-get="/index/health"
            hx-target="#main-content"
            hx-swap="innerHTML"
-           @click="activePage = 'health'; pageTitle = 'Feed 健康'"
+           @click="activePage = 'health'; pageTitle = 'Feed 健康'; window.location.hash = 'health'"
            href="javascript:void(0)">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
@@ -97,7 +128,7 @@
            hx-get="/index/logs"
            hx-target="#main-content"
            hx-swap="innerHTML"
-           @click="activePage = 'logs'; pageTitle = '抓取日志'"
+           @click="activePage = 'logs'; pageTitle = '抓取日志'; window.location.hash = 'logs'"
            href="javascript:void(0)">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
@@ -117,7 +148,7 @@
              th:hx-get="'/index/category?name=' + ${cat.name}"
              hx-target="#main-content"
              hx-swap="innerHTML"
-             @click="activePage = 'cat:' + $el.dataset.cat; pageTitle = $el.dataset.cat"
+             @click="activePage = 'cat:' + $el.dataset.cat; pageTitle = $el.dataset.cat; window.location.hash = 'cat=' + $el.dataset.cat"
              href="javascript:void(0)">
             <span th:text="${cat.name}">分类</span>
             <span class="nav-badge" th:text="${cat.count}">0</span>

@@ -94,7 +94,7 @@ public record RouteConfig(
 
     /** Builds the default enabled configuration for a registered route. */
     public static RouteConfig defaults(String path) {
-        return new RouteConfig(path, path, true,
+        return new RouteConfig(path, path, false,
                 DEFAULT_ROUTE_CACHE_TTL_SECONDS, DEFAULT_DETAIL_CACHE_TTL_SECONDS, 0, null, null, null);
     }
 

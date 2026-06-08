@@ -1,5 +1,6 @@
 package app.routes;
 
+import app.routes.github.GithubReleaseRoute;
 import app.core.Feed;
 import app.core.RouteContext;
 import app.core.RouteError;

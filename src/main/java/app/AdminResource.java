@@ -306,13 +306,17 @@ public class AdminResource {
                  consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE,
                  produces = MediaType.TEXT_HTML_VALUE)
     @ResponseBody
-    public String toggleRoute(@RequestParam String path, @RequestParam String category) {
+    public String toggleRoute(@RequestParam String path,
+                              @RequestParam(required = false) String category) {
         RouteConfig cur = runtime.routeConfigStore().get(path);
         runtime.routeConfigStore().save(new RouteConfig(
                 cur.path(), cur.sourcePath(), !cur.enabled(),
                 cur.routeCacheTtlSeconds(), cur.detailCacheTtlSeconds(),
                 cur.scheduleMinutes(), cur.scheduleCron(), cur.feedUrl(), cur.alias()));
-        return templates.categorySection(routes(), category);
+        if (category != null && !category.isBlank()) {
+            return templates.categorySection(routes(), category);
+        }
+        return templates.routeTable(routes(), null, null, false);
     }
 
     /**

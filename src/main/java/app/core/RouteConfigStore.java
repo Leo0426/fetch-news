@@ -37,12 +37,15 @@ public class RouteConfigStore {
      * @return route configs visible to the admin API
      */
     public synchronized List<RouteConfig> list(List<String> routePaths) {
-        List<RouteConfig> registered = routePaths.stream().map(this::get).toList();
-        List<RouteConfig> aliases = configs.values().stream()
-                .filter(config -> !routePaths.contains(config.path()))
-                .filter(config -> routePaths.contains(config.sourcePath()))
-                .toList();
-        return java.util.stream.Stream.concat(registered.stream(), aliases.stream()).toList();
+        List<RouteConfig> result = new java.util.ArrayList<>();
+        for (String path : routePaths) {
+            result.add(get(path));
+            configs.values().stream()
+                    .filter(config -> !routePaths.contains(config.path()))
+                    .filter(config -> path.equals(config.sourcePath()))
+                    .forEach(result::add);
+        }
+        return result;
     }
 
     /**

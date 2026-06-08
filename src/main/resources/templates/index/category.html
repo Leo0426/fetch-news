@@ -6,12 +6,6 @@
       <span class="cat-count"
             th:text="'共 ' + ${#lists.size(routes)} + ' 个路由'"></span>
     </div>
-    <button type="button" class="btn primary"
-            hx-get="/index/routes/new"
-            hx-target="#modal-inner"
-            hx-swap="innerHTML">
-      ＋ 新建挂载
-    </button>
   </div>
 
   <div th:if="${#lists.isEmpty(routes)}"
@@ -44,20 +38,34 @@
           </td>
           <td>
             <div class="desc-strategy-wrap">
-              <span th:if="${descriptions[route.path] != null}"
-                    class="desc-cell"
-                    th:text="${descriptions[route.path]}"></span>
               <span th:if="${descriptions[route.path] == null and route.path != route.sourcePath}"
                     class="src-cell"
                     th:text="'→ ' + ${route.sourcePath}"></span>
               <span th:if="${descriptions[route.path] == null and route.path == route.sourcePath}"
                     class="src-cell">—</span>
-              <span th:if="${strategies[route.sourcePath] != null}"
-                    th:class="'strategy-badge ' + ${strategies[route.sourcePath] == 'RSS 代理' ? 'strategy-rss' : (strategies[route.sourcePath] == 'JSON API' ? 'strategy-json' : (strategies[route.sourcePath] == 'HTML 解析' ? 'strategy-html' : 'strategy-generic'))}"
-                    th:text="${strategies[route.sourcePath]}"></span>
-              <span th:if="${fetchDetails[route.sourcePath] != null}"
-                    class="fetch-detail"
-                    th:text="${fetchDetails[route.sourcePath]}"></span>
+              <div class="strategy-detail-row">
+                <span th:if="${strategies[route.sourcePath] != null}"
+                      th:class="'strategy-badge ' + ${strategies[route.sourcePath] == 'RSS 代理' ? 'strategy-rss' : (strategies[route.sourcePath] == 'JSON API' ? 'strategy-json' : (strategies[route.sourcePath] == 'HTML 解析' ? 'strategy-html' : 'strategy-generic'))}"
+                      th:text="${strategies[route.sourcePath]}"></span>
+                <div class="info-pop-wrap"
+                     th:if="${abouts[route.sourcePath] != null or descriptions[route.path] != null or fetchDetails[route.sourcePath] != null}">
+                  <button type="button" class="info-tag" onclick="openPop(event,this)">简介</button>
+                  <div class="info-pop">
+                    <div th:if="${abouts[route.sourcePath] != null}"
+                         class="about-body" style="padding:0 0 4px;"
+                         th:utext="${abouts[route.sourcePath]}"></div>
+                    <div th:if="${abouts[route.sourcePath] == null and descriptions[route.path] != null}">
+                      <div class="info-pop-label">简介</div>
+                      <div class="info-pop-text" th:text="${descriptions[route.path]}"></div>
+                    </div>
+                    <div class="info-pop-sep" th:if="${fetchDetails[route.sourcePath] != null}"></div>
+                    <div th:if="${fetchDetails[route.sourcePath] != null}">
+                      <div class="info-pop-label">获取方式</div>
+                      <div class="info-pop-text" th:text="${fetchDetails[route.sourcePath]}"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </td>
           <td>
@@ -122,7 +130,8 @@
                       onclick="copyRss(this)">
                 ⎘
               </button>
-              <button type="button" class="act" title="编辑设置"
+              <button th:if="${!#strings.contains(route.path, ':')}"
+                      type="button" class="act" title="编辑设置"
                       hx-get="/index/routes/edit"
                       hx-target="#modal-inner"
                       hx-swap="innerHTML"
@@ -138,7 +147,8 @@
                       th:hx-vals="${'{&quot;path&quot;:&quot;' + route.path + '&quot;}'}">
                 ▤
               </button>
-              <button type="button" class="act del" title="删除配置"
+              <button th:if="${route.path != route.sourcePath}"
+                      type="button" class="act del" title="删除配置"
                       hx-delete="/index/routes"
                       hx-target="#cat-view"
                       hx-swap="outerHTML"
@@ -156,6 +166,35 @@
 </div>
 
 <script>
+function openPop(ev, btn) {
+  ev.stopPropagation();
+  const pop = btn.nextElementSibling;
+  const isOpen = pop.classList.contains('open');
+  closeAllPops();
+  if (!isOpen) {
+    const r = btn.getBoundingClientRect();
+    pop.style.left = r.left + 'px';
+    pop.style.top  = (r.bottom + 6) + 'px';
+    pop.classList.add('open');
+    btn.classList.add('active');
+    const pr = pop.getBoundingClientRect();
+    if (pr.bottom > window.innerHeight - 8)
+      pop.style.top = (r.top - pr.height - 6) + 'px';
+    if (pr.right > window.innerWidth - 8)
+      pop.style.left = Math.max(8, window.innerWidth - pr.width - 8) + 'px';
+  }
+}
+function closeAllPops() {
+  document.querySelectorAll('.info-pop.open').forEach(p => {
+    p.classList.remove('open');
+    const b = p.previousElementSibling;
+    if (b) b.classList.remove('active');
+  });
+}
+if (!window._popDocListener) {
+  window._popDocListener = true;
+  document.addEventListener('click', closeAllPops);
+}
 function copyRss(btn) {
   var url = location.origin + btn.dataset.path;
   navigator.clipboard.writeText(url).then(function() {

@@ -108,6 +108,7 @@ public class AdminTemplateRenderer {
         ctx.setVariable("descriptions", descriptions);
         ctx.setVariable("strategies", strategies);
         ctx.setVariable("fetchDetails", fetchDetails);
+        ctx.setVariable("abouts", RouteAbout.ABOUTS);
         ctx.setVariable("healthMap", healthMap);
         return engine.process("index/category", ctx);
     }
@@ -124,6 +125,7 @@ public class AdminTemplateRenderer {
         ctx.setVariable("descriptions", descriptions);
         ctx.setVariable("strategies", strategies);
         ctx.setVariable("fetchDetails", fetchDetails);
+        ctx.setVariable("abouts", RouteAbout.ABOUTS);
         ctx.setVariable("outOfBand", outOfBand);
         return engine.process("index/table", ctx);
     }
@@ -147,6 +149,10 @@ public class AdminTemplateRenderer {
         ctx.setVariable("message", message);
         ctx.setVariable("error", error);
         ctx.setVariable("recentLogs", isNew ? Collections.emptyList() : recentLogs(selected));
+
+        if (selected != null) {
+            ctx.setVariable("about", RouteAbout.ABOUTS.get(selected.sourcePath()));
+        }
 
         // For concrete Bilibili followings routes, expose the UID and stored cookie
         if (selected != null

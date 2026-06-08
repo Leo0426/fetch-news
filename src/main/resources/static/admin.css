@@ -326,27 +326,66 @@ body {
 .strategy-generic { background: #faf5ff; color: #7c3aed; border-color: rgba(124,58,237,.15); }
 
 .desc-strategy-wrap { display: flex; flex-direction: column; gap: 4px; }
-.fetch-detail {
-  font-size: 11px; color: var(--subtle); line-height: 1.4;
-  max-height: 0; opacity: 0; overflow: hidden;
-  transition: max-height 0.18s ease, opacity 0.15s ease;
+.strategy-detail-row { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+.info-tag {
+  display: inline-flex; align-items: center;
+  padding: 1px 6px; border-radius: 4px;
+  font-size: 10px; font-weight: 500; letter-spacing: .01em;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  color: var(--muted);
+  cursor: pointer;
+  transition: background .1s, color .12s, border-color .12s;
 }
-tr:hover .fetch-detail { max-height: 80px; opacity: 1; }
+.info-tag:hover { background: rgba(15,118,110,.06); color: var(--accent); border-color: rgba(15,118,110,.3); }
+.info-tag.active { background: rgba(15,118,110,.1); color: var(--accent); border-color: var(--accent); }
+
+/* ── Info popover ─────────────────────────────────────────────────────── */
+.info-pop-wrap {
+  position: relative;
+  display: inline-flex;
+}
+.info-pop {
+  position: fixed;
+  z-index: 300;
+  width: 400px;
+  max-height: 500px;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.10), 0 2px 8px rgba(0,0,0,.06);
+  padding: 14px 16px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity .14s;
+}
+.info-pop.open {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+.info-pop-label {
+  font-size: 10px; font-weight: 700; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--subtle); margin-bottom: 4px;
+}
+.info-pop-text { font-size: 12px; color: var(--muted); line-height: 1.5; }
+.info-pop-sep  { height: 1px; background: var(--border); margin: 10px 0; }
 
 /* ── Action buttons ───────────────────────────────────────────────────── */
 .acts { display: flex; align-items: center; gap: 2px; }
 
 .act {
-  width: 28px; height: 28px;
+  width: 32px; height: 32px;
   display: flex; align-items: center; justify-content: center;
   border-radius: 5px; border: 1px solid transparent; background: none;
-  color: var(--muted); cursor: pointer; font-size: 13px;
+  color: var(--muted); cursor: pointer; font-size: 16px;
   transition: background .1s, color .1s, border-color .1s;
   padding: 0;
 }
 .act:hover          { background: var(--surface2); border-color: var(--border); color: var(--text); }
 .act.del:hover      { background: var(--warn-bg);  border-color: rgba(220,38,38,.2); color: var(--warn); }
-a.act               { text-decoration: none; font-size: 10.5px; font-weight: 600; letter-spacing: .02em; }
+a.act               { text-decoration: none; font-size: 12px; font-weight: 600; letter-spacing: .02em; }
 
 /* ── Small button (logs pagination / filter) ──────────────────────────── */
 .btn-small {
@@ -485,6 +524,56 @@ a.act               { text-decoration: none; font-size: 10.5px; font-weight: 600
 .form-msg { font-size: 12px; }
 .form-msg.ok  { color: var(--accent); }
 .form-msg.err { color: var(--warn); }
+
+/* ── Route about section ──────────────────────────────────────────────── */
+.about-section {
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  margin-bottom: 16px;
+  background: var(--surface);
+  overflow: hidden;
+}
+.about-section summary {
+  cursor: pointer;
+  padding: 9px 13px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  user-select: none;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.about-section summary::before {
+  content: '▶';
+  font-size: 9px;
+  transition: transform .15s;
+}
+.about-section[open] summary::before { transform: rotate(90deg); }
+.about-body {
+  padding: 0 13px 12px;
+  font-size: 12.5px;
+  color: var(--text);
+}
+.about-body p { margin: 0 0 10px; line-height: 1.6; }
+.about-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.about-table th, .about-table td {
+  padding: 5px 10px;
+  border: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+.about-table thead th {
+  background: var(--surface2);
+  font-weight: 600;
+  color: var(--muted);
+}
+.about-table tbody tr:nth-child(even) { background: var(--surface); }
 
 /* ── Log section ──────────────────────────────────────────────────────── */
 .log-section {

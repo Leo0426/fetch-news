@@ -1,5 +1,6 @@
 package app.routes;
 
+import app.routes.bilibili.BilibiliVideoRoute;
 import app.CredentialConfig;
 import app.CredentialConfigStore;
 import app.core.CacheService;

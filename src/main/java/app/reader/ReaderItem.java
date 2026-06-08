@@ -37,7 +37,6 @@ public record ReaderItem(
             case "techcrunch"    -> "TC";
             case "wired"         -> "Wired";
             case "producthunt"   -> "PH";
-            case "zed"           -> "Zed";
             case "mritd"         -> "mritd";
             case "diygod"        -> "DIYGod";
             default              -> parts[1];

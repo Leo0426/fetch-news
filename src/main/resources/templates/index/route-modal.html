@@ -6,6 +6,12 @@
   </div>
 
   <div class="modal-body">
+
+    <details th:if="${about != null}" class="about-section">
+      <summary>关于此来源</summary>
+      <div class="about-body" th:utext="${about}"></div>
+    </details>
+
     <form hx-post="/index/routes"
           hx-target="#modal-inner"
           hx-swap="innerHTML"
