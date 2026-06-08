@@ -93,7 +93,8 @@ public class CredentialConfigStore {
         var map = new HashMap<>(current.bilibiliUidCookies());
         if (cookie == null || cookie.isBlank()) map.remove(uid);
         else map.put(uid, cookie);
-        return save(new CredentialConfig(current.bilibiliCookie(), map, current.twitterCookie()));
+        return save(new CredentialConfig(current.bilibiliCookie(), map,
+                current.bilibiliUidNames(), current.twitterCookie()));
     }
 
     // ── persistence ───────────────────────────────────────────────────────────
@@ -105,10 +106,13 @@ public class CredentialConfigStore {
             var node = mapper.readTree(filePath.toFile());
             String bili = node.path("bilibiliCookie").asText("");
             String twit = node.path("twitterCookie").asText("");
-            var uidMap  = new HashMap<String, String>();
+            var uidMap   = new HashMap<String, String>();
+            var nameMap  = new HashMap<String, String>();
             node.path("bilibiliUidCookies").fields()
                     .forEachRemaining(e -> uidMap.put(e.getKey(), e.getValue().asText("")));
-            return new CredentialConfig(bili, uidMap, twit);
+            node.path("bilibiliUidNames").fields()
+                    .forEachRemaining(e -> nameMap.put(e.getKey(), e.getValue().asText("")));
+            return new CredentialConfig(bili, uidMap, nameMap, twit);
         } catch (IOException e) {
             log.warn("failed to load credential config from {}: {}", filePath, e.getMessage());
             return CredentialConfig.defaults();

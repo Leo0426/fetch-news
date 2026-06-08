@@ -456,18 +456,26 @@ public class AdminResource {
             @RequestParam(defaultValue = "") String bilibiliCookie,
             @RequestParam(defaultValue = "") String twitterCookie,
             @RequestParam(required = false) List<String> uidKey,
-            @RequestParam(required = false) List<String> uidCookie) {
-        var uidMap = new java.util.LinkedHashMap<String, String>();
+            @RequestParam(required = false) List<String> uidCookie,
+            @RequestParam(required = false) List<String> uidName) {
+        var uidCookieMap = new java.util.LinkedHashMap<String, String>();
+        var uidNameMap   = new java.util.LinkedHashMap<String, String>();
         if (uidKey != null && uidCookie != null) {
             int len = Math.min(uidKey.size(), uidCookie.size());
             for (int i = 0; i < len; i++) {
                 String k = uidKey.get(i).strip();
                 String v = uidCookie.get(i).strip();
-                if (!k.isBlank() && !v.isBlank()) uidMap.put(k, v);
+                if (!k.isBlank() && !v.isBlank()) {
+                    uidCookieMap.put(k, v);
+                    if (uidName != null && i < uidName.size()) {
+                        String n = uidName.get(i).strip();
+                        if (!n.isBlank()) uidNameMap.put(k, n);
+                    }
+                }
             }
         }
         CredentialConfig saved = runtime.credentialConfigStore().save(
-                new CredentialConfig(bilibiliCookie.strip(), uidMap, twitterCookie.strip()));
+                new CredentialConfig(bilibiliCookie.strip(), uidCookieMap, uidNameMap, twitterCookie.strip()));
         return templates.credentialsSettings(saved, "已保存");
     }
 
