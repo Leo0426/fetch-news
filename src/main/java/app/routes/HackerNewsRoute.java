@@ -1,6 +1,5 @@
 package app.routes;
 
-import app.core.CacheService;
 import app.core.Feed;
 import app.core.FeedItem;
 import app.core.FetchClient;
@@ -8,29 +7,40 @@ import app.core.RouteContext;
 import app.core.RouteError;
 import app.core.RouteException;
 import app.core.RouteHandler;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
+import org.jsoup.select.Elements;
+
 import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
 /**
- * Route that serves Hacker News story feeds via the Firebase API.
+ * Route that serves Hacker News feeds by parsing the HN web page directly.
  *
  * <p>Path: /hn/:feed — where :feed is one of top, new, best, ask, show, job.
  *
- * <p>Fetches the story ID list then retrieves each story individually.
- * Story detail pages are cached to avoid redundant API calls.
+ * <p>Single HTTP request per feed; pubDate sourced from {@code .age[title]} (ISO format),
+ * category from {@code .sitestr}. No Firebase API or per-item fetch needed.
  */
 public class HackerNewsRoute implements RouteHandler {
-    private static final String LIST_URL =
-            "https://hacker-news.firebaseio.com/v0/%sstories.json";
-    private static final String ITEM_URL =
-            "https://hacker-news.firebaseio.com/v0/item/%s.json";
-    private static final int DEFAULT_LIMIT = 30;
+    private static final String ROOT = "https://news.ycombinator.com";
+    private static final int LIMIT = 30;
 
-    private static final Map<String, String> FEED_LABELS = Map.of(
+    private static final Map<String, String> PATHS = Map.of(
+            "top",  "",
+            "new",  "/newest",
+            "best", "/best",
+            "ask",  "/ask",
+            "show", "/show",
+            "job",  "/jobs");
+
+    private static final Map<String, String> LABELS = Map.of(
             "top",  "Top Stories",
             "new",  "Newest",
             "best", "Best Stories",
@@ -39,83 +49,106 @@ public class HackerNewsRoute implements RouteHandler {
             "job",  "Jobs");
 
     private final FetchClient fetchClient;
-    private final CacheService cacheService;
-    private final ObjectMapper objectMapper;
 
-    public HackerNewsRoute(FetchClient fetchClient, CacheService cacheService, ObjectMapper objectMapper) {
+    public HackerNewsRoute(FetchClient fetchClient) {
         this.fetchClient = fetchClient;
-        this.cacheService = cacheService;
-        this.objectMapper = objectMapper;
     }
 
     @Override
     public Feed handle(RouteContext context) throws Exception {
         String feed = context.pathParam("feed");
-        if (feed == null || feed.isBlank()) {
-            feed = "top";
-        }
-        if (!FEED_LABELS.containsKey(feed)) {
+        if (feed == null || feed.isBlank()) feed = "top";
+        if (!PATHS.containsKey(feed)) {
             throw new RouteException(RouteError.INVALID_PARAMETER,
-                    "unknown feed: " + feed + ". Use one of: " + String.join(", ", FEED_LABELS.keySet()));
+                    "unknown feed: " + feed + ". Valid values: " + String.join(", ", PATHS.keySet()));
         }
-        String listUrl = String.format(LIST_URL, feed);
-        String json = fetchClient.get(listUrl);
+
+        String url = ROOT + PATHS.get(feed);
+        String html = fetchClient.get(url);
+
         try {
-            JsonNode ids = objectMapper.readTree(json);
-            if (!ids.isArray()) {
-                throw new RouteException(RouteError.UPSTREAM_INVALID_CONTENT, "expected JSON array of story IDs");
-            }
+            Document doc = Jsoup.parse(html);
             List<FeedItem> items = new ArrayList<>();
-            for (JsonNode idNode : ids) {
-                if (items.size() >= DEFAULT_LIMIT) break;
-                FeedItem item = fetchStory(idNode.asText(), feed, context);
+            for (Element row : doc.select(".athing")) {
+                if (items.size() >= LIMIT) break;
+                FeedItem item = parseRow(row);
                 if (item != null) items.add(item);
             }
-            if (items.isEmpty()) {
-                throw new RouteException(RouteError.EMPTY_FEED);
-            }
-            String label = FEED_LABELS.get(feed);
-            return new Feed(
-                    "Hacker News — " + label,
-                    "https://news.ycombinator.com/",
-                    label + " from Hacker News",
-                    items);
+            if (items.isEmpty()) throw new RouteException(RouteError.EMPTY_FEED);
+
+            String label = LABELS.get(feed);
+            return new Feed("Hacker News — " + label, url, label + " from Hacker News", items);
         } catch (RouteException e) {
             throw e;
         } catch (Exception e) {
-            throw new RouteException(RouteError.PARSER_FAILED, "parser failed: " + e.getMessage(), e);
+            throw new RouteException(RouteError.PARSER_FAILED, "parse failed: " + e.getMessage(), e);
         }
     }
 
-    private FeedItem fetchStory(String id, String feed, RouteContext context) throws Exception {
-        String storyJson = cacheService.getDetailPage(
-                "hn:story:" + id,
-                context.detailCacheTtl(),
-                () -> fetchClient.get(String.format(ITEM_URL, id)));
-        JsonNode story = objectMapper.readTree(storyJson);
-        if (story == null || story.isNull()) return null;
+    private FeedItem parseRow(Element thing) {
+        String id = thing.attr("id");
+        if (id == null || id.isBlank()) return null;
 
-        String type = story.path("type").asText("story");
-        // for job feed, allow job type; otherwise require story
-        if (!"story".equals(type) && !("job".equals(feed) && "job".equals(type))) return null;
+        Element titleLink = thing.selectFirst(".titleline > a");
+        if (titleLink == null) return null;
 
-        String title = story.path("title").asText(null);
-        if (title == null) return null;
+        String title  = titleLink.text();
+        String origin = titleLink.attr("href");
+        String hnLink = ROOT + "/item?id=" + id;
+        if (origin.startsWith("item?")) origin = ROOT + "/" + origin;
 
-        String url = story.path("url").asText(null);
-        String by = story.path("by").asText(null);
-        long time = story.path("time").asLong(0);
-        int score = story.path("score").asInt(0);
-        int descendants = story.path("descendants").asInt(0);
-        String itemUrl = "https://news.ycombinator.com/item?id=" + id;
+        String site = thing.select(".sitestr").text();
+        List<String> categories = site.isBlank() ? List.of() : List.of(site);
 
-        String link = (url != null && !url.isBlank()) ? url : itemUrl;
-        String description = "<p>" + score + " points by " + escapeHtml(by != null ? by : "unknown")
-                + " | <a href=\"" + itemUrl + "\">" + descendants + " comments</a></p>";
-        return new FeedItem(title, link, description, time > 0 ? Instant.ofEpochSecond(time) : null, by, List.of());
+        // subtext row immediately follows the .athing row
+        Element subtext = thing.nextElementSibling();
+        String  author   = null;
+        Instant pubDate  = null;
+        int     score    = 0;
+        String  comments = "";
+
+        if (subtext != null) {
+            Element hnuser = subtext.selectFirst(".hnuser");
+            if (hnuser != null) author = hnuser.text();
+
+            Element age = subtext.selectFirst(".age");
+            if (age != null) {
+                try { pubDate = LocalDateTime.parse(age.attr("title")).toInstant(ZoneOffset.UTC); }
+                catch (DateTimeParseException ignored) {}
+            }
+
+            Element scoreEl = subtext.selectFirst(".score");
+            if (scoreEl != null) {
+                try { score = Integer.parseInt(scoreEl.text().split(" ")[0]); }
+                catch (NumberFormatException ignored) {}
+            }
+
+            Elements links = subtext.select("a");
+            if (!links.isEmpty()) {
+                String last = links.last().text();
+                if (last.contains("comment")) comments = last.split(" comment")[0];
+            }
+        }
+
+        String desc = buildDesc(score, author, hnLink, comments);
+        String link = (!origin.equals(hnLink)) ? origin : hnLink;
+        return new FeedItem(title, link, desc, pubDate, author, categories);
     }
 
-    private String escapeHtml(String text) {
-        return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
+    private String buildDesc(int score, String author, String hnLink, String comments) {
+        StringBuilder sb = new StringBuilder("<p>");
+        if (score > 0) sb.append(score).append(" points");
+        if (author != null) {
+            if (score > 0) sb.append(" by ");
+            sb.append(esc(author));
+        }
+        sb.append(" | <a href=\"").append(hnLink).append("\">");
+        sb.append(comments.isBlank() ? "discuss" : comments + " comments");
+        sb.append("</a></p>");
+        return sb.toString();
+    }
+
+    private String esc(String s) {
+        return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
     }
 }

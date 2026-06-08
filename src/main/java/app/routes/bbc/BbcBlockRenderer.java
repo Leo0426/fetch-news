@@ -1,4 +1,4 @@
-package app.routes;
+package app.routes.bbc;
 
 import com.fasterxml.jackson.databind.JsonNode;
 

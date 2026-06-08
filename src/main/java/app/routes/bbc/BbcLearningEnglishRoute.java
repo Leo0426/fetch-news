@@ -1,4 +1,4 @@
-package app.routes;
+package app.routes.bbc;
 
 import app.core.CacheService;
 import app.core.Feed;
