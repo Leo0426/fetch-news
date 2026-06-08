@@ -91,10 +91,14 @@
             </div>
           </td>
           <td>
-            <span th:if="${route.scheduleMinutes > 0}"
+            <span th:if="${route.scheduleCron != null}"
+                  class="pill sched"
+                  th:text="'⏱ ' + ${route.scheduleCron}"
+                  th:title="${route.scheduleCron}"></span>
+            <span th:if="${route.scheduleCron == null and route.scheduleMinutes > 0}"
                   class="pill sched"
                   th:text="'⏱ ' + ${route.scheduleMinutes} + 'm'"></span>
-            <span th:if="${route.scheduleMinutes == 0}"
+            <span th:if="${route.scheduleCron == null and route.scheduleMinutes == 0}"
                   style="color:var(--subtle);font-size:12px;">—</span>
           </td>
           <td style="padding-right:20px;">
@@ -108,8 +112,8 @@
                       th:hx-vals="${'{&quot;source&quot;:&quot;' + route.path + '&quot;}'}">
                 ＋
               </button>
-              <!-- Fetch now: concrete paths only -->
-              <button th:if="${!#strings.contains(route.path, ':')}"
+              <!-- Fetch now: concrete non-template paths only -->
+              <button th:if="${!#strings.contains(route.path, ':') and strategies[route.path] != '通用 RSS'}"
                       type="button" class="act" title="立即抓取"
                       hx-post="/index/routes/fetch"
                       hx-target="#cat-view"
@@ -117,20 +121,20 @@
                       th:hx-vals="${'{&quot;path&quot;:&quot;' + route.path + '&quot;,&quot;category&quot;:&quot;' + category + '&quot;}'}">
                 ↺
               </button>
-              <!-- RSS link: concrete paths -->
-              <a th:if="${!#strings.contains(route.path, ':')}"
+              <!-- RSS link: concrete non-template paths -->
+              <a th:if="${!#strings.contains(route.path, ':') and strategies[route.path] != '通用 RSS'}"
                  class="act" title="打开 RSS"
                  th:href="${route.path}" target="_blank" rel="noopener">
                 RSS
               </a>
-              <!-- Copy RSS URL: concrete paths -->
-              <button th:if="${!#strings.contains(route.path, ':')}"
+              <!-- Copy RSS URL: concrete non-template paths -->
+              <button th:if="${!#strings.contains(route.path, ':') and strategies[route.path] != '通用 RSS'}"
                       type="button" class="act" title="复制 RSS 链接"
                       th:attr="data-path=${route.path}"
                       onclick="copyRss(this)">
                 ⎘
               </button>
-              <button th:if="${!#strings.contains(route.path, ':')}"
+              <button th:if="${!#strings.contains(route.path, ':') and strategies[route.path] != '通用 RSS'}"
                       type="button" class="act" title="编辑设置"
                       hx-get="/index/routes/edit"
                       hx-target="#modal-inner"

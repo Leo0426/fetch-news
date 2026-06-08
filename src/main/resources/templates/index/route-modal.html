@@ -76,8 +76,8 @@
                 th:if="${!isNew and !selected.isSchedulable()}">参数化路由不支持定时抓取</span>
           <span class="field-hint"
                 th:if="${isNew or selected.isSchedulable()}"
-                th:text="${(isNew or selected.scheduleMinutes == 0)} ? '0 = 不启用' : '每 ' + ${selected.scheduleMinutes} + ' 分钟'"
-                th:class="${(!isNew and selected.scheduleMinutes > 0 and (isNew or selected.scheduleCron == null))} ? 'field-hint ok' : 'field-hint'"></span>
+                th:text="${(!isNew and selected.scheduleCron != null)} ? '已被 Cron 表达式覆盖' : (${(isNew or selected.scheduleMinutes == 0)} ? '0 = 不启用' : '每 ' + ${selected.scheduleMinutes} + ' 分钟')"
+                th:class="${(!isNew and selected.scheduleMinutes > 0 and selected.scheduleCron == null)} ? 'field-hint ok' : 'field-hint'"></span>
         </div>
         <div class="field">
           <span>Cron 表达式（优先）</span>
