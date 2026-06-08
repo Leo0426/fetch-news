@@ -1,5 +1,8 @@
 <div th:fragment="routeTable"
      id="routes-table"
+     hx-get="/index/routes/table"
+     hx-trigger="routeSaved from:body"
+     hx-swap="outerHTML"
      th:attr="hx-swap-oob=${outOfBand} ? 'outerHTML:#routes-table'">
 
   <div class="toolbar">
