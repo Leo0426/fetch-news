@@ -96,10 +96,14 @@
             </button>
           </td>
           <td>
-            <span th:if="${route.scheduleMinutes > 0}"
+            <span th:if="${route.scheduleCron != null}"
+                  class="pill sched"
+                  th:text="'⏱ ' + ${route.scheduleCron}"
+                  th:title="${route.scheduleCron}"></span>
+            <span th:if="${route.scheduleCron == null and route.scheduleMinutes > 0}"
                   class="pill sched"
                   th:text="'⏱ ' + ${route.scheduleMinutes} + 'm'"></span>
-            <span th:if="${route.scheduleMinutes == 0}"
+            <span th:if="${route.scheduleCron == null and route.scheduleMinutes == 0}"
                   style="color:var(--subtle);font-size:12px;">—</span>
           </td>
           <td>
@@ -113,13 +117,13 @@
                       th:hx-vals="${'{&quot;source&quot;:&quot;' + route.path + '&quot;}'}">
                 ＋
               </button>
-              <!-- RSS: shown only for concrete (non-parameterized) routes -->
-              <a th:if="${!#strings.contains(route.path, ':')}"
+              <!-- RSS: concrete non-parameterized routes, excluding generic /rss template -->
+              <a th:if="${!#strings.contains(route.path, ':') and strategies[route.path] != '通用 RSS'}"
                  class="act" title="RSS"
                  th:href="${route.path}" target="_blank" rel="noopener">
                 RSS
               </a>
-              <button th:if="${!#strings.contains(route.path, ':')}"
+              <button th:if="${!#strings.contains(route.path, ':') and strategies[route.path] != '通用 RSS'}"
                       type="button" class="act" title="编辑设置"
                       hx-get="/index/routes/edit"
                       hx-target="#modal-inner"
@@ -127,7 +131,7 @@
                       th:hx-vals="${'{&quot;path&quot;:&quot;' + route.path + '&quot;}'}">
                 ✏
               </button>
-              <button th:if="${!#strings.contains(route.path, ':')}"
+              <button th:if="${!#strings.contains(route.path, ':') and strategies[route.path] != '通用 RSS'}"
                       type="button" class="act" title="浏览数据"
                       hx-get="/index/items"
                       hx-target="#main-content"

@@ -309,7 +309,7 @@ body {
 }
 .pill.on  { background: var(--green-bg);  color: var(--green);  border-color: rgba(22,163,74,.2); }
 .pill.off { background: var(--warn-bg);   color: var(--warn);   border-color: rgba(220,38,38,.2); }
-.pill.sched { background: var(--purple-bg); color: var(--purple); border-color: rgba(124,58,237,.2); font-size: 10px; }
+.pill.sched { background: var(--purple-bg); color: var(--purple); border-color: rgba(124,58,237,.2); font-size: 10px; max-width: 140px; overflow: hidden; text-overflow: ellipsis; }
 
 /* ── Fetch strategy badge ─────────────────────────────────────────────── */
 .strategy-badge {
