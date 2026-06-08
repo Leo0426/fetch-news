@@ -37,6 +37,7 @@ public class AdminTemplateRenderer {
     private final TemplateEngine engine;
     private final FeedStore feedStore;
     private final AppInfo appInfo;
+    private final AppRuntime runtime;
     private final Map<String, String> categories;
     private final Map<String, String> descriptions;
     private final Map<String, String> strategies;
@@ -61,6 +62,7 @@ public class AdminTemplateRenderer {
         this.engine = engine;
         this.feedStore = feedStore;
         this.appInfo = appInfo;
+        this.runtime = runtime;
         this.categories = runtime.routeRegistry().categories();
         this.descriptions = runtime.routeRegistry().descriptions();
         this.strategies = runtime.routeRegistry().strategies();
@@ -145,6 +147,17 @@ public class AdminTemplateRenderer {
         ctx.setVariable("message", message);
         ctx.setVariable("error", error);
         ctx.setVariable("recentLogs", isNew ? Collections.emptyList() : recentLogs(selected));
+
+        // For concrete Bilibili followings routes, expose the UID and stored cookie
+        if (selected != null
+                && selected.sourcePath().startsWith("/bilibili/followings/")
+                && !selected.path().contains(":")) {
+            String uid = selected.path().substring(selected.path().lastIndexOf('/') + 1);
+            String storedCookie = runtime.credentialConfigStore().getBilibiliCookieForUid(uid);
+            ctx.setVariable("cookieUid", uid);
+            ctx.setVariable("cookieStored", storedCookie != null ? storedCookie : "");
+        }
+
         return engine.process("index/route-modal", ctx);
     }
 

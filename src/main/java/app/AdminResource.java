@@ -464,6 +464,22 @@ public class AdminResource {
     }
 
     /**
+     * Saves a single per-UID Bilibili cookie from the route modal.
+     * Returns an inline status fragment (targets #cookie-save-result).
+     */
+    @PostMapping(
+            value = "/credentials/uid-cookie",
+            consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE,
+            produces = MediaType.TEXT_HTML_VALUE)
+    @ResponseBody
+    public String saveUidCookie(
+            @RequestParam String uid,
+            @RequestParam(defaultValue = "") String cookie) {
+        runtime.credentialConfigStore().putUidCookie(uid.strip(), cookie.strip());
+        return "<span class='form-msg ok'>Cookie 已保存</span>";
+    }
+
+    /**
      * Lists registered routes and saved mount aliases (JSON API).
      */
     @GetMapping(value = "/api/routes", produces = MediaType.APPLICATION_JSON_VALUE)
