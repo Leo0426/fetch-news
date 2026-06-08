@@ -58,6 +58,43 @@ class BilibiliHelper {
 
     Map<String, String> baseHeaders() { return baseHeaders; }
 
+    // ── per-UID cookie support ────────────────────────────────────────────────
+
+    /**
+     * Returns the cookie for a specific UID.
+     * Checks {@code BILIBILI_COOKIE_{uid}} first; falls back to global
+     * {@code BILIBILI_COOKIE}. Returns {@code null} if neither is set.
+     */
+    static String cookieForUid(String uid) {
+        String specific = System.getenv("BILIBILI_COOKIE_" + uid);
+        if (specific != null && !specific.isBlank()) return specific;
+        String global = System.getenv("BILIBILI_COOKIE");
+        return (global != null && !global.isBlank()) ? global : null;
+    }
+
+    /** Returns true if any cookie (per-UID or global) is available for the UID. */
+    static boolean hasCookieForUid(String uid) {
+        return cookieForUid(uid) != null;
+    }
+
+    /** Builds request headers with the UID-specific cookie and the given Referer. */
+    Map<String, String> headersForUid(String uid, String referer) {
+        var h = new HashMap<String, String>();
+        h.put("User-Agent", BROWSER_UA);
+        h.put("Referer",    referer);
+        h.put("Origin",     "https://www.bilibili.com");
+        String cookie = cookieForUid(uid);
+        if (cookie != null) h.put("Cookie", cookie);
+        return Collections.unmodifiableMap(h);
+    }
+
+    /** Fetches a URL with the UID-specific cookie. */
+    String getForUid(String url, String uid, String referer) throws Exception {
+        return fetchClient.get(url, headersForUid(uid, referer));
+    }
+
+    // ── general fetch helpers ─────────────────────────────────────────────────
+
     /** Returns base headers with Referer overridden to the given URL. */
     Map<String, String> refererHeaders(String referer) {
         var h = new HashMap<>(baseHeaders);

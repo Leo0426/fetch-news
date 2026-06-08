@@ -14,12 +14,20 @@ services:
       # Tune to your host. Spring Boot auto-sizes within these bounds.
       JAVA_OPTS: "-Xms128m -Xmx512m"
 
-      # ── Bilibili cookie ─────────────────────────────────────────────────────
-      # Required to bypass Bilibili's rate-limiting on the space API.
-      # Grab from browser DevTools → Application → Cookies → api.bilibili.com.
-      # Minimum needed: buvid3=<value>; buvid4=<value>
-      # No login required — these cookies are set when you visit bilibili.com.
+      # ── Bilibili cookies ─────────────────────────────────────────────────────
+      # Global cookie (public routes — video, UP主动态):
+      #   Grab from browser DevTools → Cookies → api.bilibili.com.
+      #   Minimum: buvid3=<value>; buvid4=<value>  (no login required)
       BILIBILI_COOKIE: ""
+
+      # Per-UID cookie (followings/dynamic、video、article routes):
+      #   The UID is your own logged-in Bilibili UID.
+      #   How to get: open https://api.vc.bilibili.com/dynamic_svr/v1/dynamic_svr/dynamic_new?uid=0&type=8
+      #   → DevTools → Network → click dynamic_new request → copy Cookie header.
+      #   For followings/dynamic: copy the FULL cookie string.
+      #   For followings/video and followings/article: SESSDATA= field alone is sufficient.
+      #   Replace {uid} below with your actual UID (e.g. BILIBILI_COOKIE_2267573).
+      # BILIBILI_COOKIE_<uid>: ""
 
       # ── Twitter/X cookie ────────────────────────────────────────────────────
       # Required for Twitter GraphQL API access.
