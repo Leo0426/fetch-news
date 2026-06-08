@@ -11,8 +11,11 @@ import app.routes.GenericRssRoute;
 import app.routes.BBCNewsRoute;
 import app.routes.BbcLearningEnglishRoute;
 import app.routes.BilibiliDynamicRoute;
-import app.routes.TwitterUserRoute;
+import app.routes.BilibiliFollowingsArticleRoute;
+import app.routes.BilibiliFollowingsDynamicRoute;
+import app.routes.BilibiliFollowingsVideoRoute;
 import app.routes.BilibiliVideoRoute;
+import app.routes.TwitterUserRoute;
 import app.routes.CctvNewsRoute;
 import app.routes.CnblogsRoute;
 import app.routes.DiygodRoute;
@@ -197,6 +200,21 @@ public class AppRuntime {
                         "Bilibili UP主动态 — :uid 为用户 UID",
                         "视频", "JSON API",
                         "调用 /x/polymer/web-dynamic/v1/feed/space；按 type 分发：AV→视频封面+简介、DRAW→图文、WORD→纯文字、ARTICLE/OPUS→文章、FORWARD→转发；话题提取为 categories；需 BILIBILI_COOKIE"),
+                new Route("/bilibili/followings/dynamic/:uid",
+                        new BilibiliFollowingsDynamicRoute(defaultFetchClient, objectMapper, cacheService),
+                        "Bilibili 关注全部动态 — :uid 为登录用户自身 UID",
+                        "视频", "JSON API",
+                        "调用 dynamic_svr/dynamic_new?type_list=268435455；:uid 为已登录用户 UID；需 BILIBILI_COOKIE_{uid}(完整 Cookie)；解析视频/图文/文字/专栏/转发"),
+                new Route("/bilibili/followings/video/:uid",
+                        new BilibiliFollowingsVideoRoute(defaultFetchClient, objectMapper, cacheService),
+                        "Bilibili 关注视频动态 — :uid 为登录用户自身 UID",
+                        "视频", "JSON API",
+                        "调用 dynamic_svr/dynamic_new?type=8；:uid 为已登录用户 UID；需 BILIBILI_COOKIE_{uid}(SESSDATA 即可)；返回封面+简介"),
+                new Route("/bilibili/followings/article/:uid",
+                        new BilibiliFollowingsArticleRoute(defaultFetchClient, objectMapper, cacheService),
+                        "Bilibili 关注专栏动态 — :uid 为登录用户自身 UID",
+                        "视频", "JSON API",
+                        "调用 dynamic_svr/dynamic_new?type=64；:uid 为已登录用户 UID；需 BILIBILI_COOKIE_{uid}(SESSDATA 即可)；返回封面+摘要"),
                 // ── generic ───────────────────────────────────────────────────
                 new Route("/rss",
                         new GenericRssRoute(defaultFetchClient),
