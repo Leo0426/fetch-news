@@ -35,10 +35,12 @@
           <td class="path-cell" style="padding-left:20px;">
             <span th:if="${route.path == route.sourcePath}"
                   class="path-chip"
-                  th:text="${route.path}"></span>
+                  th:text="${route.alias() != null ? route.alias() : route.path}"
+                  th:title="${route.alias() != null ? route.path : ''}"></span>
             <span th:if="${route.path != route.sourcePath}"
                   class="path-chip instance"
-                  th:text="${route.path}"></span>
+                  th:text="${route.alias() != null ? route.alias() : route.path}"
+                  th:title="${route.alias() != null ? route.path : ''}"></span>
           </td>
           <td>
             <div class="desc-strategy-wrap">

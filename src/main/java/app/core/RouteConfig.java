@@ -12,6 +12,7 @@ package app.core;
  * @param scheduleCron Spring 6-field cron expression (sec min hr dom mon dow); takes precedence
  *                     over scheduleMinutes when non-null. Example: {@code "0 0 8 * * *"} = 8 AM daily.
  * @param feedUrl RSS/Atom feed URL for the generic {@code /rss} route; null for all other routes
+ * @param alias   optional human-readable label for this route; shown in the admin UI instead of the path
  */
 public record RouteConfig(
         String path,
@@ -21,25 +22,26 @@ public record RouteConfig(
         int detailCacheTtlSeconds,
         int scheduleMinutes,
         String scheduleCron,
-        String feedUrl) {
+        String feedUrl,
+        String alias) {
     public static final int DEFAULT_ROUTE_CACHE_TTL_SECONDS = 300;
     public static final int DEFAULT_DETAIL_CACHE_TTL_SECONDS = 1800;
 
     /** Creates a configuration whose exposed path is also its source path, with no schedule. */
     public RouteConfig(String path, boolean enabled, int routeCacheTtlSeconds, int detailCacheTtlSeconds) {
-        this(path, path, enabled, routeCacheTtlSeconds, detailCacheTtlSeconds, 0, null, null);
+        this(path, path, enabled, routeCacheTtlSeconds, detailCacheTtlSeconds, 0, null, null, null);
     }
 
     /** Creates a configuration with no schedule. */
     public RouteConfig(String path, String sourcePath, boolean enabled,
                        int routeCacheTtlSeconds, int detailCacheTtlSeconds) {
-        this(path, sourcePath, enabled, routeCacheTtlSeconds, detailCacheTtlSeconds, 0, null, null);
+        this(path, sourcePath, enabled, routeCacheTtlSeconds, detailCacheTtlSeconds, 0, null, null, null);
     }
 
     /** Creates a configuration without a cron expression or feedUrl. */
     public RouteConfig(String path, String sourcePath, boolean enabled,
                        int routeCacheTtlSeconds, int detailCacheTtlSeconds, int scheduleMinutes) {
-        this(path, sourcePath, enabled, routeCacheTtlSeconds, detailCacheTtlSeconds, scheduleMinutes, null, null);
+        this(path, sourcePath, enabled, routeCacheTtlSeconds, detailCacheTtlSeconds, scheduleMinutes, null, null, null);
     }
 
     /** Creates a configuration without a feedUrl. */
@@ -47,7 +49,7 @@ public record RouteConfig(
                        int routeCacheTtlSeconds, int detailCacheTtlSeconds,
                        int scheduleMinutes, String scheduleCron) {
         this(path, sourcePath, enabled, routeCacheTtlSeconds, detailCacheTtlSeconds,
-                scheduleMinutes, scheduleCron, null);
+                scheduleMinutes, scheduleCron, null, null);
     }
 
     /** Validates route paths, cache TTL values, cron syntax, and feed URL format. */
@@ -77,6 +79,7 @@ public record RouteConfig(
         }
         scheduleCron = (scheduleCron != null && scheduleCron.isBlank()) ? null : scheduleCron;
         feedUrl      = (feedUrl      != null && feedUrl.isBlank())      ? null : feedUrl;
+        alias        = (alias        != null && alias.isBlank())        ? null : alias;
     }
 
     /** Returns whether this route can be scheduled (concrete path, no pattern params). */
@@ -92,6 +95,11 @@ public record RouteConfig(
     /** Builds the default enabled configuration for a registered route. */
     public static RouteConfig defaults(String path) {
         return new RouteConfig(path, path, true,
-                DEFAULT_ROUTE_CACHE_TTL_SECONDS, DEFAULT_DETAIL_CACHE_TTL_SECONDS, 0, null, null);
+                DEFAULT_ROUTE_CACHE_TTL_SECONDS, DEFAULT_DETAIL_CACHE_TTL_SECONDS, 0, null, null, null);
+    }
+
+    /** Returns the display label: alias if set, otherwise path. */
+    public String displayName() {
+        return alias != null ? alias : path;
     }
 }

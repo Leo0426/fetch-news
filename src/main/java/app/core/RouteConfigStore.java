@@ -107,6 +107,9 @@ public class RouteConfigStore {
                 JsonNode feedUrlNode = value.path("feedUrl");
                 String feedUrl = (!feedUrlNode.isMissingNode() && !feedUrlNode.isNull())
                         ? feedUrlNode.asText() : null;
+                JsonNode aliasNode = value.path("alias");
+                String alias = (!aliasNode.isMissingNode() && !aliasNode.isNull())
+                        ? aliasNode.asText() : null;
                 configs.put(entry.getKey(), new RouteConfig(
                         entry.getKey(),
                         value.path("sourcePath").asText(defaults.sourcePath()),
@@ -115,7 +118,8 @@ public class RouteConfigStore {
                         value.path("detailCacheTtlSeconds").asInt(defaults.detailCacheTtlSeconds()),
                         value.path("scheduleMinutes").asInt(0),
                         scheduleCron,
-                        feedUrl));
+                        feedUrl,
+                        alias));
             });
         } catch (IOException e) {
             throw new RouteException(RouteError.INVALID_PARAMETER, "failed to read route config: " + e.getMessage(), e);
@@ -147,6 +151,9 @@ public class RouteConfigStore {
                 }
                 if (config.feedUrl() != null) {
                     node.put("feedUrl", config.feedUrl());
+                }
+                if (config.alias() != null) {
+                    node.put("alias", config.alias());
                 }
             }
             objectMapper.writerWithDefaultPrettyPrinter().writeValue(configFile.toFile(), root);
