@@ -1,6 +1,7 @@
 package app.routes;
 
 import app.core.CacheService;
+import app.CredentialConfigStore;
 import app.core.Feed;
 import app.core.FeedItem;
 import app.core.FetchClient;
@@ -36,8 +37,9 @@ public class BilibiliFollowingsDynamicRoute implements RouteHandler {
     private final ObjectMapper objectMapper;
 
     public BilibiliFollowingsDynamicRoute(FetchClient fetchClient, ObjectMapper objectMapper,
-                                           CacheService cacheService) {
-        this.helper       = new BilibiliHelper(fetchClient, objectMapper, cacheService);
+                                           CacheService cacheService,
+                                         CredentialConfigStore credStore) {
+        this.helper       = new BilibiliHelper(fetchClient, objectMapper, cacheService, credStore);
         this.objectMapper = objectMapper;
     }
 
@@ -47,7 +49,7 @@ public class BilibiliFollowingsDynamicRoute implements RouteHandler {
         if (uid == null || uid.isBlank()) {
             throw new RouteException(RouteError.INVALID_PARAMETER, "uid is required");
         }
-        if (!BilibiliHelper.hasCookieForUid(uid)) {
+        if (!helper.hasCookieForUid(uid)) {
             throw new RouteException(RouteError.INVALID_PARAMETER,
                     "BILIBILI_COOKIE_" + uid + " env var is required (full cookie string from browser)");
         }

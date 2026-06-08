@@ -52,6 +52,7 @@ public class AppRuntime {
     private final CacheService cacheService;
     private final RouteRegistry routeRegistry;
     private final RouteConfigStore routeConfigStore;
+    private final CredentialConfigStore credentialConfigStore;
 
     /**
      * Builds the default runtime used by Spring injection.
@@ -61,6 +62,8 @@ public class AppRuntime {
     @Autowired
     public AppRuntime(ObjectMapper objectMapper) {
         this.cacheService = new CacheService();
+        this.credentialConfigStore = new CredentialConfigStore(
+                Path.of("data/credential-config.json"), objectMapper);
         FetchClient defaultFetchClient = new DefaultFetchClient();
         this.routeRegistry = new RouteRegistry(List.of(
                 // ── tech blogs ────────────────────────────────────────────────
@@ -175,7 +178,7 @@ public class AppRuntime {
                         "调用 news.cctv.com JSONP API，按条目 ID 前缀分发：ART→文章全文(getXinwenNextArticleInfo)、PHO→图片集(contentinfo)、VIDE→HLS 视频(getHttpVideoInfo)；发布时间从 focus_date 字段解析"),
                 // ── social / product ──────────────────────────────────────────
                 new Route("/twitter/user/:id",
-                        new TwitterUserRoute(defaultFetchClient, objectMapper, cacheService),
+                        new TwitterUserRoute(defaultFetchClient, objectMapper, cacheService, credentialConfigStore),
                         "Twitter/X 用户时间线 — :id 为用户名(如 elonmusk)或 +数字ID(如 +44196397)",
                         "社区", "GraphQL API",
                         "调用 X GraphQL /i/api/graphql/{queryId}/UserTweets；GQL query ID 从 Twitter JS 动态解析并缓存 24h，失败时回退 hardcoded fallback；需 TWITTER_COOKIE(含 auth_token+ct0)"),
@@ -191,27 +194,27 @@ public class AppRuntime {
                         "代理 producthunt.com/feed?category=undefined 官方 RSS 2.0，标准字段解析"),
                 // ── video ─────────────────────────────────────────────────────
                 new Route("/bilibili/user/video/:uid",
-                        new BilibiliVideoRoute(defaultFetchClient, objectMapper, cacheService),
+                        new BilibiliVideoRoute(defaultFetchClient, objectMapper, cacheService, credentialConfigStore),
                         "Bilibili UP主最新投稿 — :uid 为用户 UID",
                         "视频", "JSON API (WBI)",
                         "调用 WBI 签名端点 /x/space/wbi/arc/search；从 vlist 取 bvid、封面(pic)、标题、简介、作者、发布时间(UNIX秒)；需 BILIBILI_COOKIE"),
                 new Route("/bilibili/user/dynamic/:uid",
-                        new BilibiliDynamicRoute(defaultFetchClient, objectMapper, cacheService),
+                        new BilibiliDynamicRoute(defaultFetchClient, objectMapper, cacheService, credentialConfigStore),
                         "Bilibili UP主动态 — :uid 为用户 UID",
                         "视频", "JSON API",
                         "调用 /x/polymer/web-dynamic/v1/feed/space；按 type 分发：AV→视频封面+简介、DRAW→图文、WORD→纯文字、ARTICLE/OPUS→文章、FORWARD→转发；话题提取为 categories；需 BILIBILI_COOKIE"),
                 new Route("/bilibili/followings/dynamic/:uid",
-                        new BilibiliFollowingsDynamicRoute(defaultFetchClient, objectMapper, cacheService),
+                        new BilibiliFollowingsDynamicRoute(defaultFetchClient, objectMapper, cacheService, credentialConfigStore),
                         "Bilibili 关注全部动态 — :uid 为登录用户自身 UID",
                         "视频", "JSON API",
                         "调用 dynamic_svr/dynamic_new?type_list=268435455；:uid 为已登录用户 UID；需 BILIBILI_COOKIE_{uid}(完整 Cookie)；解析视频/图文/文字/专栏/转发"),
                 new Route("/bilibili/followings/video/:uid",
-                        new BilibiliFollowingsVideoRoute(defaultFetchClient, objectMapper, cacheService),
+                        new BilibiliFollowingsVideoRoute(defaultFetchClient, objectMapper, cacheService, credentialConfigStore),
                         "Bilibili 关注视频动态 — :uid 为登录用户自身 UID",
                         "视频", "JSON API",
                         "调用 dynamic_svr/dynamic_new?type=8；:uid 为已登录用户 UID；需 BILIBILI_COOKIE_{uid}(SESSDATA 即可)；返回封面+简介"),
                 new Route("/bilibili/followings/article/:uid",
-                        new BilibiliFollowingsArticleRoute(defaultFetchClient, objectMapper, cacheService),
+                        new BilibiliFollowingsArticleRoute(defaultFetchClient, objectMapper, cacheService, credentialConfigStore),
                         "Bilibili 关注专栏动态 — :uid 为登录用户自身 UID",
                         "视频", "JSON API",
                         "调用 dynamic_svr/dynamic_new?type=64；:uid 为已登录用户 UID；需 BILIBILI_COOKIE_{uid}(SESSDATA 即可)；返回封面+摘要"),
@@ -235,6 +238,9 @@ public class AppRuntime {
         this.cacheService = cacheService;
         this.routeRegistry = routeRegistry;
         this.routeConfigStore = routeConfigStore;
+        this.credentialConfigStore = new CredentialConfigStore(
+                Path.of("build/test-credential-config.json"),
+                new com.fasterxml.jackson.databind.ObjectMapper());
     }
 
     /**
@@ -262,6 +268,10 @@ public class AppRuntime {
      */
     public RouteConfigStore routeConfigStore() {
         return routeConfigStore;
+    }
+
+    public CredentialConfigStore credentialConfigStore() {
+        return credentialConfigStore;
     }
 
     /**

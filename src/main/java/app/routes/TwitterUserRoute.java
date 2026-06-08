@@ -1,6 +1,7 @@
 package app.routes;
 
 import app.core.CacheService;
+import app.CredentialConfigStore;
 import app.core.Feed;
 import app.core.FeedItem;
 import app.core.FetchClient;
@@ -29,8 +30,9 @@ public class TwitterUserRoute implements RouteHandler {
     private final TwitterHelper helper;
 
     public TwitterUserRoute(FetchClient fetchClient, ObjectMapper objectMapper,
-                             CacheService cacheService) {
-        this.helper = new TwitterHelper(fetchClient, objectMapper, cacheService);
+                             CacheService cacheService,
+                             CredentialConfigStore credStore) {
+        this.helper = new TwitterHelper(fetchClient, objectMapper, cacheService, credStore);
     }
 
     @Override

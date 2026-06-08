@@ -1,6 +1,8 @@
 package app;
 
 import app.ai.AiConfig;
+import app.CredentialConfig;
+import app.CredentialConfigStore;
 import app.ai.AiConfigStore;
 import app.ai.ArticleSummarizer;
 import app.ai.OllamaClient;
@@ -423,6 +425,42 @@ public class AdminResource {
     @ResponseBody
     public String testAi() {
         return templates.aiTestResult(ollamaClient.checkConnection(), aiConfigStore.get().model());
+    }
+
+    /**
+     * Credentials settings page fragment.
+     */
+    @GetMapping(value = "/credentials", produces = MediaType.TEXT_HTML_VALUE)
+    @ResponseBody
+    public String credentialsSettings() {
+        return templates.credentialsSettings(runtime.credentialConfigStore().getStored(), null);
+    }
+
+    /**
+     * Save credentials from form.
+     */
+    @PostMapping(
+            value = "/credentials",
+            consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE,
+            produces = MediaType.TEXT_HTML_VALUE)
+    @ResponseBody
+    public String saveCredentials(
+            @RequestParam(defaultValue = "") String bilibiliCookie,
+            @RequestParam(defaultValue = "") String twitterCookie,
+            @RequestParam(required = false) List<String> uidKey,
+            @RequestParam(required = false) List<String> uidCookie) {
+        var uidMap = new java.util.LinkedHashMap<String, String>();
+        if (uidKey != null && uidCookie != null) {
+            int len = Math.min(uidKey.size(), uidCookie.size());
+            for (int i = 0; i < len; i++) {
+                String k = uidKey.get(i).strip();
+                String v = uidCookie.get(i).strip();
+                if (!k.isBlank() && !v.isBlank()) uidMap.put(k, v);
+            }
+        }
+        CredentialConfig saved = runtime.credentialConfigStore().save(
+                new CredentialConfig(bilibiliCookie.strip(), uidMap, twitterCookie.strip()));
+        return templates.credentialsSettings(saved, "已保存");
     }
 
     /**

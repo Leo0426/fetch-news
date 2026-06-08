@@ -1,6 +1,7 @@
 package app;
 
 import app.ai.AiConfig;
+import app.CredentialConfig;
 import app.ai.OllamaClient;
 import app.core.RouteConfig;
 import app.reader.ReaderGroup;
@@ -173,6 +174,13 @@ public class AdminTemplateRenderer {
      * @param summaryCount number of cached AI summaries in SQLite
      * @param message      optional save confirmation message
      */
+    public String credentialsSettings(CredentialConfig config, String message) {
+        Context ctx = new Context();
+        ctx.setVariable("config", config);
+        ctx.setVariable("message", message);
+        return engine.process("index/credentials", ctx);
+    }
+
     public String aiSettings(AiConfig config, int extractCount, int summaryCount, String message) {
         Context ctx = new Context();
         ctx.setVariable("config", config);

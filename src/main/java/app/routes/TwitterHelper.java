@@ -1,5 +1,6 @@
 package app.routes;
 
+import app.CredentialConfigStore;
 import app.core.CacheService;
 import app.core.FetchClient;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -95,15 +96,24 @@ class TwitterHelper {
     private final FetchClient fetchClient;
     private final ObjectMapper objectMapper;
     private final CacheService cacheService;
-    private final Map<String, String> authHeaders;
-    private final String cookie;
+    private final CredentialConfigStore credStore;
 
-    TwitterHelper(FetchClient fetchClient, ObjectMapper objectMapper, CacheService cacheService) {
+    TwitterHelper(FetchClient fetchClient, ObjectMapper objectMapper,
+                  CacheService cacheService, CredentialConfigStore credStore) {
         this.fetchClient  = fetchClient;
         this.objectMapper = objectMapper;
         this.cacheService = cacheService;
-        this.cookie = System.getenv("TWITTER_COOKIE");
+        this.credStore    = credStore;
+    }
 
+    boolean hasCookie() {
+        String c = credStore.getTwitterCookie();
+        return c != null && !c.isBlank();
+    }
+
+    /** Builds auth headers using the current Twitter cookie from the credential store. */
+    private Map<String, String> authHeaders() {
+        String cookie = credStore.getTwitterCookie();
         var h = new HashMap<String, String>();
         h.put("authorization",              BEARER);
         h.put("x-twitter-active-user",      "yes");
@@ -112,14 +122,12 @@ class TwitterHelper {
         h.put("accept-language",            "en-US,en;q=0.9");
         h.put("referer",                    "https://x.com/");
         if (cookie != null && !cookie.isBlank()) {
-            h.put("cookie",          cookie);
-            h.put("x-csrf-token",    extractCt0(cookie));
-            h.put("x-twitter-auth-type", "OAuth2Session");
+            h.put("cookie",               cookie);
+            h.put("x-csrf-token",         extractCt0(cookie));
+            h.put("x-twitter-auth-type",  "OAuth2Session");
         }
-        this.authHeaders = Collections.unmodifiableMap(h);
+        return Collections.unmodifiableMap(h);
     }
-
-    boolean hasCookie() { return cookie != null && !cookie.isBlank(); }
 
     // ── GQL request ───────────────────────────────────────────────────────────
 
@@ -271,7 +279,7 @@ class TwitterHelper {
     // ── internals ─────────────────────────────────────────────────────────────
 
     private JsonNode get(String url) throws Exception {
-        String body = fetchClient.get(url, authHeaders);
+        String body = fetchClient.get(url, authHeaders());
         return objectMapper.readTree(body);
     }
 
