@@ -12,6 +12,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -83,8 +84,7 @@ public class FeishuPusher {
             if (items.isEmpty()) return;
 
             int max = cfg.effectiveMaxItems(category);
-            doSend("【fetch-news】" + routeLabel + " 新增 " + items.size() + " 条",
-                    items, webhook, max);
+            doSend("📬 " + routeLabel, category, items, webhook, max);
             lastPushTime.put(routePath, Instant.now());
         } catch (Exception e) {
             log.warn("[feishu] immediate push error for {}: {}", routePath, e.getMessage());
@@ -136,7 +136,7 @@ public class FeishuPusher {
                 String webhook = cfg.effectiveWebhook(cat);
                 if (webhook.isBlank()) continue;
                 int max = cfg.effectiveMaxItems(cat);
-                doSend("【摘要】" + cat, items, webhook, max);
+                doSend("📰 " + cat + " 摘要", cat, items, webhook, max);
             } catch (Exception e) {
                 log.warn("[feishu] digest error for {}: {}", cat, e.getMessage());
             }
@@ -160,9 +160,14 @@ public class FeishuPusher {
 
     /** Sends a test message directly to {@code webhookUrl}. Returns true on HTTP 200. */
     public boolean test(String webhookUrl) {
-        Map<String, Object> payload = Map.of(
-                "msg_type", "text",
-                "content", Map.of("text", "✅ fetch-news 飞书推送连接测试成功"));
+        String now = ZonedDateTime.now(ZoneId.systemDefault())
+                .format(DateTimeFormatter.ofPattern("yyyy年M月d日 HH:mm"));
+        Map<String, Object> payload = buildCard(
+                "✅ 连接测试成功",
+                "turquoise",
+                "fetch-news 飞书推送已就绪",
+                now,
+                List.of());
         try {
             String body = mapper.writeValueAsString(payload);
             HttpRequest req = HttpRequest.newBuilder()
@@ -181,26 +186,34 @@ public class FeishuPusher {
 
     // ── internal send ─────────────────────────────────────────────────────────
 
-    private void doSend(String title, List<StoredItem> items, String webhookUrl, int maxItems) {
+    private void doSend(String title, String category,
+                        List<StoredItem> items, String webhookUrl, int maxItems) {
         List<StoredItem> toSend = items.size() > maxItems ? items.subList(0, maxItems) : items;
-        List<List<Map<String, String>>> content = new ArrayList<>();
-        for (StoredItem item : toSend) {
-            String text = item.title() != null && !item.title().isBlank() ? item.title() : item.link();
+
+        String date = ZonedDateTime.now(ZoneId.systemDefault())
+                .format(DateTimeFormatter.ofPattern("yyyy年M月d日 HH:mm"));
+        String subtitle = date + "　共 **" + items.size() + "** 条";
+
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < toSend.size(); i++) {
+            StoredItem item = toSend.get(i);
+            String text = item.title() != null && !item.title().isBlank()
+                    ? item.title() : item.link();
+            // truncate very long titles
+            if (text != null && text.length() > 80) text = text.substring(0, 78) + "…";
             if (item.link() != null && !item.link().isBlank()) {
-                content.add(List.of(Map.of("tag", "a", "text", text, "href", item.link())));
+                sb.append("**").append(i + 1).append(".** [")
+                  .append(text).append("](").append(item.link()).append(")\n");
             } else {
-                content.add(List.of(Map.of("tag", "text", "text", text)));
+                sb.append("**").append(i + 1).append(".** ").append(text).append("\n");
             }
         }
         if (items.size() > maxItems) {
-            content.add(List.of(Map.of("tag", "text",
-                    "text", "… 另有 " + (items.size() - maxItems) + " 条未展示")));
+            sb.append("\n_另有 ").append(items.size() - maxItems).append(" 条未展示_");
         }
-        Map<String, Object> payload = Map.of(
-                "msg_type", "post",
-                "content", Map.of(
-                        "post", Map.of(
-                                "zh_cn", Map.of("title", title, "content", content))));
+
+        Map<String, Object> payload = buildCard(
+                title, categoryColor(category), subtitle, sb.toString().stripTrailing(), null);
         try {
             String body = mapper.writeValueAsString(payload);
             HttpRequest req = HttpRequest.newBuilder()
@@ -218,5 +231,56 @@ public class FeishuPusher {
         } catch (Exception e) {
             log.warn("[feishu] send error: {}", e.getMessage());
         }
+    }
+
+    /**
+     * Builds a Feishu interactive card payload.
+     *
+     * @param headerText  card header title
+     * @param color       header template color
+     * @param subtitle    first line below header (lark_md)
+     * @param body        main content (lark_md); null or blank to omit
+     * @param extra       extra elements appended after body; null to omit
+     */
+    private static Map<String, Object> buildCard(String headerText, String color,
+                                                  String subtitle, String body,
+                                                  List<Map<String, Object>> extra) {
+        List<Map<String, Object>> elements = new ArrayList<>();
+
+        if (subtitle != null && !subtitle.isBlank()) {
+            elements.add(mdElement(subtitle));
+        }
+        if (body != null && !body.isBlank()) {
+            elements.add(Map.of("tag", "hr"));
+            elements.add(mdElement(body));
+        }
+        if (extra != null) {
+            elements.addAll(extra);
+        }
+
+        return Map.of(
+                "msg_type", "interactive",
+                "card", Map.of(
+                        "header", Map.of(
+                                "title", Map.of("tag", "plain_text", "content", headerText),
+                                "template", color),
+                        "elements", elements));
+    }
+
+    private static Map<String, Object> mdElement(String content) {
+        return Map.of("tag", "div",
+                "text", Map.of("tag", "lark_md", "content", content));
+    }
+
+    private static String categoryColor(String category) {
+        if (category == null) return "blue";
+        return switch (category) {
+            case "技术博客", "编程" -> "blue";
+            case "英文媒体"        -> "green";
+            case "中文媒体"        -> "orange";
+            case "学术"           -> "violet";
+            case "社区", "视频"    -> "turquoise";
+            default               -> "blue";
+        };
     }
 }
