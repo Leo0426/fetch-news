@@ -3,6 +3,7 @@ package app;
 import app.ai.AiConfigStore;
 import app.ai.ArticleSummarizer;
 import app.core.FeedItem;
+import app.reader.BriefingSection;
 import app.reader.ReaderGroup;
 import app.reader.ReaderItem;
 import app.store.BookmarkedItem;
@@ -295,6 +296,70 @@ public class ReaderResource {
             log.warn("mark-all-read failed: {}", e.getMessage());
             return ResponseEntity.status(500).body("error");
         }
+    }
+
+    /**
+     * Daily briefing page — items for a specific calendar date, grouped by category tag.
+     */
+    @GetMapping(value = "/reader/briefing", produces = MediaType.TEXT_HTML_VALUE)
+    @ResponseBody
+    public String briefing(@RequestParam(required = false) String date) {
+        LocalDate targetDate;
+        try {
+            targetDate = (date != null && !date.isBlank())
+                    ? LocalDate.parse(date)
+                    : LocalDate.now();
+        } catch (Exception e) {
+            targetDate = LocalDate.now();
+        }
+
+        List<StoredItem> stored = List.of();
+        if (feedStore != null) {
+            try {
+                stored = feedStore.loadItemsForDate(targetDate);
+            } catch (Exception e) {
+                log.warn("failed to load items for briefing date {}: {}", targetDate, e.getMessage());
+            }
+        }
+
+        java.util.Map<String, String> summaries = java.util.Map.of();
+        if (feedStore != null && !stored.isEmpty()) {
+            try {
+                List<String> links = stored.stream()
+                        .filter(s -> s.link() != null)
+                        .map(StoredItem::link)
+                        .toList();
+                summaries = feedStore.loadSummaries(links);
+            } catch (Exception e) {
+                log.warn("failed to load summaries for briefing: {}", e.getMessage());
+            }
+        }
+
+        Map<String, String> categories = runtime.routeRegistry().categories();
+        final java.util.Map<String, String> finalSummaries = summaries;
+
+        LinkedHashMap<String, List<ReaderItem>> byCategory = new LinkedHashMap<>();
+        for (StoredItem s : stored) {
+            if (s.title() == null || s.title().isBlank()) continue;
+            if (s.link()  == null || s.link().isBlank())  continue;
+            String summary = finalSummaries.get(s.link());
+            String cat = matchCategory(s.routePath(), categories);
+            byCategory.computeIfAbsent(cat, k -> new ArrayList<>())
+                    .add(new ReaderItem(s.routePath(), s.title(), s.link(), s.firstSeenAt(), summary));
+        }
+
+        int cap = 15;
+        List<BriefingSection> sections = byCategory.entrySet().stream()
+                .map(e -> {
+                    List<ReaderItem> all = e.getValue();
+                    return new BriefingSection(e.getKey(),
+                            all.size() > cap ? all.subList(0, cap) : all,
+                            all.size());
+                })
+                .sorted(java.util.Comparator.comparingInt(BriefingSection::totalCount).reversed())
+                .toList();
+
+        return templates.briefingPage(sections, targetDate, stored.size());
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────

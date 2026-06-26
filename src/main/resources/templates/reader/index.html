@@ -6,53 +6,6 @@
   <title th:text="${hours <= 24 ? '今日速览' : hours <= 48 ? '近 48 小时' : hours <= 72 ? '近 3 天' : '近 7 天'}">今日速览</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/admin.css">
-  <style>
-    body { background: var(--bg); }
-
-    /* reader-only interactive states */
-    .rd-card--read { border-left-color: var(--border); opacity: 0.55; }
-    .rd-card--read:hover { border-left-color: var(--subtle); opacity: 0.8; box-shadow: var(--sh); }
-    .rd-card--read .rd-card-title { color: var(--muted); font-weight: 400; }
-    .rd-card--bookmarked { border-left-color: #f59e0b; }
-
-    .rd-bookmark-btn {
-      width: 18px; height: 18px; flex-shrink: 0;
-      border: none; background: none; padding: 0; cursor: pointer;
-      color: var(--subtle); transition: color .12s, transform .12s;
-      display: flex; align-items: center; justify-content: center;
-    }
-    .rd-bookmark-btn:hover { color: #f59e0b; transform: scale(1.2); }
-    .rd-bookmark-btn.bookmarked { color: #f59e0b; }
-
-    .rd-read-dot {
-      width: 9px; height: 9px; border-radius: 50%;
-      border: 1.5px solid var(--accent); background: var(--accent);
-      cursor: pointer; flex-shrink: 0; padding: 0; outline: none;
-      margin-left: auto;
-      transition: background .12s, border-color .12s, transform .12s;
-    }
-    .rd-read-dot:hover { transform: scale(1.3); }
-    .rd-card--read .rd-read-dot { background: transparent; border-color: var(--subtle); }
-    .rd-card--read .rd-read-dot:hover { border-color: var(--accent); background: var(--accent-bg); }
-
-    .rd-summarize-wrap { margin-bottom: 8px; }
-    .rd-summarize-btn {
-      display: inline-flex; align-items: center; gap: 4px;
-      font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
-      color: var(--subtle); border: 1px dashed var(--border);
-      border-radius: 3px; padding: 3px 8px; background: none; cursor: pointer;
-      transition: color .12s, border-color .12s, background .12s;
-    }
-    .rd-summarize-btn:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); background: var(--accent-bg); }
-    .rd-summarize-btn:disabled { opacity: 0.45; cursor: default; }
-    .rd-summarize-loading { font-size: 12px; color: var(--subtle); line-height: 1.6; margin-bottom: 4px; }
-    .rd-summarize-err { font-size: 11px; color: var(--warn); line-height: 1.5; margin-bottom: 4px; }
-    .rd-summarize-retry {
-      font-size: 10px; font-weight: 600; color: var(--warn);
-      text-decoration: underline; background: none; border: none;
-      cursor: pointer; padding: 0 2px;
-    }
-  </style>
   <script>
     function readerState() {
       return {
@@ -66,7 +19,6 @@
         aiSummaries: {},
         aiErrors:    {},
 
-        /* ── view toggle ── */
         toggleListView() {
           this.listView = !this.listView;
           this.listView
@@ -74,8 +26,7 @@
             : localStorage.removeItem('fn-list-view');
         },
 
-        /* ── read/unread ── */
-        isRead(link) { return !!this.reads[link]; },
+        isRead(link)       { return !!this.reads[link]; },
         async markRead(link) {
           if (this.reads[link]) return;
           this.reads = {...this.reads, [link]: true};
@@ -104,7 +55,6 @@
             .filter(el => !reads[el.dataset.link]).length;
         },
 
-        /* ── bookmarks ── */
         isBookmarked(link) { return !!this.bookmarks[link]; },
         bookmarkCount() {
           const bm = this.bookmarks;
@@ -121,10 +71,9 @@
               headers: {'Content-Type': 'application/x-www-form-urlencoded'},
               body: new URLSearchParams({link, title: title||'', routePath: routePath||''}).toString()
             });
-          } catch(e) { /* optimistic — ignore network errors */ }
+          } catch(e) {}
         },
 
-        /* ── AI summary ── */
         isSummarizing(link) { return !!this.summarizing[link]; },
         summary(link)       { return this.aiSummaries[link] || null; },
         summaryError(link)  { return this.aiErrors[link] || null; },
@@ -175,7 +124,6 @@
     });
   </script>
   <script th:inline="javascript">
-    /* Server-initialised state for Alpine */
     const _fnBookmarks = /*[[${bookmarkedLinks}]]*/ [];
     const _fnReads     = /*[[${readLinks}]]*/ [];
   </script>
@@ -183,9 +131,13 @@
   <script defer src="/alpine.min.js"></script>
 </head>
 <body x-data="readerState()">
+
+<!-- Reading progress bar -->
+<div class="rd-progress-bar" id="rd-progress-bar"></div>
+
 <div class="rd-wrap">
 
-  <!-- header -->
+  <!-- ── Header ─────────────────────────────────────────────── -->
   <div class="rd-head">
     <div>
       <div class="rd-title"
@@ -194,17 +146,17 @@
     </div>
     <div class="rd-meta">
       <span class="rd-count" th:text="${totalCount} + ' 条'">0 条</span>
-      <!-- list / card view toggle -->
       <button class="rd-mark-all" @click="toggleListView()"
               :title="listView ? '切换为卡片视图' : '切换为列表视图'">
         <span x-show="!listView">☰ 列表</span>
         <span x-show="listView" style="display:none">⊞ 卡片</span>
       </button>
+      <a href="/reader/briefing" class="rd-mark-all" style="text-decoration:none;">简报</a>
       <a href="/index" class="rd-admin">路由配置 →</a>
     </div>
   </div>
 
-  <!-- search box: live filter + full-DB search -->
+  <!-- ── Search ─────────────────────────────────────────────── -->
   <form action="/reader/search" method="get" class="rd-search-form">
     <input class="rd-search-input" type="search" name="q"
            @input.debounce.200ms="searchQuery = $event.target.value.trim()"
@@ -219,7 +171,7 @@
             style="margin-left:6px;font-size:11px;color:var(--accent);border:none;background:none;cursor:pointer;">清除</button>
   </div>
 
-  <!-- time-window tabs -->
+  <!-- ── Time-window tabs ───────────────────────────────────── -->
   <div class="rd-tabs">
     <a th:href="'/reader?hours=24'"  class="rd-tab" th:classappend="${hours == 24}  ? ' active'">今天</a>
     <a th:href="'/reader?hours=48'"  class="rd-tab" th:classappend="${hours == 48}  ? ' active'">48 小时</a>
@@ -227,7 +179,7 @@
     <a th:href="'/reader?hours=168'" class="rd-tab" th:classappend="${hours == 168} ? ' active'">7 天</a>
   </div>
 
-  <!-- category tabs: only shown when there are 2+ distinct categories -->
+  <!-- ── Category tabs ─────────────────────────────────────── -->
   <div class="rd-tabs" th:if="${#lists.size(uniqueTags) > 1}" style="flex-wrap:wrap;">
     <button class="rd-tab" :class="activeTag === 'all' && 'active'" @click="activeTag = 'all'">全部</button>
     <button th:each="tag : ${uniqueTags}"
@@ -238,7 +190,7 @@
             th:text="${tag}">分类</button>
   </div>
 
-  <!-- filter bar -->
+  <!-- ── Filter bar ─────────────────────────────────────────── -->
   <div class="rd-filter" th:if="${totalCount > 0}">
     <button class="rd-filter-btn" :class="filter === 'all'        && 'active'" @click="filter = 'all'">全部</button>
     <button class="rd-filter-btn" :class="filter === 'unread'     && 'active'" @click="filter = 'unread'">
@@ -253,113 +205,208 @@
     <button class="rd-mark-all" @click="markAllRead()">全部标为已读</button>
   </div>
 
-  <!-- empty state -->
+  <!-- ── Empty state ───────────────────────────────────────── -->
   <div th:if="${groups.isEmpty()}" class="rd-empty">
     暂无内容<br>
     <span style="font-size:12px;">请先在管理后台启用路由并配置定时抓取，或等待首次抓取完成</span>
   </div>
 
-  <!-- category groups -->
-  <div th:each="group : ${groups}" class="rd-section"
-       th:attr="data-tag=${group.tag()}"
-       x-show="(activeTag === 'all' || $el.dataset.tag === activeTag) &&
-               (!searchQuery || [...$el.querySelectorAll('[data-link]')].some(el =>
-                 (el.dataset.title || '').toLowerCase().includes(searchQuery.toLowerCase()))) &&
-               (filter === 'all' || [...$el.querySelectorAll('[data-link]')].some(el =>
-                 filter === 'unread'     ? !isRead(el.dataset.link) :
-                 filter === 'read'       ?  isRead(el.dataset.link) :
-                 filter === 'bookmarked' ?  isBookmarked(el.dataset.link) : true))">
-    <div class="rd-section-head">
-      <span style="display:flex;align-items:center;gap:7px;">
-        <span th:text="${group.name()}">来源</span>
-        <span th:if="${group.tag() != null}"
-              style="font-size:9px;font-weight:700;background:var(--accent-bg);color:var(--accent);
-                     border:1px solid var(--accent);border-radius:3px;padding:1px 5px;"
-              th:text="${group.tag()}">分类</span>
-      </span>
-      <span class="rd-badge" th:text="${#lists.size(group.items())}">0</span>
-    </div>
-    <div class="rd-grid" :class="listView && 'rd-list'">
-      <!--
-        No nested x-data on cards — all Alpine state lives in the body readerState() component.
-        Children reach the card's link via $el.closest('[data-link]').dataset.link.
-      -->
-      <div th:each="item : ${group.items()}"
-           class="rd-card"
-           th:attr="data-link=${item.link()},data-title=${item.title()},data-route-path=${item.routePath()}"
-           :class="isRead($el.dataset.link) ? 'rd-card--read' : (isBookmarked($el.dataset.link) ? 'rd-card--bookmarked' : '')"
-           x-show="(!searchQuery || ($el.dataset.title || '').toLowerCase().includes(searchQuery.toLowerCase()))
-                && (filter === 'all'
-                || (filter === 'unread'     && !isRead($el.dataset.link))
-                || (filter === 'read'       &&  isRead($el.dataset.link))
-                || (filter === 'bookmarked' &&  isBookmarked($el.dataset.link)))">
+  <!-- ── Main layout: TOC + sections ───────────────────────── -->
+  <div class="rd-layout" th:if="${!groups.isEmpty()}">
 
-        <a class="rd-card-title"
-           th:href="${item.link()}"
-           th:text="${item.title()}"
-           @click="markRead($el.closest('[data-link]').dataset.link)"
-           target="_blank" rel="noopener noreferrer">标题</a>
+    <!-- TOC sidebar (populated by JS) -->
+    <nav class="rd-toc" id="rd-toc" aria-label="目录导航"></nav>
 
-        <!-- server-rendered summary (already in DB) -->
-        <p th:if="${item.hasSummary()}"
-           class="rd-summary"
-           th:text="${item.summary()}"></p>
+    <!-- Content area -->
+    <div id="rd-main">
 
-        <!-- dynamic AI summary for cards without one -->
-        <div th:if="${!item.hasSummary() and aiEnabled}" class="rd-summarize-wrap">
-          <p x-show="summary($el.closest('[data-link]').dataset.link)"
-             x-text="summary($el.closest('[data-link]').dataset.link) || ''"
-             class="rd-summary" style="display:none"></p>
-          <p x-show="isSummarizing($el.closest('[data-link]').dataset.link)"
-             class="rd-summarize-loading" style="display:none">✦ 生成中…</p>
-          <div x-show="summaryError($el.closest('[data-link]').dataset.link)"
-               class="rd-summarize-err" style="display:none">
-            <span x-text="summaryError($el.closest('[data-link]').dataset.link) || ''"></span>
-            <button @click.stop="summarize($el.closest('[data-link]').dataset.link,
-                                           $el.closest('[data-link]').dataset.title)"
-                    class="rd-summarize-retry">重试</button>
+      <div th:each="group, gs : ${groups}"
+           class="rd-section reveal"
+           th:id="'sec-' + ${gs.index}"
+           th:attr="data-tag=${group.tag()}"
+           x-show="(activeTag === 'all' || $el.dataset.tag === activeTag) &&
+                   (!searchQuery || [...$el.querySelectorAll('[data-link]')].some(el =>
+                     (el.dataset.title || '').toLowerCase().includes(searchQuery.toLowerCase()))) &&
+                   (filter === 'all' || [...$el.querySelectorAll('[data-link]')].some(el =>
+                     filter === 'unread'     ? !isRead(el.dataset.link) :
+                     filter === 'read'       ?  isRead(el.dataset.link) :
+                     filter === 'bookmarked' ?  isBookmarked(el.dataset.link) : true))">
+
+        <div class="rd-section-head">
+          <span style="display:flex;align-items:center;gap:7px;">
+            <span th:text="${group.name()}">来源</span>
+            <span th:if="${group.tag() != null}"
+                  style="font-size:9px;font-weight:700;background:var(--accent-bg);color:var(--accent);
+                         border:1px solid var(--accent);border-radius:3px;padding:1px 5px;"
+                  th:text="${group.tag()}">分类</span>
+          </span>
+          <span class="rd-badge" th:text="${#lists.size(group.items())}">0</span>
+        </div>
+
+        <div class="rd-grid" :class="listView && 'rd-list'">
+          <div th:each="item, is : ${group.items()}"
+               class="rd-card reveal"
+               th:attr="data-link=${item.link()},data-title=${item.title()},data-route-path=${item.routePath()}"
+               :class="isRead($el.dataset.link) ? 'rd-card--read' : (isBookmarked($el.dataset.link) ? 'rd-card--bookmarked' : '')"
+               x-show="(!searchQuery || ($el.dataset.title || '').toLowerCase().includes(searchQuery.toLowerCase()))
+                    && (filter === 'all'
+                    || (filter === 'unread'     && !isRead($el.dataset.link))
+                    || (filter === 'read'       &&  isRead($el.dataset.link))
+                    || (filter === 'bookmarked' &&  isBookmarked($el.dataset.link)))">
+
+            <a class="rd-card-title"
+               th:href="${item.link()}"
+               th:text="${item.title()}"
+               @click="markRead($el.closest('[data-link]').dataset.link)"
+               target="_blank" rel="noopener noreferrer">标题</a>
+
+            <p th:if="${item.hasSummary()}"
+               class="rd-summary"
+               th:text="${item.summary()}"></p>
+
+            <div th:if="${!item.hasSummary() and aiEnabled}" class="rd-summarize-wrap">
+              <p x-show="summary($el.closest('[data-link]').dataset.link)"
+                 x-text="summary($el.closest('[data-link]').dataset.link) || ''"
+                 class="rd-summary" style="display:none"></p>
+              <p x-show="isSummarizing($el.closest('[data-link]').dataset.link)"
+                 class="rd-summarize-loading" style="display:none">✦ 生成中…</p>
+              <div x-show="summaryError($el.closest('[data-link]').dataset.link)"
+                   class="rd-summarize-err" style="display:none">
+                <span x-text="summaryError($el.closest('[data-link]').dataset.link) || ''"></span>
+                <button @click.stop="summarize($el.closest('[data-link]').dataset.link,
+                                               $el.closest('[data-link]').dataset.title)"
+                        class="rd-summarize-retry">重试</button>
+              </div>
+              <button x-show="!isSummarizing($el.closest('[data-link]').dataset.link)
+                           && !summary($el.closest('[data-link]').dataset.link)
+                           && !summaryError($el.closest('[data-link]').dataset.link)"
+                      @click.stop="summarize($el.closest('[data-link]').dataset.link,
+                                             $el.closest('[data-link]').dataset.title)"
+                      :disabled="isSummarizing($el.closest('[data-link]').dataset.link)"
+                      class="rd-summarize-btn">
+                <svg width="9" height="9" viewBox="0 0 24 24" fill="none"
+                     stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+                  <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+                </svg>
+                AI 摘要
+              </button>
+            </div>
+
+            <div class="rd-card-meta">
+              <span class="rd-src" th:text="${item.sourceLabel()}">来源</span>
+              <span class="rd-age" th:text="${item.formattedAge()}">1 小时前</span>
+              <button class="rd-bookmark-btn"
+                      :class="isBookmarked($el.closest('[data-link]').dataset.link) && 'bookmarked'"
+                      :title="isBookmarked($el.closest('[data-link]').dataset.link) ? '取消收藏' : '收藏'"
+                      @click.stop="toggleBookmark(
+                        $el.closest('[data-link]').dataset.link,
+                        $el.closest('[data-link]').dataset.title,
+                        $el.closest('[data-link]').dataset.routePath)">
+                <svg width="12" height="12" viewBox="0 0 24 24"
+                     stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                     :fill="isBookmarked($el.closest('[data-link]').dataset.link) ? 'currentColor' : 'none'">
+                  <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+                </svg>
+              </button>
+              <button class="rd-read-dot"
+                      @click.stop="toggleRead($el.closest('[data-link]').dataset.link)"
+                      :title="isRead($el.closest('[data-link]').dataset.link) ? '标为未读' : '标为已读'"></button>
+            </div>
           </div>
-          <button x-show="!isSummarizing($el.closest('[data-link]').dataset.link)
-                       && !summary($el.closest('[data-link]').dataset.link)
-                       && !summaryError($el.closest('[data-link]').dataset.link)"
-                  @click.stop="summarize($el.closest('[data-link]').dataset.link,
-                                         $el.closest('[data-link]').dataset.title)"
-                  :disabled="isSummarizing($el.closest('[data-link]').dataset.link)"
-                  class="rd-summarize-btn">
-            <svg width="9" height="9" viewBox="0 0 24 24" fill="none"
-                 stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-              <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
-            </svg>
-            AI 摘要
-          </button>
         </div>
 
-        <div class="rd-card-meta">
-          <span class="rd-src" th:text="${item.sourceLabel()}">来源</span>
-          <span class="rd-age" th:text="${item.formattedAge()}">1 小时前</span>
-          <!-- bookmark toggle -->
-          <button class="rd-bookmark-btn"
-                  :class="isBookmarked($el.closest('[data-link]').dataset.link) && 'bookmarked'"
-                  :title="isBookmarked($el.closest('[data-link]').dataset.link) ? '取消收藏' : '收藏'"
-                  @click.stop="toggleBookmark(
-                    $el.closest('[data-link]').dataset.link,
-                    $el.closest('[data-link]').dataset.title,
-                    $el.closest('[data-link]').dataset.routePath)">
-            <svg width="12" height="12" viewBox="0 0 24 24"
-                 stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-                 :fill="isBookmarked($el.closest('[data-link]').dataset.link) ? 'currentColor' : 'none'">
-              <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
-            </svg>
-          </button>
-          <!-- read dot -->
-          <button class="rd-read-dot"
-                  @click.stop="toggleRead($el.closest('[data-link]').dataset.link)"
-                  :title="isRead($el.closest('[data-link]').dataset.link) ? '标为未读' : '标为已读'"></button>
-        </div>
       </div>
-    </div>
-  </div>
+    </div><!-- /rd-main -->
+  </div><!-- /rd-layout -->
 
-</div>
+</div><!-- /rd-wrap -->
+
+<script>
+  /* ── Reading progress bar ── */
+  (function () {
+    var bar = document.getElementById('rd-progress-bar');
+    if (!bar) return;
+    function tick() {
+      var scrolled = window.scrollY;
+      var total    = document.documentElement.scrollHeight - window.innerHeight;
+      var pct      = total > 0 ? (scrolled / total) * 100 : 0;
+      bar.style.width = pct.toFixed(2) + '%';
+      if (pct >= 99.5) bar.classList.add('done');
+      else             bar.classList.remove('done');
+    }
+    window.addEventListener('scroll', tick, { passive: true });
+    tick();
+  })();
+
+  /* ── Scroll reveal (Intersection Observer) ── */
+  (function () {
+    /* stagger cards within each grid */
+    document.querySelectorAll('.rd-grid').forEach(function (grid) {
+      grid.querySelectorAll('.rd-card.reveal').forEach(function (card, i) {
+        card.style.transitionDelay = Math.min(i, 7) * 55 + 'ms';
+      });
+    });
+
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('in');
+          io.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.06, rootMargin: '0px 0px -32px 0px' });
+
+    document.querySelectorAll('.reveal').forEach(function (el) {
+      io.observe(el);
+    });
+  })();
+
+  /* ── TOC: build from section headings ── */
+  (function () {
+    var toc      = document.getElementById('rd-toc');
+    var sections = Array.from(document.querySelectorAll('.rd-section[id]'));
+    if (!toc || sections.length < 2) {
+      if (toc) toc.style.display = 'none';
+      var layout = document.querySelector('.rd-layout');
+      if (layout) layout.style.display = 'block';
+      return;
+    }
+
+    var label = document.createElement('div');
+    label.className = 'rd-toc-label';
+    label.textContent = 'Contents';
+    toc.appendChild(label);
+
+    sections.forEach(function (sec) {
+      var nameEl = sec.querySelector('.rd-section-head span span:first-child');
+      if (!nameEl) return;
+      var a = document.createElement('a');
+      a.href = '#' + sec.id;
+      a.className = 'rd-toc-link';
+      a.textContent = nameEl.textContent.trim();
+      a.addEventListener('click', function (e) {
+        e.preventDefault();
+        sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+      toc.appendChild(a);
+    });
+
+    /* scroll-spy */
+    var links = Array.from(toc.querySelectorAll('.rd-toc-link'));
+    var spy = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (entry.isIntersecting) {
+          var id = entry.target.id;
+          links.forEach(function (l) {
+            l.classList.toggle('active', l.getAttribute('href') === '#' + id);
+          });
+        }
+      });
+    }, { rootMargin: '-80px 0px -60% 0px', threshold: 0 });
+
+    sections.forEach(function (s) { spy.observe(s); });
+  })();
+</script>
+
 </body>
 </html>

@@ -1,0 +1,196 @@
+<!-- 飞书推送配置 section -->
+
+<!-- ═══════════ 全局设置 ═══════════ -->
+<div class="card" style="margin-bottom:16px;">
+  <div class="card-head">
+    <div style="display:flex;align-items:center;gap:10px;">
+      <span style="background:#00B0F0;color:#fff;padding:3px 10px;border-radius:5px;
+                   font-size:12px;font-weight:700;letter-spacing:.3px;">飞书</span>
+      <span class="card-title">全局设置</span>
+    </div>
+    <span style="font-size:12px;color:var(--muted);">分类可单独覆盖 Webhook，留空使用此全局地址</span>
+  </div>
+  <div style="padding:18px 20px 20px;">
+    <form hx-post="/index/feishu"
+          hx-target="#main-content"
+          hx-swap="innerHTML">
+
+      <div class="toggle-row" style="margin-bottom:16px;">
+        <input type="checkbox" name="enabled" id="feishu-enabled"
+               th:checked="${config.enabled()}">
+        <label for="feishu-enabled" style="font-size:13px;font-weight:600;cursor:pointer;">
+          全局开启飞书推送
+        </label>
+      </div>
+
+      <div class="field-row" style="grid-template-columns:1fr 120px;margin-bottom:14px;">
+        <div class="field">
+          <span>全局 Webhook URL</span>
+          <input name="webhookUrl" type="url" autocomplete="off"
+                 placeholder="https://open.feishu.cn/open-apis/bot/v2/hook/…"
+                 th:value="${config.webhookUrl()}"
+                 style="font-family:monospace;font-size:12px;">
+          <span class="field-hint">未配置分类专属 Webhook 时使用此地址</span>
+        </div>
+        <div class="field">
+          <span>默认最多条数</span>
+          <input name="maxItemsPerPush" type="number" min="1" max="50"
+                 th:value="${config.maxItemsPerPush()}">
+          <span class="field-hint">分类可单独覆盖</span>
+        </div>
+      </div>
+
+      <div th:if="${message != null}" class="form-msg ok" style="margin-bottom:10px;"
+           th:text="${message}"></div>
+
+      <div class="form-acts">
+        <button class="btn primary" type="submit">保存全局配置</button>
+        <button class="btn" type="button"
+                hx-post="/index/feishu/test"
+                hx-target="#feishu-test-result"
+                hx-swap="innerHTML"
+                hx-include="closest form">测试连接</button>
+        <span id="feishu-test-result" class="form-msg"></span>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ═══════════ 分类推送配置 ═══════════ -->
+<div class="card">
+  <div class="card-head">
+    <span class="card-title">分类推送配置</span>
+    <span style="font-size:12px;color:var(--muted);">
+      实时推送：fetch 后有新条目立即推送 &nbsp;·&nbsp; 每日摘要：按 cron 批量推送
+    </span>
+  </div>
+
+  <div th:if="${#lists.isEmpty(allCategories)}"
+       style="padding:32px;text-align:center;color:var(--muted);font-size:13px;">
+    暂无已注册分类
+  </div>
+
+  <table th:if="${!#lists.isEmpty(allCategories)}" class="rtable">
+    <thead>
+      <tr>
+        <th>分类</th>
+        <th style="text-align:center;width:52px;">开启</th>
+        <th style="width:110px;">推送模式</th>
+        <th>分类 Webhook（留空=全局）</th>
+        <th style="width:80px;">最多条数</th>
+        <th style="width:130px;">摘要 Cron</th>
+        <th style="width:130px;"></th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr th:each="cat : ${allCategories}"
+          th:id="'cat-row-' + ${cat}"
+          th:attr="x-data='{ mode: &quot;' + ${config.getCategory(cat).mode()} + '&quot; }'">
+
+        <td style="font-weight:600;font-size:13px;" th:text="${cat}">分类</td>
+
+        <td style="text-align:center;">
+          <input type="checkbox"
+                 th:name="'en_' + ${cat}"
+                 th:id="'fe-en-' + ${cat}"
+                 th:checked="${config.getCategory(cat).enabled()}"
+                 style="width:15px;height:15px;cursor:pointer;">
+        </td>
+
+        <td>
+          <select x-model="mode"
+                  th:name="'mode_' + ${cat}"
+                  style="width:100%;font-size:12px;height:30px;padding:0 6px;
+                         border:1px solid var(--border);border-radius:5px;
+                         background:var(--surface);color:var(--text);font:inherit;">
+            <option value="immediate"
+                    th:selected="${'immediate'.equals(config.getCategory(cat).mode())}">实时推送</option>
+            <option value="digest"
+                    th:selected="${'digest'.equals(config.getCategory(cat).mode())}">每日摘要</option>
+          </select>
+        </td>
+
+        <td>
+          <input type="text" autocomplete="off"
+                 th:name="'wh_' + ${cat}"
+                 placeholder="留空使用全局"
+                 th:value="${config.getCategory(cat).webhookUrl()}"
+                 style="width:100%;font-size:12px;height:30px;padding:0 8px;
+                        font-family:monospace;border:1px solid var(--border);
+                        border-radius:5px;background:var(--surface);">
+        </td>
+
+        <td>
+          <input type="number" min="0" max="50"
+                 th:name="'max_' + ${cat}"
+                 placeholder="0=全局"
+                 th:value="${config.getCategory(cat).maxItemsPerPush() > 0 ? config.getCategory(cat).maxItemsPerPush() : ''}"
+                 style="width:100%;font-size:12px;height:30px;padding:0 8px;
+                        border:1px solid var(--border);border-radius:5px;background:var(--surface);">
+        </td>
+
+        <td>
+          <input type="text"
+                 th:name="'cron_' + ${cat}"
+                 placeholder="0 0 8 * * *"
+                 th:value="${config.getCategory(cat).digestCron()}"
+                 :disabled="mode !== 'digest'"
+                 :style="mode !== 'digest' ? 'opacity:0.35;' : ''"
+                 style="width:100%;font-size:11px;font-family:monospace;height:30px;padding:0 6px;
+                        border:1px solid var(--border);border-radius:5px;background:var(--surface);">
+        </td>
+
+        <td>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <button class="btn" type="button"
+                    style="height:28px;padding:0 12px;font-size:12px;"
+                    th:attr="'@click'='saveCategory(\'' + ${cat} + '\')'">保存</button>
+            <span th:id="'cat-result-' + ${cat}" class="form-msg"
+                  style="font-size:12px;white-space:nowrap;"></span>
+          </div>
+        </td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- Alpine saveCategory helper -->
+<script>
+function saveCategory(cat) {
+  const row  = document.getElementById(`cat-row-${cat}`);
+  const res  = document.getElementById(`cat-result-${cat}`);
+  const en   = row.querySelector(`[name="en_${cat}"]`);
+  const mode = row.querySelector(`[name="mode_${cat}"]`);
+  const wh   = row.querySelector(`[name="wh_${cat}"]`);
+  const max  = row.querySelector(`[name="max_${cat}"]`);
+  const cron = row.querySelector(`[name="cron_${cat}"]`);
+
+  const body = new URLSearchParams({
+    categoryName:    cat,
+    enabled:         en && en.checked ? 'on' : '',
+    mode:            mode ? mode.value : 'immediate',
+    webhookUrl:      wh   ? wh.value  : '',
+    maxItemsPerPush: max  ? (max.value || '0') : '0',
+    digestCron:      cron ? cron.value : ''
+  });
+
+  fetch('/index/feishu/category', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+    body: body.toString()
+  })
+  .then(r => r.text())
+  .then(html => { if (res) res.innerHTML = html; })
+  .catch(() => { if (res) res.innerHTML = "<span class='form-msg err'>保存失败</span>"; });
+}
+</script>
+
+<!-- 使用说明 -->
+<div style="margin-top:16px;padding:12px 16px;background:var(--surface2);
+            border:1px solid var(--border);border-radius:8px;
+            font-size:12px;color:var(--muted);line-height:1.9;">
+  <strong style="color:var(--text);">使用说明：</strong><br>
+  · <strong>实时推送</strong>：每次 fetch 后若有新条目（24h 内首次出现）立即推送，重启后首次 fetch 推送最近 24h 内容。<br>
+  · <strong>每日摘要</strong>：按 cron（6 字段：<code>秒 分 时 日 月 周</code>）批量推送，例如每天 8 点：<code>0 0 8 * * *</code>。<br>
+  · 分类 Webhook 留空使用全局地址；最多条数填 0 使用全局默认值。
+</div>

@@ -7,6 +7,7 @@ import app.core.Feed;
 import app.core.RouteConfig;
 import app.core.RouteContext;
 import app.core.RouteMatch;
+import app.feishu.FeishuPusher;
 import app.store.FeedStore;
 import jakarta.annotation.PreDestroy;
 import java.time.Duration;
@@ -38,17 +39,19 @@ public class FetchScheduler {
     private final ArticleExtractor articleExtractor;
     private final ArticleSummarizer articleSummarizer;
     private final AiConfigStore aiConfigStore;
+    private final FeishuPusher feishuPusher;
     private final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
 
     public FetchScheduler(AppRuntime runtime, FeedStore feedStore,
                           ArticleExtractor articleExtractor, ArticleSummarizer articleSummarizer,
-                          AiConfigStore aiConfigStore) {
+                          AiConfigStore aiConfigStore, FeishuPusher feishuPusher) {
         this.runtime = runtime;
         this.feedStore = feedStore;
         this.feedFetcher = new FeedFetcher(feedStore);
         this.articleExtractor = articleExtractor;
         this.articleSummarizer = articleSummarizer;
         this.aiConfigStore = aiConfigStore;
+        this.feishuPusher = feishuPusher;
     }
 
     /** Submits an immediate background fetch for {@code path}; returns without waiting. */
@@ -73,12 +76,18 @@ public class FetchScheduler {
     public void tick() {
         Instant now = Instant.now();
         List<RouteConfig> routes = runtime.routeConfigStore().list(runtime.routeRegistry().paths());
+        Map<String, String> categoryByPath = runtime.routeRegistry().categories();
+
         for (RouteConfig config : routes) {
             if (!config.enabled() || !config.hasSchedule()) continue;
             if (isDue(config, now)) {
                 executor.submit(() -> fetch(config));
             }
         }
+
+        // Digest check runs in the background every tick; FeishuPusher gates on cron.
+        executor.submit(() ->
+                feishuPusher.checkDigests(now, routes, categoryByPath, feedStore));
     }
 
     private boolean isDue(RouteConfig config, Instant now) {
@@ -115,8 +124,16 @@ public class FetchScheduler {
                 articleSummarizer.summarize(feed.items());
                 log.info("[sched] ai done {}", config.path());
             }
+            pushImmediateItems(config);
         } catch (Exception e) {
             log.warn("[sched] error {}: {}", config.path(), e.getMessage());
         }
+    }
+
+    private void pushImmediateItems(RouteConfig config) {
+        String category = runtime.routeRegistry().categories()
+                .getOrDefault(config.sourcePath(), null);
+        if (category == null) return;
+        feishuPusher.pushRouteItems(config.path(), category, config.displayName(), feedStore);
     }
 }

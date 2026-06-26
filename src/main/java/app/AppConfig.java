@@ -4,6 +4,8 @@ import app.ai.AiConfigStore;
 import app.ai.ArticleExtractor;
 import app.ai.ArticleSummarizer;
 import app.ai.OllamaClient;
+import app.feishu.FeishuConfigStore;
+import app.feishu.FeishuPusher;
 import app.store.FeedStore;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -71,5 +73,22 @@ public class AppConfig {
     @Bean
     public ArticleSummarizer articleSummarizer(OllamaClient ollamaClient, FeedStore feedStore) {
         return new ArticleSummarizer(ollamaClient, feedStore);
+    }
+
+    /**
+     * Feishu config store — persists webhook URL and settings to {@code feishu-config.json}.
+     */
+    @Bean
+    public FeishuConfigStore feishuConfigStore(ObjectMapper objectMapper) {
+        Path path = Path.of(System.getProperty("fetch-news.feishu-config", "feishu-config.json"));
+        return new FeishuConfigStore(path, objectMapper);
+    }
+
+    /**
+     * Feishu pusher — sends new feed items to the configured webhook after each scheduled fetch.
+     */
+    @Bean
+    public FeishuPusher feishuPusher(FeishuConfigStore feishuConfigStore, ObjectMapper objectMapper) {
+        return new FeishuPusher(feishuConfigStore, objectMapper);
     }
 }

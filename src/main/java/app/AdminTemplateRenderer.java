@@ -3,7 +3,9 @@ package app;
 import app.ai.AiConfig;
 import app.CredentialConfig;
 import app.ai.OllamaClient;
+import app.feishu.FeishuConfig;
 import app.core.RouteConfig;
+import app.reader.BriefingSection;
 import app.reader.ReaderGroup;
 import app.reader.ReaderItem;
 import app.store.BookmarkedItem;
@@ -19,6 +21,8 @@ import org.thymeleaf.context.Context;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -200,6 +204,14 @@ public class AdminTemplateRenderer {
         return engine.process("index/credentials", ctx);
     }
 
+    public String feishuSettings(FeishuConfig config, List<String> allCategories, String message) {
+        Context ctx = new Context();
+        ctx.setVariable("config", config);
+        ctx.setVariable("allCategories", allCategories);
+        ctx.setVariable("message", message);
+        return engine.process("index/feishu-settings", ctx);
+    }
+
     public String aiSettings(AiConfig config, int extractCount, int summaryCount, String message) {
         Context ctx = new Context();
         ctx.setVariable("config", config);
@@ -230,6 +242,26 @@ public class AdminTemplateRenderer {
         ctx.setVariable("readLinks", readLinks);
         ctx.setVariable("uniqueTags", uniqueTags);
         return engine.process("reader/index", ctx);
+    }
+
+    private static final DateTimeFormatter BRIEFING_DATE_FMT =
+            DateTimeFormatter.ofPattern("yyyy 年 M 月 d 日");
+    private static final DateTimeFormatter BRIEFING_ISO_FMT =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd");
+
+    /**
+     * Daily briefing page — items grouped by category for the given calendar date.
+     */
+    public String briefingPage(List<BriefingSection> sections, LocalDate date, int totalCount) {
+        Context ctx = new Context();
+        ctx.setVariable("sections", sections);
+        ctx.setVariable("date", date.format(BRIEFING_DATE_FMT));
+        ctx.setVariable("dateIso", date.format(BRIEFING_ISO_FMT));
+        ctx.setVariable("prevDate", date.minusDays(1).format(BRIEFING_ISO_FMT));
+        ctx.setVariable("nextDate", date.plusDays(1).format(BRIEFING_ISO_FMT));
+        ctx.setVariable("isToday", date.equals(LocalDate.now()));
+        ctx.setVariable("totalCount", totalCount);
+        return engine.process("reader/briefing", ctx);
     }
 
     /**

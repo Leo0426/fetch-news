@@ -10,6 +10,9 @@ import app.core.FeedItem;
 import app.core.RouteConfig;
 import app.core.RouteError;
 import app.core.RouteException;
+import app.feishu.FeishuConfig;
+import app.feishu.FeishuConfigStore;
+import app.feishu.FeishuPusher;
 import app.store.FeedStore;
 import app.store.StoredItem;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -51,12 +54,16 @@ public class AdminResource {
     private final OllamaClient ollamaClient;
     private final ArticleSummarizer articleSummarizer;
     private final FetchScheduler fetchScheduler;
+    private final FeishuConfigStore feishuConfigStore;
+    private final FeishuPusher feishuPusher;
 
     public AdminResource(AppRuntime runtime, ObjectMapper objectMapper,
                          AdminTemplateRenderer templates, FeedStore feedStore,
                          AiConfigStore aiConfigStore, OllamaClient ollamaClient,
                          ArticleSummarizer articleSummarizer,
-                         FetchScheduler fetchScheduler) {
+                         FetchScheduler fetchScheduler,
+                         FeishuConfigStore feishuConfigStore,
+                         FeishuPusher feishuPusher) {
         this.runtime = runtime;
         this.objectMapper = objectMapper;
         this.templates = templates;
@@ -65,6 +72,8 @@ public class AdminResource {
         this.ollamaClient = ollamaClient;
         this.articleSummarizer = articleSummarizer;
         this.fetchScheduler = fetchScheduler;
+        this.feishuConfigStore = feishuConfigStore;
+        this.feishuPusher = feishuPusher;
     }
 
     /** Redirects the root path to the index page. */
@@ -484,6 +493,89 @@ public class AdminResource {
             @RequestParam(defaultValue = "") String cookie) {
         runtime.credentialConfigStore().putUidCookie(uid.strip(), cookie.strip());
         return "<span class='form-msg ok'>Cookie 已保存</span>";
+    }
+
+    /**
+     * Feishu push settings page fragment.
+     */
+    @GetMapping(value = "/feishu", produces = MediaType.TEXT_HTML_VALUE)
+    @ResponseBody
+    public String feishuSettings() {
+        return templates.feishuSettings(feishuConfigStore.get(), allCategories(), null);
+    }
+
+    /**
+     * Save global Feishu config (webhook URL, enabled flag, default max items).
+     * Preserves existing per-category configs.
+     */
+    @PostMapping(
+            value = "/feishu",
+            consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE,
+            produces = MediaType.TEXT_HTML_VALUE)
+    @ResponseBody
+    public String saveFeishuConfig(
+            @RequestParam(defaultValue = "") String webhookUrl,
+            @RequestParam(required = false) String enabled,
+            @RequestParam(defaultValue = "10") int maxItemsPerPush) {
+        FeishuConfig current = feishuConfigStore.get();
+        FeishuConfig config = new FeishuConfig(
+                webhookUrl.strip(),
+                "on".equals(enabled),
+                maxItemsPerPush,
+                current.categories());
+        feishuConfigStore.save(config);
+        return templates.feishuSettings(config, allCategories(), "已保存");
+    }
+
+    /**
+     * Save config for a single category. Merges into the existing categories map.
+     */
+    @PostMapping(
+            value = "/feishu/category",
+            consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE,
+            produces = MediaType.TEXT_HTML_VALUE)
+    @ResponseBody
+    public String saveFeishuCategory(
+            @RequestParam String categoryName,
+            @RequestParam(required = false) String enabled,
+            @RequestParam(defaultValue = "immediate") String mode,
+            @RequestParam(defaultValue = "") String webhookUrl,
+            @RequestParam(defaultValue = "") String digestCron,
+            @RequestParam(defaultValue = "0") int maxItemsPerPush) {
+        FeishuConfig current = feishuConfigStore.get();
+        var categories = new java.util.LinkedHashMap<>(current.categories());
+        categories.put(categoryName, new app.feishu.FeishuCategoryConfig(
+                "on".equals(enabled),
+                webhookUrl.strip(),
+                mode,
+                digestCron.strip(),
+                maxItemsPerPush));
+        feishuConfigStore.save(new FeishuConfig(
+                current.webhookUrl(), current.enabled(), current.maxItemsPerPush(), categories));
+        return "<span class='form-msg ok'>已保存</span>";
+    }
+
+    /**
+     * Tests Feishu webhook connectivity — returns an inline status fragment.
+     */
+    @PostMapping(
+            value = "/feishu/test",
+            consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE,
+            produces = MediaType.TEXT_HTML_VALUE)
+    @ResponseBody
+    public String testFeishu(@RequestParam(defaultValue = "") String webhookUrl) {
+        if (webhookUrl.isBlank()) {
+            return "<span class='form-msg err'>请先填写 Webhook URL</span>";
+        }
+        boolean ok = feishuPusher.test(webhookUrl.strip());
+        return ok
+                ? "<span class='form-msg ok'>连接成功，请查收飞书测试消息</span>"
+                : "<span class='form-msg err'>连接失败，请检查 Webhook URL 是否正确</span>";
+    }
+
+    private List<String> allCategories() {
+        return runtime.routeRegistry().categories().values()
+                .stream().distinct().sorted().toList();
     }
 
     /**

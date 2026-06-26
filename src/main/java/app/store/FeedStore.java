@@ -15,6 +15,8 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -290,6 +292,71 @@ public class FeedStore implements Closeable {
     }
 
     /**
+     * Returns items for {@code routePath} whose {@code first_seen_at} is at or after {@code since},
+     * newest first. Used to identify items discovered in a single scheduled fetch.
+     */
+    public List<StoredItem> loadNewItemsSince(String routePath, Instant since) throws SQLException {
+        List<StoredItem> result = new ArrayList<>();
+        try (PreparedStatement ps = conn.prepareStatement("""
+                SELECT route_path, title, item_link, author, pub_date, first_seen_at
+                FROM feed_items
+                WHERE route_path = ? AND first_seen_at >= ?
+                ORDER BY first_seen_at DESC
+                """)) {
+            ps.setString(1, routePath);
+            ps.setString(2, since.toString());
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    String pubDateStr = rs.getString("pub_date");
+                    Instant pubDate = pubDateStr != null ? Instant.parse(pubDateStr) : null;
+                    result.add(new StoredItem(
+                            rs.getString("route_path"),
+                            rs.getString("title"),
+                            rs.getString("item_link"),
+                            rs.getString("author"),
+                            pubDate,
+                            Instant.parse(rs.getString("first_seen_at"))));
+                }
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Returns items across multiple routes whose {@code first_seen_at} is at or after
+     * {@code since}, newest first. Used for category-level digest messages.
+     */
+    public List<StoredItem> loadNewItemsSinceForRoutes(List<String> routePaths, Instant since)
+            throws SQLException {
+        if (routePaths.isEmpty()) return List.of();
+        List<StoredItem> result = new ArrayList<>();
+        String placeholders = String.join(",", Collections.nCopies(routePaths.size(), "?"));
+        try (PreparedStatement ps = conn.prepareStatement("""
+                SELECT route_path, title, item_link, author, pub_date, first_seen_at
+                FROM feed_items
+                WHERE route_path IN (%s) AND first_seen_at >= ?
+                ORDER BY first_seen_at DESC
+                """.formatted(placeholders))) {
+            for (int i = 0; i < routePaths.size(); i++) ps.setString(i + 1, routePaths.get(i));
+            ps.setString(routePaths.size() + 1, since.toString());
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    String pubDateStr = rs.getString("pub_date");
+                    Instant pubDate = pubDateStr != null ? Instant.parse(pubDateStr) : null;
+                    result.add(new StoredItem(
+                            rs.getString("route_path"),
+                            rs.getString("title"),
+                            rs.getString("item_link"),
+                            rs.getString("author"),
+                            pubDate,
+                            Instant.parse(rs.getString("first_seen_at"))));
+                }
+            }
+        }
+        return result;
+    }
+
+    /**
      * Returns all items first seen within {@code window} of now, newest first.
      * Capped at 500 rows so the reader stays fast regardless of volume.
      */
@@ -304,6 +371,41 @@ public class FeedStore implements Closeable {
                 LIMIT 500
                 """)) {
             ps.setString(1, since);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    String pubDateStr = rs.getString("pub_date");
+                    Instant pubDate = pubDateStr != null ? Instant.parse(pubDateStr) : null;
+                    result.add(new StoredItem(
+                            rs.getString("route_path"),
+                            rs.getString("title"),
+                            rs.getString("item_link"),
+                            rs.getString("author"),
+                            pubDate,
+                            Instant.parse(rs.getString("first_seen_at"))));
+                }
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Returns items whose {@code first_seen_at} falls within the given calendar date
+     * (system default timezone), ordered newest-first.
+     */
+    public List<StoredItem> loadItemsForDate(LocalDate date) throws SQLException {
+        ZoneId tz = ZoneId.systemDefault();
+        String from = date.atStartOfDay(tz).toInstant().toString();
+        String to   = date.plusDays(1).atStartOfDay(tz).toInstant().toString();
+        List<StoredItem> result = new ArrayList<>();
+        try (PreparedStatement ps = conn.prepareStatement("""
+                SELECT route_path, title, item_link, author, pub_date, first_seen_at
+                FROM feed_items
+                WHERE first_seen_at >= ? AND first_seen_at < ?
+                ORDER BY first_seen_at DESC
+                LIMIT 1000
+                """)) {
+            ps.setString(1, from);
+            ps.setString(2, to);
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
                     String pubDateStr = rs.getString("pub_date");
