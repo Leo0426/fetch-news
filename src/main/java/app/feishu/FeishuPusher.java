@@ -202,55 +202,71 @@ public class FeishuPusher {
     // ── internal send ─────────────────────────────────────────────────────────
 
     /**
-     * @param description optional extra line shown between subtitle and item list
-     *                    (e.g. source breakdown for digest mode); null to omit
+     * Splits items into pages of {@code maxItems} and sends one card per page.
+     *
+     * @param description optional line shown on the first card only (e.g. source breakdown)
      */
     private void doSend(String title, String category, String description,
                         List<StoredItem> items, String webhookUrl, int maxItems) {
-        List<StoredItem> toSend = items.size() > maxItems ? items.subList(0, maxItems) : items;
-
+        int total = items.size();
+        int pages  = (total + maxItems - 1) / maxItems;   // ceil division
         String date = ZonedDateTime.now(ZoneId.systemDefault())
                 .format(DateTimeFormatter.ofPattern("yyyy年M月d日 HH:mm"));
-        String subtitle = date + "　共 **" + items.size() + "** 条";
+        String color = categoryColor(category);
 
-        StringBuilder sb = new StringBuilder();
-        if (description != null && !description.isBlank()) {
-            sb.append("**来源：** ").append(description).append("\n\n");
-        }
-        for (int i = 0; i < toSend.size(); i++) {
-            StoredItem item = toSend.get(i);
-            String text = item.title() != null && !item.title().isBlank()
-                    ? item.title() : item.link();
-            if (text != null && text.length() > 80) text = text.substring(0, 78) + "…";
-            if (item.link() != null && !item.link().isBlank()) {
-                sb.append("**").append(i + 1).append(".** [")
-                  .append(text).append("](").append(item.link()).append(")\n");
-            } else {
-                sb.append("**").append(i + 1).append(".** ").append(text).append("\n");
-            }
-        }
-        if (items.size() > maxItems) {
-            sb.append("\n_另有 ").append(items.size() - maxItems).append(" 条未展示_");
-        }
+        for (int page = 0; page < pages; page++) {
+            int from = page * maxItems;
+            int to   = Math.min(from + maxItems, total);
+            List<StoredItem> batch = items.subList(from, to);
 
-        Map<String, Object> payload = buildCard(
-                title, categoryColor(category), subtitle, sb.toString().stripTrailing(), null);
-        try {
-            String body = mapper.writeValueAsString(payload);
-            HttpRequest req = HttpRequest.newBuilder()
-                    .uri(URI.create(webhookUrl))
-                    .header("Content-Type", "application/json")
-                    .timeout(Duration.ofSeconds(15))
-                    .POST(HttpRequest.BodyPublishers.ofString(body))
-                    .build();
-            HttpResponse<String> resp = http.send(req, HttpResponse.BodyHandlers.ofString());
-            if (resp.statusCode() != 200) {
-                log.warn("[feishu] push failed: HTTP {} — {}", resp.statusCode(), resp.body());
-            } else {
-                log.info("[feishu] pushed {} items: {}", toSend.size(), title);
+            // Header: append page indicator when sending multiple cards
+            String pageTitle = pages > 1
+                    ? title + "  (" + (page + 1) + "/" + pages + ")"
+                    : title;
+
+            // Subtitle: date + total count (all pages share the same totals)
+            String subtitle = date + "　共 **" + total + "** 条";
+
+            StringBuilder sb = new StringBuilder();
+            // Source breakdown only on first page
+            if (page == 0 && description != null && !description.isBlank()) {
+                sb.append("**来源：** ").append(description).append("\n\n");
             }
-        } catch (Exception e) {
-            log.warn("[feishu] send error: {}", e.getMessage());
+            for (int i = 0; i < batch.size(); i++) {
+                StoredItem item = batch.get(i);
+                String text = item.title() != null && !item.title().isBlank()
+                        ? item.title() : item.link();
+                if (text != null && text.length() > 80) text = text.substring(0, 78) + "…";
+                int globalNum = from + i + 1;
+                if (item.link() != null && !item.link().isBlank()) {
+                    sb.append("**").append(globalNum).append(".** [")
+                      .append(text).append("](").append(item.link()).append(")\n");
+                } else {
+                    sb.append("**").append(globalNum).append(".** ").append(text).append("\n");
+                }
+            }
+
+            Map<String, Object> payload = buildCard(
+                    pageTitle, color, subtitle, sb.toString().stripTrailing(), null);
+            try {
+                String body = mapper.writeValueAsString(payload);
+                HttpRequest req = HttpRequest.newBuilder()
+                        .uri(URI.create(webhookUrl))
+                        .header("Content-Type", "application/json")
+                        .timeout(Duration.ofSeconds(15))
+                        .POST(HttpRequest.BodyPublishers.ofString(body))
+                        .build();
+                HttpResponse<String> resp = http.send(req, HttpResponse.BodyHandlers.ofString());
+                if (resp.statusCode() != 200) {
+                    log.warn("[feishu] push failed (page {}/{}): HTTP {} — {}",
+                            page + 1, pages, resp.statusCode(), resp.body());
+                } else {
+                    log.info("[feishu] pushed {}/{} items (page {}/{}): {}",
+                            to, total, page + 1, pages, title);
+                }
+            } catch (Exception e) {
+                log.warn("[feishu] send error (page {}/{}): {}", page + 1, pages, e.getMessage());
+            }
         }
     }
 
