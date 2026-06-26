@@ -84,7 +84,7 @@ public class FeishuPusher {
             if (items.isEmpty()) return;
 
             int max = cfg.effectiveMaxItems(category);
-            doSend("📬 " + routeLabel, category, items, webhook, max);
+            doSend("📬 " + routeLabel + " · " + category, category, null, items, webhook, max);
             lastPushTime.put(routePath, Instant.now());
         } catch (Exception e) {
             log.warn("[feishu] immediate push error for {}: {}", routePath, e.getMessage());
@@ -136,7 +136,22 @@ public class FeishuPusher {
                 String webhook = cfg.effectiveWebhook(cat);
                 if (webhook.isBlank()) continue;
                 int max = cfg.effectiveMaxItems(cat);
-                doSend("📰 " + cat + " 摘要", cat, items, webhook, max);
+
+                // Build source breakdown: "TechCrunch (5) · Wired (3)"
+                Map<String, String> pathToName = routes.stream()
+                        .collect(java.util.stream.Collectors.toMap(
+                                RouteConfig::path, RouteConfig::displayName, (a, b) -> a));
+                Map<String, Long> countByPath = items.stream()
+                        .collect(java.util.stream.Collectors.groupingBy(
+                                StoredItem::routePath, java.util.stream.Collectors.counting()));
+                String sources = countByPath.entrySet().stream()
+                        .sorted(Map.Entry.<String, Long>comparingByValue().reversed())
+                        .limit(6)
+                        .map(e -> "**" + pathToName.getOrDefault(e.getKey(), e.getKey())
+                                + "** (" + e.getValue() + ")")
+                        .collect(java.util.stream.Collectors.joining(" · "));
+
+                doSend("📰 " + cat + " 摘要", cat, sources, items, webhook, max);
             } catch (Exception e) {
                 log.warn("[feishu] digest error for {}: {}", cat, e.getMessage());
             }
@@ -186,7 +201,11 @@ public class FeishuPusher {
 
     // ── internal send ─────────────────────────────────────────────────────────
 
-    private void doSend(String title, String category,
+    /**
+     * @param description optional extra line shown between subtitle and item list
+     *                    (e.g. source breakdown for digest mode); null to omit
+     */
+    private void doSend(String title, String category, String description,
                         List<StoredItem> items, String webhookUrl, int maxItems) {
         List<StoredItem> toSend = items.size() > maxItems ? items.subList(0, maxItems) : items;
 
@@ -195,11 +214,13 @@ public class FeishuPusher {
         String subtitle = date + "　共 **" + items.size() + "** 条";
 
         StringBuilder sb = new StringBuilder();
+        if (description != null && !description.isBlank()) {
+            sb.append("**来源：** ").append(description).append("\n\n");
+        }
         for (int i = 0; i < toSend.size(); i++) {
             StoredItem item = toSend.get(i);
             String text = item.title() != null && !item.title().isBlank()
                     ? item.title() : item.link();
-            // truncate very long titles
             if (text != null && text.length() > 80) text = text.substring(0, 78) + "…";
             if (item.link() != null && !item.link().isBlank()) {
                 sb.append("**").append(i + 1).append(".** [")
