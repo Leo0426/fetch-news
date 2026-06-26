@@ -51,6 +51,7 @@ nb-configuration.xml
 # Runtime-generated config
 route-config.json
 feishu-config.json
+ai-config.json
 
 # Plugin directory
 /.quarkus/cli/plugins/
