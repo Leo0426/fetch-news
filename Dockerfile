@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 # ─── Build stage ────────────────────────────────────────────────────────────────
 FROM eclipse-temurin:25-jdk-alpine AS build
 WORKDIR /build
@@ -7,12 +8,15 @@ COPY gradlew .
 COPY gradle/ gradle/
 COPY build.gradle gradle.properties settings.gradle ./
 
-# Warm up the Gradle dependency cache (failure is OK on first run without sources)
-RUN ./gradlew dependencies --no-daemon -q 2>/dev/null; true
+# Warm up dependency cache; mount keeps it across rebuilds so src/ changes
+# don't re-trigger network downloads
+RUN --mount=type=cache,target=/root/.gradle \
+    ./gradlew dependencies --no-daemon -q 2>/dev/null; true
 
 # Copy source and build the fat JAR (skip tests — run them in CI separately)
 COPY src/ src/
-RUN ./gradlew bootJar --no-daemon -x test
+RUN --mount=type=cache,target=/root/.gradle \
+    ./gradlew bootJar --no-daemon -x test
 
 # ─── Runtime stage ───────────────────────────────────────────────────────────────
 FROM eclipse-temurin:25-jre-alpine
