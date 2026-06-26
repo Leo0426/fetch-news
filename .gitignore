@@ -53,6 +53,9 @@ route-config.json
 feishu-config.json
 ai-config.json
 
+# Temporary build artifact (created by build.sh, cleaned up after docker build)
+app.jar
+
 # Plugin directory
 /.quarkus/cli/plugins/
 # TLS Certificates

@@ -28,7 +28,16 @@ echo "Platform  : ${PLATFORM:-<native>}"
 echo "Push      : ${PUSH}"
 echo
 
-# ── Build ─────────────────────────────────────────────────────────────────────
+# ── Build JAR on host (avoids QEMU network flakiness for cross-platform builds) ──
+echo "Step 1/2  : building fat JAR locally…"
+./gradlew bootJar --no-daemon -x test -q
+JAR_SRC="$(ls build/libs/*.jar | head -1)"
+cp "$JAR_SRC" app.jar
+echo "           → $(du -sh app.jar | cut -f1) written to app.jar"
+echo
+
+# ── Docker image ──────────────────────────────────────────────────────────────
+echo "Step 2/2  : building Docker image…"
 PLATFORMS_COUNT=$(tr ',' '\n' <<< "$PLATFORM" | wc -l | tr -d ' ')
 
 if [[ "$PLATFORMS_COUNT" -gt 1 ]]; then
@@ -58,5 +67,6 @@ else
   fi
 fi
 
+rm -f app.jar
 echo
 echo "Done: ${TAG_VERSION}, ${TAG_LATEST}"

@@ -1,28 +1,10 @@
-# syntax=docker/dockerfile:1
-# ─── Build stage ────────────────────────────────────────────────────────────────
-FROM eclipse-temurin:25-jdk-alpine AS build
-WORKDIR /build
-
-# Copy wrapper and dependency descriptors first — layer cached until these change
-COPY gradlew .
-COPY gradle/ gradle/
-COPY build.gradle gradle.properties settings.gradle ./
-
-# Warm up dependency cache; mount keeps it across rebuilds so src/ changes
-# don't re-trigger network downloads
-RUN --mount=type=cache,target=/root/.gradle \
-    ./gradlew dependencies --no-daemon -q 2>/dev/null; true
-
-# Copy source and build the fat JAR (skip tests — run them in CI separately)
-COPY src/ src/
-RUN --mount=type=cache,target=/root/.gradle \
-    ./gradlew bootJar --no-daemon -x test
-
-# ─── Runtime stage ───────────────────────────────────────────────────────────────
+# JAR is built on the host by build.sh before docker build is invoked.
+# This keeps Docker free of network dependencies and avoids QEMU/TLS flakiness
+# when cross-compiling for linux/amd64 on Apple Silicon.
 FROM eclipse-temurin:25-jre-alpine
 WORKDIR /app
 
-COPY --from=build /build/build/libs/*.jar app.jar
+COPY app.jar app.jar
 
 # /data is the external mount point for all persistent files:
 #   feed-store.db       — SQLite database
