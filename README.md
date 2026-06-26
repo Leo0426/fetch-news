@@ -4,11 +4,11 @@
 
 每个路由都输出标准 RSS，可直接用任意订阅器消费；内置 Web 阅读器，支持按分类浏览、AI 摘要一键生成、书签收藏、每日简报。
 
-![路由管理](docs/bbc.png)
+![路由控制台](docs/admin.png)
 
-![文章阅读器](docs/bbc-items.png)
+![今日速览](docs/reader.png)
 
-![凭据配置](docs/credentials.png)
+![每日简报](docs/briefing.png)
 
 ## 信息源
 
