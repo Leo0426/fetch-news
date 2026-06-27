@@ -7,6 +7,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
@@ -54,17 +55,37 @@ public class ArticleSummarizer {
     public void summarize(List<FeedItem> items) {
         for (FeedItem item : items) {
             if (item.link() == null || item.link().isBlank()) continue;
+            Instant startedAt = null;
+            String model = ollama.model();
             try {
                 if (feedStore.loadSummary(item.link()) != null) continue;
+                startedAt = Instant.now();
+                feedStore.markSummaryStarted(item.link(), startedAt, model);
                 String input = resolveInput(item);
-                if (input == null || input.isBlank()) continue;
+                if (input == null || input.isBlank()) {
+                    feedStore.markSummaryFinished(
+                            item.link(), startedAt, Instant.now(), model, "no article content available");
+                    continue;
+                }
                 String truncated = input.length() > MAX_INPUT_CHARS
                         ? input.substring(0, MAX_INPUT_CHARS) : input;
                 String summary = ollama.generate(buildPrompt(item.title(), truncated)).strip();
                 if (!summary.isBlank()) {
-                    feedStore.saveSummary(item.link(), summary, ollama.model());
+                    feedStore.saveSummary(item.link(), summary, model);
+                    feedStore.markSummaryFinished(item.link(), startedAt, Instant.now(), model, null);
+                } else {
+                    feedStore.markSummaryFinished(
+                            item.link(), startedAt, Instant.now(), model, "Ollama returned empty summary");
                 }
             } catch (Exception e) {
+                if (startedAt != null) {
+                    try {
+                        feedStore.markSummaryFinished(
+                                item.link(), startedAt, Instant.now(), model, e.getMessage());
+                    } catch (Exception dbEx) {
+                        log.debug("failed to record summary status for {}: {}", item.link(), dbEx.getMessage());
+                    }
+                }
                 log.warn("summarization failed for {}: {}", item.link(), e.getMessage());
             }
         }

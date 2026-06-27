@@ -15,6 +15,7 @@ import app.feishu.FeishuConfigStore;
 import app.feishu.FeishuPusher;
 import app.store.FeedStore;
 import app.store.StoredItem;
+import app.store.SummaryStatus;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -165,17 +166,20 @@ public class AdminResource {
             }
         }
         Map<String, String> summaries = Map.of();
+        Map<String, SummaryStatus> summaryStatuses = Map.of();
         if (feedStore != null && !items.isEmpty()) {
             try {
                 List<String> links = items.stream()
                         .filter(i -> i.link() != null).map(StoredItem::link).toList();
                 summaries = feedStore.loadSummaries(links);
+                summaryStatuses = feedStore.loadSummaryStatuses(links);
             } catch (Exception e) {
                 log.warn("failed to load summaries for {}: {}", path, e.getMessage());
             }
         }
         boolean aiEnabled = aiConfigStore != null && aiConfigStore.get().enabled();
-        return templates.itemsPanel(path, items, total, Math.max(0, page), summaries, aiEnabled);
+        return templates.itemsPanel(path, items, total, Math.max(0, page),
+                summaries, summaryStatuses, aiEnabled);
     }
 
     /**
@@ -204,7 +208,8 @@ public class AdminResource {
             if (cached == null || cached.isBlank()) {
                 return summaryGenDiv(link, title, "生成失败，请确认 Ollama 服务正常", true);
             }
-            return "<div class=\"item-summary\">" + HtmlUtils.htmlEscape(cached) + "</div>";
+            SummaryStatus status = feedStore.loadSummaryStatuses(List.of(link)).get(link);
+            return summaryDiv(cached, status);
         } catch (Exception e) {
             log.warn("admin summarize failed for {}: {}", link, e.getMessage());
             return summaryGenDiv(link, title, HtmlUtils.htmlEscape(e.getMessage()), true);
@@ -643,6 +648,22 @@ public class AdminResource {
     }
 
     /** Builds a `.item-summary-gen` div with an error message and optional retry button. */
+    private static String summaryDiv(String summary, SummaryStatus status) {
+        StringBuilder html = new StringBuilder("<div class=\"item-summary\">")
+                .append(HtmlUtils.htmlEscape(summary))
+                .append("</div>");
+        if (status != null) {
+            String stateClass = status.error() ? " err" : status.running() ? " running" : "";
+            String label = status.running() ? "摘要中" : status.success() ? "摘要完成" : "摘要失败";
+            html.append("<div class=\"item-summary-meta").append(stateClass).append("\">")
+                    .append("<span>").append(label).append("</span>")
+                    .append("<span>开始 ").append(HtmlUtils.htmlEscape(status.formattedStartedAt())).append("</span>")
+                    .append("<span>耗时 ").append(HtmlUtils.htmlEscape(status.formattedDuration())).append("</span>")
+                    .append("</div>");
+        }
+        return html.toString();
+    }
+
     private static String summaryGenDiv(String link, String title, String errorMsg, boolean showRetry) {
         String esc = HtmlUtils.htmlEscape(errorMsg);
         String retryBtn = showRetry ? """

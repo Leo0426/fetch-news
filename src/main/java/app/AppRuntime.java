@@ -5,6 +5,9 @@ import app.core.DefaultFetchClient;
 import app.core.FetchClient;
 import app.core.Route;
 import app.core.RouteConfigStore;
+import app.core.RouteError;
+import app.core.RouteException;
+import app.core.RouteMatch;
 import app.core.RouteRegistry;
 import app.routes.ArxivRoute;
 import app.routes.GenericRssRoute;
@@ -238,6 +241,18 @@ public class AppRuntime {
      */
     public RouteConfigStore routeConfigStore() {
         return routeConfigStore;
+    }
+
+    /**
+     * Resolves a concrete request/config path, falling back to its configured source route.
+     */
+    public RouteMatch resolveRoute(String path, String sourcePath) {
+        try {
+            return routeRegistry.resolve(path);
+        } catch (RouteException e) {
+            if (e.error() != RouteError.ROUTE_NOT_FOUND) throw e;
+            return routeRegistry.resolve(sourcePath);
+        }
     }
 
     public CredentialConfigStore credentialConfigStore() {

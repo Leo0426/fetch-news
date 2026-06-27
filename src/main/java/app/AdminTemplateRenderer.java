@@ -13,6 +13,7 @@ import app.store.FeedStore;
 import app.store.FetchLogEntry;
 import app.store.RouteHealth;
 import app.store.StoredItem;
+import app.store.SummaryStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -325,7 +326,9 @@ public class AdminTemplateRenderer {
      * @param aiEnabled whether to show the AI summary generate button
      */
     public String itemsPanel(String routePath, List<StoredItem> items, int total, int page,
-                             Map<String, String> summaries, boolean aiEnabled) {
+                             Map<String, String> summaries,
+                             Map<String, SummaryStatus> summaryStatuses,
+                             boolean aiEnabled) {
         int totalPages = total == 0 ? 1 : (total + PAGE_SIZE - 1) / PAGE_SIZE;
         int startItem = total == 0 ? 0 : page * PAGE_SIZE + 1;
         int endItem = Math.min(page * PAGE_SIZE + PAGE_SIZE, total);
@@ -340,6 +343,7 @@ public class AdminTemplateRenderer {
         ctx.setVariable("endItem", endItem);
         ctx.setVariable("pageWindow", computePageWindow(page, totalPages));
         ctx.setVariable("summaries", summaries);
+        ctx.setVariable("summaryStatuses", summaryStatuses);
         ctx.setVariable("aiEnabled", aiEnabled);
         return engine.process("index/items", ctx);
     }

@@ -919,6 +919,23 @@ label.field-label {
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+.item-summary-meta,
+.rd-ai-meta,
+.bf-ai-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  margin-top: 5px;
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 11px;
+}
+.item-summary-meta.running,
+.rd-ai-meta.running,
+.bf-ai-meta.running { color: var(--purple); }
+.item-summary-meta.err,
+.rd-ai-meta.err,
+.bf-ai-meta.err { color: var(--warn); }
 .item-summary-gen { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 5px; }
 .sum-gen-btn {
   padding: 3px 7px;

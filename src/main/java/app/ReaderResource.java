@@ -9,6 +9,7 @@ import app.reader.ReaderItem;
 import app.store.BookmarkedItem;
 import app.store.FeedStore;
 import app.store.StoredItem;
+import app.store.SummaryStatus;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
@@ -71,6 +72,7 @@ public class ReaderResource {
 
         // Batch-load AI summaries for all items in one query
         java.util.Map<String, String> summaries = java.util.Map.of();
+        java.util.Map<String, SummaryStatus> summaryStatuses = java.util.Map.of();
         if (feedStore != null && !stored.isEmpty()) {
             try {
                 List<String> links = stored.stream()
@@ -78,6 +80,7 @@ public class ReaderResource {
                         .map(app.store.StoredItem::link)
                         .toList();
                 summaries = feedStore.loadSummaries(links);
+                summaryStatuses = feedStore.loadSummaryStatuses(links);
             } catch (Exception e) {
                 log.warn("failed to load summaries: {}", e.getMessage());
             }
@@ -87,13 +90,16 @@ public class ReaderResource {
         // Group by routePath (concrete source), preserving DB insertion order (newest first)
         LinkedHashMap<String, List<ReaderItem>> byRoute = new LinkedHashMap<>();
         final java.util.Map<String, String> finalSummaries = summaries;
+        final java.util.Map<String, SummaryStatus> finalSummaryStatuses = summaryStatuses;
 
         for (StoredItem s : stored) {
             if (s.title() == null || s.title().isBlank()) continue;
             if (s.link()  == null || s.link().isBlank())  continue;
             String summary = finalSummaries.get(s.link());
+            SummaryStatus summaryStatus = finalSummaryStatuses.get(s.link());
             byRoute.computeIfAbsent(s.routePath(), k -> new ArrayList<>())
-                    .add(new ReaderItem(s.routePath(), s.title(), s.link(), s.firstSeenAt(), summary));
+                    .add(new ReaderItem(s.routePath(), s.title(), s.link(),
+                            s.pubDate(), s.firstSeenAt(), summary, summaryStatus));
         }
 
         // Build groups; sort by the firstSeenAt of the first (newest) item in each group
@@ -139,10 +145,12 @@ public class ReaderResource {
                     List<String> links = stored.stream()
                             .filter(s -> s.link() != null).map(StoredItem::link).toList();
                     java.util.Map<String, String> summaries = feedStore.loadSummaries(links);
+                    java.util.Map<String, SummaryStatus> summaryStatuses = feedStore.loadSummaryStatuses(links);
                     items = stored.stream()
                             .map(s -> new ReaderItem(
                                     s.routePath(), s.title(), s.link(),
-                                    s.firstSeenAt(), summaries.get(s.link())))
+                                    s.pubDate(), s.firstSeenAt(),
+                                    summaries.get(s.link()), summaryStatuses.get(s.link())))
                             .toList();
                 }
             } catch (Exception e) {
@@ -323,6 +331,7 @@ public class ReaderResource {
         }
 
         java.util.Map<String, String> summaries = java.util.Map.of();
+        java.util.Map<String, SummaryStatus> summaryStatuses = java.util.Map.of();
         if (feedStore != null && !stored.isEmpty()) {
             try {
                 List<String> links = stored.stream()
@@ -330,6 +339,7 @@ public class ReaderResource {
                         .map(StoredItem::link)
                         .toList();
                 summaries = feedStore.loadSummaries(links);
+                summaryStatuses = feedStore.loadSummaryStatuses(links);
             } catch (Exception e) {
                 log.warn("failed to load summaries for briefing: {}", e.getMessage());
             }
@@ -339,13 +349,16 @@ public class ReaderResource {
         final java.util.Map<String, String> finalSummaries = summaries;
 
         LinkedHashMap<String, List<ReaderItem>> byCategory = new LinkedHashMap<>();
+        final java.util.Map<String, SummaryStatus> finalBriefingSummaryStatuses = summaryStatuses;
         for (StoredItem s : stored) {
             if (s.title() == null || s.title().isBlank()) continue;
             if (s.link()  == null || s.link().isBlank())  continue;
             String summary = finalSummaries.get(s.link());
+            SummaryStatus summaryStatus = finalBriefingSummaryStatuses.get(s.link());
             String cat = matchCategory(s.routePath(), categories);
             byCategory.computeIfAbsent(cat, k -> new ArrayList<>())
-                    .add(new ReaderItem(s.routePath(), s.title(), s.link(), s.firstSeenAt(), summary));
+                    .add(new ReaderItem(s.routePath(), s.title(), s.link(),
+                            s.pubDate(), s.firstSeenAt(), summary, summaryStatus));
         }
 
         int cap = 15;

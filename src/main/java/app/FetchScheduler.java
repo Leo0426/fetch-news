@@ -41,6 +41,7 @@ public class FetchScheduler {
     private final AiConfigStore aiConfigStore;
     private final FeishuPusher feishuPusher;
     private final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
+    private final ExecutorService aiExecutor = Executors.newVirtualThreadPerTaskExecutor();
 
     public FetchScheduler(AppRuntime runtime, FeedStore feedStore,
                           ArticleExtractor articleExtractor, ArticleSummarizer articleSummarizer,
@@ -57,17 +58,21 @@ public class FetchScheduler {
     /** Submits an immediate background fetch for {@code path}; returns without waiting. */
     public void triggerFetch(String path) {
         RouteConfig config = runtime.routeConfigStore().get(path);
-        executor.submit(() -> fetch(config));
+        executor.submit(() -> fetchNow(config));
     }
 
     @PreDestroy
     public void shutdown() {
         executor.shutdown();
+        aiExecutor.shutdown();
         try {
             if (!executor.awaitTermination(15, TimeUnit.SECONDS))
                 executor.shutdownNow();
+            if (!aiExecutor.awaitTermination(15, TimeUnit.SECONDS))
+                aiExecutor.shutdownNow();
         } catch (InterruptedException e) {
             executor.shutdownNow();
+            aiExecutor.shutdownNow();
             Thread.currentThread().interrupt();
         }
     }
@@ -81,7 +86,7 @@ public class FetchScheduler {
         for (RouteConfig config : routes) {
             if (!config.enabled() || !config.hasSchedule()) continue;
             if (isDue(config, now)) {
-                executor.submit(() -> fetch(config));
+                executor.submit(() -> fetchNow(config));
             }
         }
 
@@ -106,10 +111,10 @@ public class FetchScheduler {
         }
     }
 
-    private void fetch(RouteConfig config) {
+    void fetchNow(RouteConfig config) {
         log.info("[sched] start {}", config.path());
         try {
-            RouteMatch match = runtime.routeRegistry().resolve(config.path());
+            RouteMatch match = runtime.resolveRoute(config.path(), config.sourcePath());
             RouteContext context = new RouteContext(
                     config.path(),
                     match.context().pathParams(),
@@ -118,19 +123,29 @@ public class FetchScheduler {
                     config.feedUrl());
             Feed feed = feedFetcher.fetch(match, context, config.path(), 0);
             log.info("[sched] done {} — {} items", config.path(), feed.items().size());
-            if (aiConfigStore.get().enabled()) {
-                log.info("[sched] ai start {}", config.path());
-                articleExtractor.enrich(feed.items());
-                articleSummarizer.summarize(feed.items());
-                log.info("[sched] ai done {}", config.path());
-            }
             pushImmediateItems(config);
+            if (aiConfigStore.get().enabled()) {
+                aiExecutor.submit(() -> summarizeAsync(config, feed));
+            }
         } catch (Exception e) {
             log.warn("[sched] error {}: {}", config.path(), e.getMessage());
         }
     }
 
+    private void summarizeAsync(RouteConfig config, Feed feed) {
+        log.info("[sched] ai queued {}", config.path());
+        try {
+            log.info("[sched] ai start {}", config.path());
+            articleExtractor.enrich(feed.items());
+            articleSummarizer.summarize(feed.items());
+            log.info("[sched] ai done {}", config.path());
+        } catch (Exception e) {
+            log.warn("[sched] ai error {}: {}", config.path(), e.getMessage());
+        }
+    }
+
     private void pushImmediateItems(RouteConfig config) {
+        if (feishuPusher == null) return;
         String category = runtime.routeRegistry().categories()
                 .getOrDefault(config.sourcePath(), null);
         if (category == null) return;

@@ -210,7 +210,7 @@ public class FeishuPusher {
                         List<StoredItem> items, String webhookUrl, int maxItems) {
         int total = items.size();
         int pages  = (total + maxItems - 1) / maxItems;   // ceil division
-        String date = ZonedDateTime.now(ZoneId.systemDefault())
+        String pushedAt = ZonedDateTime.now(ZoneId.systemDefault())
                 .format(DateTimeFormatter.ofPattern("yyyy年M月d日 HH:mm"));
         String color = categoryColor(category);
 
@@ -224,8 +224,7 @@ public class FeishuPusher {
                     ? title + "  (" + (page + 1) + "/" + pages + ")"
                     : title;
 
-            // Subtitle: date + total count (all pages share the same totals)
-            String subtitle = date + "　共 **" + total + "** 条";
+            String subtitle = "**推送时间：** " + pushedAt + "　共 **" + total + "** 条";
 
             StringBuilder sb = new StringBuilder();
             // Source breakdown only on first page
@@ -244,6 +243,8 @@ public class FeishuPusher {
                 } else {
                     sb.append("**").append(globalNum).append(".** ").append(text).append("\n");
                 }
+                sb.append("　信息获取时间：").append(item.formattedFirstSeen())
+                  .append("　新闻发布时间：").append(item.formattedPubDate()).append("\n");
             }
 
             Map<String, Object> payload = buildCard(

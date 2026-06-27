@@ -1,7 +1,10 @@
 package app.reader;
 
+import app.store.SummaryStatus;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 
 /**
  * A feed item enriched with reader-friendly display fields.
@@ -11,8 +14,13 @@ public record ReaderItem(
         String routePath,
         String title,
         String link,
+        Instant pubDate,
         Instant firstSeenAt,
-        String summary) {
+        String summary,
+        SummaryStatus summaryStatus) {
+
+    private static final DateTimeFormatter SHORT =
+            DateTimeFormatter.ofPattern("MM-dd HH:mm").withZone(ZoneId.systemDefault());
 
     /** Short source label derived from the route path's first segment. */
     public String sourceLabel() {
@@ -54,6 +62,14 @@ public record ReaderItem(
         return hours / 24 + " 天前";
     }
 
+    public String formattedFetchedAt() {
+        return firstSeenAt != null ? SHORT.format(firstSeenAt) : "—";
+    }
+
+    public String formattedPublishedAt() {
+        return pubDate != null ? SHORT.format(pubDate) : "—";
+    }
+
     /**
      * Human-readable source group name derived from the route path.
      * Examples: "/hn/top" → "HN · top", "/bbc/news/technology" → "BBC · technology".
@@ -70,5 +86,9 @@ public record ReaderItem(
     /** Whether this item has an AI-generated summary. */
     public boolean hasSummary() {
         return summary != null && !summary.isBlank();
+    }
+
+    public boolean hasSummaryStatus() {
+        return summaryStatus != null;
     }
 }

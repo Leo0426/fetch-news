@@ -61,9 +61,17 @@
       <p th:if="${item.hasSummary()}"
          class="rd-summary"
          th:text="${item.summary()}"></p>
+      <div th:if="${item.hasSummaryStatus()}"
+           class="rd-ai-meta"
+           th:classappend="${item.summaryStatus().error()} ? ' err' : (${item.summaryStatus().running()} ? ' running' : '')">
+        <span th:text="${item.summaryStatus().running()} ? '摘要中' : (${item.summaryStatus().success()} ? '摘要完成' : '摘要失败')">摘要状态</span>
+        <span th:text="'开始 ' + ${item.summaryStatus().formattedStartedAt()}">开始 —</span>
+        <span th:text="'耗时 ' + ${item.summaryStatus().formattedDuration()}">耗时 —</span>
+      </div>
       <div class="rd-card-meta">
         <span class="rd-src" th:text="${item.sourceLabel()}">来源</span>
-        <span class="rd-age" th:text="${item.formattedAge()}">1 小时前</span>
+        <span class="rd-age" th:text="'获取 ' + ${item.formattedFetchedAt()}">获取 —</span>
+        <span class="rd-age" th:text="'发布 ' + ${item.formattedPublishedAt()}">发布 —</span>
       </div>
     </div>
   </div>

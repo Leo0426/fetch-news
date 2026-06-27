@@ -43,24 +43,32 @@
         <tr>
           <th>标题 / AI 摘要</th>
           <th>作者</th>
-          <th>发布时间</th>
-          <th>收录时间</th>
+          <th>新闻发布时间</th>
+          <th>信息获取时间</th>
         </tr>
       </thead>
       <tbody>
-        <tr th:each="item : ${items}">
+        <tr th:each="item : ${items}"
+            th:with="summary=${summaries[item.link]}, summaryStatus=${summaryStatuses[item.link]}">
           <td class="col-title">
             <a th:href="${item.link}"
                th:text="${not #strings.isEmpty(item.title)} ? ${item.title} : ${item.link}"
                target="_blank" rel="noopener">title</a>
 
             <!-- Existing AI summary -->
-            <div th:if="${summaries[item.link] != null}"
+            <div th:if="${summary != null}"
                  class="item-summary"
-                 th:text="${summaries[item.link]}"></div>
+                 th:text="${summary}"></div>
+            <div th:if="${summaryStatus != null}"
+                 class="item-summary-meta"
+                 th:classappend="${summaryStatus.error()} ? ' err' : (${summaryStatus.running()} ? ' running' : '')">
+              <span th:text="${summaryStatus.running()} ? '摘要中' : (${summaryStatus.success()} ? '摘要完成' : '摘要失败')">摘要状态</span>
+              <span th:text="'开始 ' + ${summaryStatus.formattedStartedAt()}">开始 —</span>
+              <span th:text="'耗时 ' + ${summaryStatus.formattedDuration()}">耗时 —</span>
+            </div>
 
             <!-- Generate button (AI enabled, no summary yet) -->
-            <div th:if="${aiEnabled and summaries[item.link] == null}"
+            <div th:if="${aiEnabled and summary == null}"
                  class="item-summary-gen">
               <input type="hidden" name="link" th:value="${item.link}">
               <input type="hidden" name="title" th:value="${not #strings.isEmpty(item.title)} ? ${item.title} : ''">

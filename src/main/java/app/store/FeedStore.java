@@ -113,6 +113,16 @@ public class FeedStore implements Closeable {
                         created_at TEXT NOT NULL
                     )""");
             s.execute("""
+                    CREATE TABLE IF NOT EXISTS ai_summary_runs (
+                        item_link    TEXT PRIMARY KEY,
+                        status       TEXT NOT NULL,
+                        started_at   TEXT NOT NULL,
+                        completed_at TEXT,
+                        duration_ms  INTEGER,
+                        model        TEXT,
+                        error_detail TEXT
+                    )""");
+            s.execute("""
                     CREATE TABLE IF NOT EXISTS bookmarks (
                         item_link     TEXT PRIMARY KEY,
                         title         TEXT,
@@ -124,11 +134,16 @@ public class FeedStore implements Closeable {
                         item_link TEXT PRIMARY KEY,
                         read_at   TEXT NOT NULL
                     )""");
+            s.execute("""
+                    CREATE VIRTUAL TABLE IF NOT EXISTS feed_search_fts
+                    USING fts5(item_link UNINDEXED, title, description, summary)
+                    """);
             // Prune read state for items no longer in the feed store (keeps table small)
             s.execute("""
                     DELETE FROM read_items
                     WHERE item_link NOT IN (SELECT item_link FROM feed_items)""");
         }
+        rebuildSearchIndex();
     }
 
     private boolean hasOldFeedItemsSchema() throws SQLException {
@@ -242,6 +257,7 @@ public class FeedStore implements Closeable {
             }
             ps.executeBatch();
         }
+        refreshSearchIndex(valid.stream().map(FeedItem::link).toList());
 
         return valid.size() - existing;
     }
@@ -711,6 +727,7 @@ public class FeedStore implements Closeable {
 
     /** Upserts an AI-generated summary for an article URL. */
     public synchronized void saveSummary(String itemLink, String summary, String model) throws SQLException {
+        String now = Instant.now().toString();
         try (PreparedStatement ps = conn.prepareStatement("""
                 INSERT INTO ai_summaries (item_link, summary, model, created_at)
                 VALUES (?, ?, ?, ?)
@@ -722,9 +739,134 @@ public class FeedStore implements Closeable {
             ps.setString(1, itemLink);
             ps.setString(2, summary);
             ps.setString(3, model);
-            ps.setString(4, Instant.now().toString());
+            ps.setString(4, now);
             ps.executeUpdate();
         }
+        try (PreparedStatement ps = conn.prepareStatement("""
+                INSERT OR IGNORE INTO ai_summary_runs
+                    (item_link, status, started_at, completed_at, duration_ms, model, error_detail)
+                VALUES (?, 'success', ?, ?, 0, ?, NULL)
+                """)) {
+            ps.setString(1, itemLink);
+            ps.setString(2, now);
+            ps.setString(3, now);
+            ps.setString(4, model);
+            ps.executeUpdate();
+        }
+        refreshSearchIndex(List.of(itemLink));
+    }
+
+    /** Records that AI summarization has started for an article URL. */
+    public synchronized void markSummaryStarted(String itemLink, Instant startedAt, String model)
+            throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement("""
+                INSERT INTO ai_summary_runs
+                    (item_link, status, started_at, completed_at, duration_ms, model, error_detail)
+                VALUES (?, 'running', ?, NULL, NULL, ?, NULL)
+                ON CONFLICT(item_link) DO UPDATE SET
+                    status       = 'running',
+                    started_at   = excluded.started_at,
+                    completed_at = NULL,
+                    duration_ms  = NULL,
+                    model        = excluded.model,
+                    error_detail = NULL
+                """)) {
+            ps.setString(1, itemLink);
+            ps.setString(2, startedAt.toString());
+            ps.setString(3, model);
+            ps.executeUpdate();
+        }
+    }
+
+    /** Records that AI summarization has finished for an article URL. */
+    public synchronized void markSummaryFinished(
+            String itemLink,
+            Instant startedAt,
+            Instant completedAt,
+            String model,
+            String errorDetail) throws SQLException {
+        long durationMs = Duration.between(startedAt, completedAt).toMillis();
+        try (PreparedStatement ps = conn.prepareStatement("""
+                INSERT INTO ai_summary_runs
+                    (item_link, status, started_at, completed_at, duration_ms, model, error_detail)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(item_link) DO UPDATE SET
+                    status       = excluded.status,
+                    started_at   = excluded.started_at,
+                    completed_at = excluded.completed_at,
+                    duration_ms  = excluded.duration_ms,
+                    model        = excluded.model,
+                    error_detail = excluded.error_detail
+                """)) {
+            ps.setString(1, itemLink);
+            ps.setString(2, errorDetail == null ? "success" : "error");
+            ps.setString(3, startedAt.toString());
+            ps.setString(4, completedAt.toString());
+            ps.setLong(5, durationMs);
+            ps.setString(6, model);
+            ps.setString(7, errorDetail);
+            ps.executeUpdate();
+        }
+    }
+
+    /** Batch-loads latest AI summarization status for a list of links. */
+    public Map<String, SummaryStatus> loadSummaryStatuses(List<String> links) throws SQLException {
+        Map<String, SummaryStatus> result = new LinkedHashMap<>();
+        if (links.isEmpty()) return result;
+        String placeholders = String.join(",", Collections.nCopies(links.size(), "?"));
+        try (PreparedStatement ps = conn.prepareStatement("""
+                SELECT item_link, status, started_at, completed_at, duration_ms, model, error_detail
+                FROM ai_summary_runs
+                WHERE item_link IN (%s)
+                """.formatted(placeholders))) {
+            for (int i = 0; i < links.size(); i++) ps.setString(i + 1, links.get(i));
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    String started = rs.getString("started_at");
+                    String completed = rs.getString("completed_at");
+                    long duration = rs.getLong("duration_ms");
+                    Long durationMs = rs.wasNull() ? null : duration;
+                    result.put(rs.getString("item_link"), new SummaryStatus(
+                            rs.getString("item_link"),
+                            rs.getString("status"),
+                            started != null ? Instant.parse(started) : null,
+                            completed != null ? Instant.parse(completed) : null,
+                            durationMs,
+                            rs.getString("model"),
+                            rs.getString("error_detail")));
+                }
+            }
+        }
+        List<String> missing = links.stream()
+                .filter(link -> link != null && !link.isBlank())
+                .filter(link -> !result.containsKey(link))
+                .distinct()
+                .toList();
+        if (!missing.isEmpty()) {
+            String missingPlaceholders = String.join(",", Collections.nCopies(missing.size(), "?"));
+            try (PreparedStatement ps = conn.prepareStatement("""
+                    SELECT item_link, model, created_at
+                    FROM ai_summaries
+                    WHERE item_link IN (%s)
+                    """.formatted(missingPlaceholders))) {
+                for (int i = 0; i < missing.size(); i++) ps.setString(i + 1, missing.get(i));
+                try (ResultSet rs = ps.executeQuery()) {
+                    while (rs.next()) {
+                        String created = rs.getString("created_at");
+                        Instant createdAt = created != null ? Instant.parse(created) : null;
+                        result.put(rs.getString("item_link"), new SummaryStatus(
+                                rs.getString("item_link"),
+                                "success",
+                                createdAt,
+                                createdAt,
+                                0L,
+                                rs.getString("model"),
+                                null));
+                    }
+                }
+            }
+        }
+        return result;
     }
 
     /** Returns the total number of cached AI summaries. */
@@ -889,26 +1031,28 @@ public class FeedStore implements Closeable {
     // ── search ────────────────────────────────────────────────────────────────
 
     /**
-     * Full-text search across item titles and AI summaries using SQL LIKE.
-     * Matches are case-insensitive (SQLite default for ASCII; Chinese characters
-     * are matched by substring). Returns at most {@code limit} items, newest first.
+     * Full-text search across item titles, descriptions, and AI summaries.
      */
     public List<StoredItem> search(String query, int limit) throws SQLException {
         if (query == null || query.isBlank()) return List.of();
-        String like = "%" + query + "%";
+        if (limit < 1) return List.of();
+        String ftsQuery = toFtsQuery(query);
         List<StoredItem> result = new ArrayList<>();
         try (PreparedStatement ps = conn.prepareStatement("""
-                SELECT DISTINCT fi.route_path, fi.item_link, fi.title,
+                WITH matches AS (
+                    SELECT item_link, bm25(feed_search_fts) AS rank
+                    FROM feed_search_fts
+                    WHERE feed_search_fts MATCH ?
+                )
+                SELECT fi.route_path, fi.item_link, fi.title,
                        fi.author, fi.pub_date, fi.first_seen_at
-                FROM feed_items fi
-                LEFT JOIN ai_summaries s ON s.item_link = fi.item_link
-                WHERE fi.title LIKE ? OR s.summary LIKE ?
-                ORDER BY fi.first_seen_at DESC
+                FROM matches m
+                JOIN feed_items fi ON fi.item_link = m.item_link
+                ORDER BY m.rank, fi.first_seen_at DESC
                 LIMIT ?
                 """)) {
-            ps.setString(1, like);
-            ps.setString(2, like);
-            ps.setInt(3, limit);
+            ps.setString(1, ftsQuery);
+            ps.setInt(2, limit);
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
                     String pubDateStr = rs.getString("pub_date");
@@ -924,6 +1068,50 @@ public class FeedStore implements Closeable {
             }
         }
         return result;
+    }
+
+    private void rebuildSearchIndex() throws SQLException {
+        try (Statement s = conn.createStatement()) {
+            s.execute("DELETE FROM feed_search_fts");
+            s.execute("""
+                    INSERT INTO feed_search_fts(rowid, item_link, title, description, summary)
+                    SELECT fi.id, fi.item_link, fi.title, fi.description, s.summary
+                    FROM feed_items fi
+                    LEFT JOIN ai_summaries s ON s.item_link = fi.item_link
+                    """);
+        }
+    }
+
+    private void refreshSearchIndex(List<String> links) throws SQLException {
+        List<String> valid = links.stream()
+                .filter(link -> link != null && !link.isBlank())
+                .distinct()
+                .toList();
+        if (valid.isEmpty()) return;
+        String placeholders = String.join(",", Collections.nCopies(valid.size(), "?"));
+        try (PreparedStatement delete = conn.prepareStatement(
+                     "DELETE FROM feed_search_fts WHERE item_link IN (" + placeholders + ")");
+             PreparedStatement insert = conn.prepareStatement("""
+                     INSERT INTO feed_search_fts(rowid, item_link, title, description, summary)
+                     SELECT fi.id, fi.item_link, fi.title, fi.description, s.summary
+                     FROM feed_items fi
+                     LEFT JOIN ai_summaries s ON s.item_link = fi.item_link
+                     WHERE fi.item_link IN (%s)
+                     """.formatted(placeholders))) {
+            for (int i = 0; i < valid.size(); i++) {
+                delete.setString(i + 1, valid.get(i));
+                insert.setString(i + 1, valid.get(i));
+            }
+            delete.executeUpdate();
+            insert.executeUpdate();
+        }
+    }
+
+    private static String toFtsQuery(String query) {
+        return java.util.Arrays.stream(query.strip().split("\\s+"))
+                .filter(term -> !term.isBlank())
+                .map(term -> "\"" + term.replace("\"", "\"\"") + "\"")
+                .collect(java.util.stream.Collectors.joining(" "));
     }
 
     // ── health ────────────────────────────────────────────────────────────────

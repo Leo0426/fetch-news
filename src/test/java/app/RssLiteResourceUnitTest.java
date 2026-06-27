@@ -3,6 +3,7 @@ package app;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import app.ai.AiConfigStore;
 import app.core.CacheService;
 import app.core.Feed;
 import app.core.FeedItem;
@@ -10,6 +11,7 @@ import app.core.Route;
 import app.core.RouteConfig;
 import app.core.RouteConfigStore;
 import app.core.RouteRegistry;
+import app.store.FeedStore;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -72,6 +74,47 @@ class RssLiteResourceUnitTest {
 
         assertEquals(200, response.getStatusCode().value());
         assertEquals(1, calls.get());
+    }
+
+    /**
+     * Verifies that scheduled fetches use the same mount-alias resolution as HTTP requests.
+     */
+    @Test
+    void scheduledFetchResolvesMountAliasToConfiguredSourceRoute() throws Exception {
+        ObjectMapper objectMapper = new ObjectMapper();
+        AtomicInteger calls = new AtomicInteger();
+        RouteRegistry registry = new RouteRegistry(List.of(new Route("/source", context -> {
+            int call = calls.incrementAndGet();
+            return new Feed("Source", "https://example.com/source", "Source feed", List.of(new FeedItem(
+                    "Scheduled " + call,
+                    "https://example.com/source/" + call,
+                    "Scheduled " + call,
+                    Instant.parse("2026-05-22T08:00:00Z"),
+                    null,
+                    List.of())));
+        })));
+        RouteConfigStore store = new RouteConfigStore(tempDir.resolve("scheduled-routes.json"), objectMapper);
+        RouteConfig alias = new RouteConfig("/alias", "/source", true, 300, 1800, 15);
+        store.save(alias);
+        AppRuntime runtime = new AppRuntime(
+                new CacheService(Duration.ofMinutes(5), Duration.ofMinutes(30)), registry, store);
+
+        try (FeedStore feedStore = new FeedStore(tempDir.resolve("scheduled-feed.db"), objectMapper)) {
+            FetchScheduler scheduler = new FetchScheduler(
+                    runtime,
+                    feedStore,
+                    null,
+                    null,
+                    new AiConfigStore(tempDir.resolve("ai-config.json"), objectMapper),
+                    null);
+
+            scheduler.fetchNow(alias);
+
+            assertEquals(1, calls.get());
+            assertEquals(1, feedStore.loadItems("/alias").size());
+            assertEquals(0, feedStore.loadItems("/source").size());
+            scheduler.shutdown();
+        }
     }
 
     /**

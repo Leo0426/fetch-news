@@ -10,7 +10,6 @@ import app.core.RouteContext;
 import app.core.RouteError;
 import app.core.RouteException;
 import app.core.RouteMatch;
-import app.core.RouteRegistry;
 import app.core.RssRenderer;
 import app.store.FeedStore;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -38,7 +37,6 @@ public class RssLiteResource {
     private static final Logger log = LoggerFactory.getLogger(RssLiteResource.class);
 
     private final CacheService cacheService;
-    private final RouteRegistry registry;
     private final AppRuntime runtime;
     private final FeedFetcher feedFetcher;
     private final FeedStore feedStore;
@@ -51,7 +49,6 @@ public class RssLiteResource {
     public RssLiteResource(AppRuntime runtime, ObjectMapper objectMapper, FeedStore feedStore) {
         this.runtime = runtime;
         this.cacheService = runtime.cacheService();
-        this.registry = runtime.routeRegistry();
         this.feedFetcher = new FeedFetcher(feedStore);
         this.feedStore = feedStore;
         RssRenderer rss = new RssRenderer();
@@ -92,10 +89,10 @@ public class RssLiteResource {
             String outputFormat = format == null || format.isBlank() ? "rss" : format;
             int itemLimit = parseLimit(limit);
             RouteConfig config = runtime.routeConfigStore().get(path);
+            RouteMatch match = runtime.resolveRoute(path, config.sourcePath());
             if (!config.enabled()) {
                 throw new RouteException(RouteError.ROUTE_DISABLED, "route is disabled: " + path);
             }
-            RouteMatch match = resolveForPath(path, config.sourcePath());
             RouteContext context = new RouteContext(
                     path,
                     match.context().pathParams(),
@@ -148,21 +145,6 @@ public class RssLiteResource {
     }
 
     // ── private helpers ───────────────────────────────────────────────────────
-
-    /**
-     * Resolves a route for serving: tries the concrete request path first so that
-     * saved instances of parameterized routes (e.g. /github/releases/anthropics/claude)
-     * extract the correct path params. Falls back to sourcePath for plain mount aliases
-     * whose path doesn't match any registered pattern.
-     */
-    private RouteMatch resolveForPath(String requestPath, String sourcePath) {
-        try {
-            return registry.resolve(requestPath);
-        } catch (RouteException e) {
-            if (e.error() != RouteError.ROUTE_NOT_FOUND) throw e;
-            return registry.resolve(sourcePath);
-        }
-    }
 
     private ResponseEntity<?> render(Feed feed, String outputFormat, int cacheTtlSeconds) {
         FeedRenderer renderer = renderers.get(outputFormat);
