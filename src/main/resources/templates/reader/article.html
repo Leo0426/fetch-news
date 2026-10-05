@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title th:text="${page.item() != null} ? ${page.item().title()} + ' · 站内阅读' : '站内阅读'">站内阅读</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/admin.css">
+  <link rel="stylesheet" href="/article.css">
+  <script defer src="/ui.js"></script>
+  <script defer src="/article.js"></script>
+</head>
+<body class="reader-page article-page">
+<a class="skip-link" href="#article-content">跳到文章正文</a>
+<div class="rd-progress-bar" id="rd-progress-bar" aria-hidden="true"></div>
+
+<main class="article-shell">
+  <nav class="article-nav" aria-label="文章导航">
+    <a class="article-back" th:href="${page.returnUrl()}" data-article-return>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m14 6-6 6 6 6"/></svg>
+      返回列表
+    </a>
+    <span class="article-nav-label">站内阅读</span>
+    <a th:if="${page.originalUrl() != null}" class="article-original" th:href="${page.originalUrl()}" target="_blank" rel="noopener noreferrer">打开原文 <span aria-hidden="true">↗</span></a>
+  </nav>
+
+  <section th:if="${page.error() != null}" id="article-content" class="article-empty" tabindex="-1" aria-labelledby="article-error-title">
+    <span class="page-eyebrow">站内阅读</span>
+    <h1 id="article-error-title">暂时无法打开这篇文章</h1>
+    <p th:text="${page.error()}">请稍后重试。</p>
+    <a th:href="${page.returnUrl()}" class="article-button article-button--primary">返回列表</a>
+  </section>
+
+  <article th:if="${page.item() != null and page.error() == null}" id="article-content" class="article-document" tabindex="-1" data-article
+           th:attr="data-link=${page.item().link()},data-title=${page.item().title()},data-route-path=${page.item().routePath()},data-read=${page.read()},data-bookmarked=${page.bookmarked()},data-return-url=${page.returnUrl()}">
+    <header class="article-header">
+      <div class="article-kicker">
+        <span class="article-source" th:text="${page.item().sourceLabel()}">来源</span>
+        <span class="article-read-state" data-article-read-state th:text="${page.read()} ? '已读' : '未读'" th:classappend="${page.read()} ? ' is-read'">未读</span>
+      </div>
+      <h1 class="article-title" th:text="${page.item().title()}">文章标题</h1>
+      <div class="article-meta">
+        <span th:if="${!#strings.isEmpty(page.author())}" th:text="${page.author()}">作者</span>
+        <span th:if="${page.item().pubDate() != null}" th:text="'发布 ' + ${page.item().formattedPublishedAt()}">发布时间</span>
+        <span th:text="'保存 ' + ${page.item().formattedFetchedAt()}">保存时间</span>
+      </div>
+      <div th:if="${!page.categories().isEmpty()}" class="article-tags" aria-label="文章标签">
+        <span th:each="category : ${page.categories()}" th:text="${category}">标签</span>
+      </div>
+    </header>
+
+    <div class="article-tools" data-article-control hidden>
+      <div class="article-font-controls" role="group" aria-label="正文字号">
+        <span class="article-tool-label" aria-hidden="true">字号</span>
+        <button type="button" data-article-size="small" aria-pressed="false" aria-label="小字号">小</button>
+        <button type="button" data-article-size="standard" aria-pressed="true" aria-label="标准字号">标准</button>
+        <button type="button" data-article-size="large" aria-pressed="false" aria-label="大字号">大</button>
+      </div>
+      <div class="article-save-controls">
+        <button type="button" class="article-button article-bookmark" data-article-bookmark th:attr="aria-pressed=${page.bookmarked()}">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m19 21-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2Z"/></svg>
+          <span data-article-bookmark-label th:text="${page.bookmarked()} ? '已收藏' : '收藏'">收藏</span>
+        </button>
+        <button type="button" class="article-button" data-article-mark-read th:disabled="${page.read()}" th:text="${page.read()} ? '已标为已读' : '标为已读'">标为已读</button>
+      </div>
+    </div>
+    <noscript><p class="article-noscript">正文可以直接阅读。启用 JavaScript 后，可调整字号、收藏或标为已读。</p></noscript>
+
+    <section th:if="${page.item().hasSummary()}" class="article-summary" aria-labelledby="article-summary-title">
+      <h2 id="article-summary-title"><span aria-hidden="true">✧</span> AI 摘要</h2>
+      <p th:text="${page.item().summary()}">摘要</p>
+    </section>
+
+    <div class="article-content-note" th:if="${!page.content().isEmpty()}">
+      <span class="article-note-mark" aria-hidden="true"></span>
+      <span th:text="${page.content().kind() == 'extract'} ? 'AI 整理的内容' : '订阅中保存的内容，可能是节选'">订阅中保存的内容，可能是节选</span>
+    </div>
+    <div th:if="${!page.content().isEmpty()}" class="article-prose" th:utext="${page.content().html()}"></div>
+    <section th:if="${page.content().isEmpty()}" class="article-content-empty" aria-labelledby="article-empty-title">
+      <h2 id="article-empty-title">暂无已保存内容</h2>
+      <p>当前订阅没有提供可展示的正文，可前往原文继续阅读。</p>
+      <a th:if="${page.originalUrl() != null}" class="article-text-link" th:href="${page.originalUrl()}" target="_blank" rel="noopener noreferrer">前往原文继续阅读 <span aria-hidden="true">↗</span></a>
+    </section>
+
+    <footer class="article-footer">
+      <div class="article-end-mark" aria-hidden="true">· · ·</div>
+      <p class="article-end-note">按自己的节奏，读完这一篇。</p>
+      <div class="article-footer-actions">
+        <a th:href="${page.returnUrl()}" class="article-button" data-article-return>返回列表</a>
+        <button type="button" class="article-button article-button--primary" data-article-finish data-article-control hidden>完成阅读并返回 <span aria-hidden="true">→</span></button>
+      </div>
+      <p class="article-save-status" data-article-save-status role="status" aria-live="polite" aria-atomic="true"></p>
+    </footer>
+  </article>
+</main>
+</body>
+</html>

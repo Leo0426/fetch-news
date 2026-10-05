@@ -1,18 +1,17 @@
 package app;
 
 import app.ai.AiConfig;
-import app.CredentialConfig;
-import app.CredentialConfigStore;
 import app.ai.AiConfigStore;
 import app.ai.ArticleSummarizer;
 import app.ai.OllamaClient;
-import app.core.FeedItem;
+import app.ai.SummaryProgress;
 import app.core.RouteConfig;
 import app.core.RouteError;
 import app.core.RouteException;
 import app.feishu.FeishuConfig;
 import app.feishu.FeishuConfigStore;
 import app.feishu.FeishuPusher;
+import app.store.FeedRefreshState;
 import app.store.FeedStore;
 import app.store.StoredItem;
 import app.store.SummaryStatus;
@@ -22,6 +21,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.NoSuchElementException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -38,6 +38,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.util.HtmlUtils;
+import org.springframework.web.util.UriComponentsBuilder;
 
 /**
  * Serves the index UI and its HTMX fragment endpoints.
@@ -182,10 +183,6 @@ public class AdminResource {
                 summaries, summaryStatuses, aiEnabled);
     }
 
-    /**
-     * Generates (or returns cached) an AI summary for a single item.
-     * Returns an HTML fragment to be swapped into the summary cell via HTMX.
-     */
     @PostMapping(
             value = "/items/summarize",
             consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE,
@@ -194,63 +191,55 @@ public class AdminResource {
     public String summarizeItem(
             @RequestParam String link,
             @RequestParam(required = false, defaultValue = "") String title) {
-        if (!aiConfigStore.get().enabled()) {
-            return summaryGenDiv(link, title, "AI 未启用", false);
-        }
+        return summaryResponse(link, true);
+    }
+
+    @GetMapping(value = "/items/summary-status", produces = MediaType.TEXT_HTML_VALUE)
+    @ResponseBody
+    public String summaryStatus(@RequestParam String link) {
+        return summaryResponse(link, false);
+    }
+
+    private String summaryResponse(String link, boolean submit) {
+        if (feedStore == null) return summaryGenDiv(link, "文章存储不可用，请稍后再试。", false);
+        if (articleSummarizer == null) return summaryGenDiv(link, "摘要服务暂不可用，请稍后再试。", false);
         try {
-            String cached = feedStore.loadSummary(link);
-            if (cached == null || cached.isBlank()) {
-                FeedItem item = new FeedItem(
-                        title.isBlank() ? null : title, link, null, null, null, List.of());
-                articleSummarizer.summarize(List.of(item));
-                cached = feedStore.loadSummary(link);
+            SummaryProgress progress = articleSummarizer.progress(link);
+            if (submit && !progress.pending() && !"success".equals(progress.state())) {
+                if (!aiEnabled()) return summaryGenDiv(link, "AI 未启用，请先在设置中开启。", false);
+                progress = articleSummarizer.request(link);
             }
-            if (cached == null || cached.isBlank()) {
-                return summaryGenDiv(link, title, "生成失败，请确认 Ollama 服务正常", true);
-            }
-            SummaryStatus status = feedStore.loadSummaryStatuses(List.of(link)).get(link);
-            return summaryDiv(cached, status);
+            return summaryFragment(link, progress);
+        } catch (NoSuchElementException e) {
+            return summaryGenDiv(link, "未找到已保存的文章，请先抓取后再生成摘要。", false);
         } catch (Exception e) {
-            log.warn("admin summarize failed for {}: {}", link, e.getMessage());
-            return summaryGenDiv(link, title, HtmlUtils.htmlEscape(e.getMessage()), true);
+            log.warn("admin summary status unavailable for {}: {}", link, e.toString());
+            return summaryCheckDiv(link);
         }
     }
 
-    /**
-     * Submits batch AI summarization for all un-summarized items of a route.
-     * Returns an HTML status snippet; processing happens in a background virtual thread.
-     */
     @PostMapping(
             value = "/items/summarize-batch",
             consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE,
             produces = MediaType.TEXT_HTML_VALUE)
     @ResponseBody
     public String summarizeBatch(@RequestParam String path) {
-        if (!aiConfigStore.get().enabled()) {
-            return "<span class='sum-status err'>AI 未启用，请先在设置中配置 Ollama</span>";
-        }
+        if (feedStore == null) return "<span class='sum-status err'>文章存储不可用，请稍后再试。</span>";
+        if (!aiEnabled()) return "<span class='sum-status err'>AI 未启用，请先在设置中配置 Ollama。</span>";
+        if (articleSummarizer == null) return "<span class='sum-status err'>摘要服务暂不可用，请稍后再试。</span>";
         try {
-            List<FeedItem> all = feedStore.loadItems(path);
-            List<String> links = all.stream()
-                    .filter(i -> i.link() != null && !i.link().isBlank())
-                    .map(FeedItem::link).toList();
-            Map<String, String> existing = feedStore.loadSummaries(links);
-            List<FeedItem> pending = all.stream()
-                    .filter(i -> i.link() != null && !i.link().isBlank())
-                    .filter(i -> !existing.containsKey(i.link()))
-                    .toList();
-            if (pending.isEmpty()) {
-                return "<span class='sum-status ok'>全部条目已有摘要</span>";
-            }
-            Thread.startVirtualThread(() -> {
-                try { articleSummarizer.summarize(pending); }
-                catch (Exception e) { log.warn("batch summarize failed: {}", e.getMessage()); }
-            });
-            return "<span class='sum-status ok'>已提交 " + pending.size() + " 条，后台生成中</span>";
+            int accepted = articleSummarizer.enqueue(feedStore.loadItems(path));
+            return accepted == 0
+                    ? "<span class='sum-status ok'>没有新增任务；已有摘要或已排队的文章会跳过，失败任务可逐条重试。</span>"
+                    : "<span class='sum-status ok'>已加入队列 " + accepted + " 条，将依次生成摘要。</span>";
         } catch (Exception e) {
-            log.warn("batch summarize submit failed: {}", e.getMessage());
-            return "<span class='sum-status err'>提交失败：" + HtmlUtils.htmlEscape(e.getMessage()) + "</span>";
+            log.warn("batch summarize submit failed: {}", e.toString());
+            return "<span class='sum-status err'>暂时无法确认提交结果，请刷新文章列表查看任务状态。</span>";
         }
+    }
+
+    private boolean aiEnabled() {
+        return aiConfigStore != null && aiConfigStore.get().enabled();
     }
 
     /**
@@ -380,14 +369,20 @@ public class AdminResource {
     @ResponseBody
     public String health() {
         java.util.Map<String, app.store.RouteHealth> healthMap = java.util.Map.of();
+        List<FeedRefreshState> refreshStates = List.of();
         if (feedStore != null) {
             try {
                 healthMap = feedStore.loadRouteHealth();
             } catch (Exception e) {
                 log.warn("failed to load route health: {}", e.getMessage());
             }
+            try {
+                refreshStates = feedStore.loadFeedRefreshStates();
+            } catch (Exception e) {
+                log.warn("failed to load RSS refresh state: {}", e.getMessage());
+            }
         }
-        return templates.healthSection(routes(), healthMap);
+        return templates.healthSection(routes(), healthMap, refreshStates);
     }
 
     /**
@@ -647,39 +642,56 @@ public class AdminResource {
         }
     }
 
-    /** Builds a `.item-summary-gen` div with an error message and optional retry button. */
-    private static String summaryDiv(String summary, SummaryStatus status) {
-        StringBuilder html = new StringBuilder("<div class=\"item-summary\">")
-                .append(HtmlUtils.htmlEscape(summary))
-                .append("</div>");
-        if (status != null) {
-            String stateClass = status.error() ? " err" : status.running() ? " running" : "";
-            String label = status.running() ? "摘要中" : status.success() ? "摘要完成" : "摘要失败";
-            html.append("<div class=\"item-summary-meta").append(stateClass).append("\">")
-                    .append("<span>").append(label).append("</span>")
-                    .append("<span>开始 ").append(HtmlUtils.htmlEscape(status.formattedStartedAt())).append("</span>")
-                    .append("<span>耗时 ").append(HtmlUtils.htmlEscape(status.formattedDuration())).append("</span>")
-                    .append("</div>");
+    private String summaryFragment(String link, SummaryProgress progress) {
+        if ("success".equals(progress.state())) {
+            return "<div class=\"item-summary-gen\"><div class=\"item-summary\">"
+                    + HtmlUtils.htmlEscape(progress.summary())
+                    + "</div><div class=\"item-summary-meta\" role=\"status\">摘要完成</div></div>";
         }
-        return html.toString();
+        if (progress.pending()) {
+            boolean queued = "queued".equals(progress.state());
+            String hint = queued && !aiEnabled() ? "AI 已关闭，任务保留在队列中。" : "可以离开此页，完成后自动显示摘要。";
+            return """
+                    <div class="item-summary-gen" hx-get="%s" hx-trigger="every 2s" hx-target="this" hx-swap="outerHTML">
+                    <div class="item-summary-meta running" role="status" aria-live="polite">%s</div>
+                    <p class="item-summary-hint">%s</p></div>
+                    """.formatted(summaryStatusUrl(link), queued ? "排队中" : "摘要中", hint);
+        }
+        String error = "error".equals(progress.state()) ? progress.error() : null;
+        if (!aiEnabled() && error == null) error = "AI 未启用，请先在设置中开启。";
+        return summaryGenDiv(link, error, aiEnabled());
     }
 
-    private static String summaryGenDiv(String link, String title, String errorMsg, boolean showRetry) {
-        String esc = HtmlUtils.htmlEscape(errorMsg);
-        String retryBtn = showRetry ? """
-                 <button type="button" class="sum-gen-btn"\
-                 hx-post="/index/items/summarize"\
-                 hx-target="closest .item-summary-gen"\
-                 hx-swap="outerHTML"\
-                 hx-include="closest .item-summary-gen">重试</button>""" : "";
+    private static String summaryStatusUrl(String link) {
+        return HtmlUtils.htmlEscape(UriComponentsBuilder.fromPath("/index/items/summary-status")
+                .queryParam("link", "{link}").encode().buildAndExpand(Map.of("link", link)).toUriString());
+    }
+
+    private static String summaryCheckDiv(String link) {
         return """
-                <div class="item-summary-gen">\
-                <input type="hidden" name="link" value="%s">\
-                <input type="hidden" name="title" value="%s">\
-                <span class="sum-err-text">%s</span>%s\
-                </div>""".formatted(
-                HtmlUtils.htmlEscape(link),
-                HtmlUtils.htmlEscape(title),
-                esc, retryBtn);
+                <div class="item-summary-gen">
+                <p class="item-summary-error" role="alert">摘要状态暂时无法确认，请重新查看状态。</p>
+                <button type="button" class="sum-gen-btn" hx-get="%s"
+                hx-target="closest .item-summary-gen" hx-swap="outerHTML" hx-disabled-elt="this">重新查看状态</button>
+                </div>
+                """.formatted(summaryStatusUrl(link));
+    }
+
+    private static String summaryGenDiv(String link, String error, boolean showButton) {
+        StringBuilder html = new StringBuilder("<div class=\"item-summary-gen\">");
+        if (error != null) {
+            html.append("<p class=\"item-summary-error\" role=\"alert\">")
+                    .append(HtmlUtils.htmlEscape(error)).append("</p>");
+        }
+        if (showButton) {
+            html.append("<input type=\"hidden\" name=\"link\" value=\"")
+                    .append(HtmlUtils.htmlEscape(link)).append("\">")
+                    .append("""
+                            <button type="button" class="sum-gen-btn" hx-post="/index/items/summarize"
+                            hx-target="closest .item-summary-gen" hx-swap="outerHTML"
+                            hx-include="closest .item-summary-gen" hx-disabled-elt="this">
+                            """).append(error == null ? "✦ 生成摘要" : "✦ 重试生成").append("</button>");
+        }
+        return html.append("</div>").toString();
     }
 }

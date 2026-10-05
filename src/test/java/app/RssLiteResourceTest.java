@@ -3,10 +3,17 @@ package app;
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.not;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.restassured.RestAssured;
+import io.restassured.path.json.JsonPath;
+import org.jsoup.Jsoup;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 
@@ -18,9 +25,14 @@ class RssLiteResourceTest {
     @LocalServerPort
     int port;
 
+    @Autowired
+    AppRuntime runtime;
+
     @BeforeEach
     void configureRestAssured() {
         RestAssured.port = port;
+        runtime.routeConfigStore().remove("/mritd/blog");
+        runtime.routeConfigStore().remove("/mritd-short");
     }
 
     /**
@@ -45,7 +57,7 @@ class RssLiteResourceTest {
                 .then()
                 .statusCode(200)
                 .contentType(containsString("application/json"))
-                .body("find { it.path == '/zed/blog' }.enabled", equalTo(true));
+                .body("find { it.path == '/mritd/blog' }.enabled", equalTo(false));
     }
 
     /**
@@ -71,14 +83,20 @@ class RssLiteResourceTest {
      */
     @Test
     void adminEditModalHasFormFields() {
-        given()
-                .when().get("/index/routes/edit?path=/zed/blog")
+        String html = given()
+                .when().get("/index/routes/edit?path=/mritd/blog")
                 .then()
                 .statusCode(200)
                 .contentType(containsString("text/html"))
                 .body(containsString("挂载路径"))
                 .body(containsString("来源路由"))
-                .body(containsString("hx-post"));
+                .body(containsString("data-source-path=\"/mritd/blog\""))
+                .body(not(containsString("[[${")))
+                .body(containsString("hx-post"))
+                .extract().asString();
+        var source = Jsoup.parse(html).selectFirst("#modal-sourcePath option[selected]");
+        assertNotNull(source, "The current source must be available in the route editor");
+        assertEquals("/mritd/blog", source.attr("value"));
     }
 
     /**
@@ -99,41 +117,78 @@ class RssLiteResourceTest {
                 .contentType(containsString("javascript"));
     }
 
+    @Test
+    void interactionScriptsAreServedBeforeFeedRoutes() {
+        for (String[] asset : new String[][] {
+                {"ui.js", "FetchNewsUI"}, {"reader.js", "readerState"}, {"admin.js", "appShell"}}) {
+            given().when().get("/" + asset[0]).then()
+                    .statusCode(200)
+                    .contentType(containsString("javascript"))
+                    .body(containsString(asset[1]));
+        }
+    }
+
+    @Test
+    void readerPagesRenderNavigationAndInteractionAssets() {
+        for (String path : new String[] {"/reader", "/reader/bookmarks", "/reader/search", "/reader/briefing", "/reader/unread"}) {
+            given().when().get(path).then()
+                    .statusCode(200)
+                    .contentType(containsString("text/html"))
+                    .body(containsString("阅读导航"))
+                    .body(containsString("/ui.js"));
+        }
+    }
+
+    @Test
+    void unreadStylesAndCursorValidationAreAvailableOverHttp() {
+        given().when().get("/unread.css").then()
+                .statusCode(200).contentType(containsString("text/css"));
+        for (String cursor : new String[] {"0", "-1", "invalid", "9223372036854775808"}) {
+            given().queryParam("before", cursor).when().get("/reader/unread").then().statusCode(400);
+        }
+    }
+
+    @Test
+    void searchStylesAndInputValidationAreAvailableOverHttp() {
+        given().when().get("/search.css").then()
+                .statusCode(200).contentType(containsString("text/css"));
+        for (String query : new String[] {"字", "𠀀", "字".repeat(201)}) {
+            given().queryParam("q", query).when().get("/reader/search").then().statusCode(400)
+                    .body(containsString("请输入 2–200 个字符"));
+        }
+        given().queryParam("q", "不存在的搜索词").when().get("/reader/search").then().statusCode(200);
+    }
+
     /**
      * Verifies that the HTMX route editor can save form-encoded route settings.
      */
     @Test
     void adminHtmxFormCanSaveRoute() {
-        given()
+        var response = given()
                 .contentType("application/x-www-form-urlencoded")
-                .formParam("path", "/zed/blog")
-                .formParam("sourcePath", "/zed/blog")
+                .formParam("path", "/mritd/blog")
+                .formParam("sourcePath", "/mritd/blog")
                 .formParam("enabled", "false")
-                .formParam("routeCacheTtlSeconds", "300")
-                .formParam("detailCacheTtlSeconds", "1800")
+                .formParam("routeCacheTtlSeconds", "120")
+                .formParam("detailCacheTtlSeconds", "900")
                 .when().post("/index/routes")
                 .then()
                 .statusCode(200)
                 .contentType(containsString("text/html"))
-                .body(containsString("已保存"))
-                .body(containsString("hx-swap-oob"))
-                .body(containsString("/zed/blog"))
-                .body(containsString("off"));
+                .body(equalTo(""))
+                .extract().response();
+
+        JsonPath triggers = JsonPath.from(response.header("HX-Trigger"));
+        assertTrue(triggers.getBoolean("closemodal"));
+        assertTrue(triggers.getBoolean("routeSaved"));
 
         given()
-                .contentType("application/json")
-                .body("""
-                        {
-                          "path": "/zed/blog",
-                          "enabled": true,
-                          "routeCacheTtlSeconds": 300,
-                          "detailCacheTtlSeconds": 1800
-                        }
-                        """)
-                .when().put("/index/api/routes")
+                .when().get("/index/api/routes")
                 .then()
                 .statusCode(200)
-                .body("enabled", equalTo(true));
+                .body("find { it.path == '/mritd/blog' }.enabled", equalTo(false))
+                .body("find { it.path == '/mritd/blog' }.routeCacheTtlSeconds", equalTo(120))
+                .body("find { it.path == '/mritd/blog' }.detailCacheTtlSeconds", equalTo(900));
     }
 
     /**
@@ -144,8 +199,18 @@ class RssLiteResourceTest {
         given()
                 .contentType("application/json")
                 .body("""
+                        {"path": "/mritd/blog", "enabled": true}
+                        """)
+                .when().put("/index/api/routes")
+                .then()
+                .statusCode(200)
+                .body("enabled", equalTo(true));
+
+        given()
+                .contentType("application/json")
+                .body("""
                         {
-                          "path": "/zed/blog",
+                          "path": "/mritd/blog",
                           "enabled": false,
                           "routeCacheTtlSeconds": 300,
                           "detailCacheTtlSeconds": 1800
@@ -157,7 +222,7 @@ class RssLiteResourceTest {
                 .body("enabled", equalTo(false));
 
         given()
-                .when().get("/zed/blog")
+                .when().get("/mritd/blog")
                 .then()
                 .statusCode(404)
                 .body("error", equalTo("route disabled"));
@@ -166,7 +231,7 @@ class RssLiteResourceTest {
                 .contentType("application/json")
                 .body("""
                         {
-                          "path": "/zed/blog",
+                          "path": "/mritd/blog",
                           "enabled": true,
                           "routeCacheTtlSeconds": 300,
                           "detailCacheTtlSeconds": 1800
@@ -208,7 +273,7 @@ class RssLiteResourceTest {
                 .contentType("application/json")
                 .body("""
                         {
-                          "path": "/zed/blog",
+                          "path": "/mritd/blog",
                           "enabled": true,
                           "routeCacheTtlSeconds": 0,
                           "detailCacheTtlSeconds": 1800
@@ -230,7 +295,7 @@ class RssLiteResourceTest {
                 .contentType("application/json")
                 .body("""
                         {
-                          "path": "/zed/blog",
+                          "path": "/mritd/blog",
                           "enabled": true,
                           "routeCacheTtlSeconds": 300,
                           "detailCacheTtlSeconds": 0
@@ -288,8 +353,8 @@ class RssLiteResourceTest {
                 .contentType("application/json")
                 .body("""
                         {
-                          "path": "/zed-short",
-                          "sourcePath": "/zed/blog",
+                          "path": "/mritd-short",
+                          "sourcePath": "/mritd/blog",
                           "enabled": true,
                           "routeCacheTtlSeconds": 300,
                           "detailCacheTtlSeconds": 1800
@@ -298,7 +363,7 @@ class RssLiteResourceTest {
                 .when().put("/index/api/routes")
                 .then()
                 .statusCode(200)
-                .body("path", equalTo("/zed-short"))
-                .body("sourcePath", equalTo("/zed/blog"));
+                .body("path", equalTo("/mritd-short"))
+                .body("sourcePath", equalTo("/mritd/blog"));
     }
 }

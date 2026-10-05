@@ -20,9 +20,17 @@ public record SummaryStatus(
     private static final DateTimeFormatter FMT =
             DateTimeFormatter.ofPattern("MM-dd HH:mm:ss").withZone(ZoneId.systemDefault());
 
+    public boolean queued() { return "queued".equals(status); }
     public boolean running() { return "running".equals(status); }
     public boolean success() { return "success".equals(status); }
     public boolean error()   { return "error".equals(status); }
+
+    public String errorMessage() {
+        if (!error()) return null;
+        return errorDetail != null && errorDetail.contains("interrupted")
+                ? "上次摘要任务已中断，请重试。"
+                : "摘要生成失败，请检查本地模型或文章内容后重试。";
+    }
 
     public String formattedStartedAt() {
         return startedAt != null ? FMT.format(startedAt) : "—";

@@ -1,4 +1,4 @@
-<div class="items-view">
+<div class="items-view" th:attr="data-path=${routePath},data-page=${page}">
 
   <div class="items-header">
     <div class="items-header-left">
@@ -16,7 +16,8 @@
                   hx-target="#batch-sum-msg"
                   hx-swap="innerHTML"
                   hx-include="closest form"
-                  hx-indicator="#batch-spin">
+                  hx-indicator="#batch-spin"
+                  hx-disabled-elt="this">
             ✦ 批量生成摘要
           </button>
           <span id="batch-spin" class="htmx-indicator"
@@ -55,34 +56,39 @@
                th:text="${not #strings.isEmpty(item.title)} ? ${item.title} : ${item.link}"
                target="_blank" rel="noopener">title</a>
 
-            <!-- Existing AI summary -->
-            <div th:if="${summary != null}"
-                 class="item-summary"
-                 th:text="${summary}"></div>
-            <div th:if="${summaryStatus != null}"
-                 class="item-summary-meta"
-                 th:classappend="${summaryStatus.error()} ? ' err' : (${summaryStatus.running()} ? ' running' : '')">
-              <span th:text="${summaryStatus.running()} ? '摘要中' : (${summaryStatus.success()} ? '摘要完成' : '摘要失败')">摘要状态</span>
-              <span th:text="'开始 ' + ${summaryStatus.formattedStartedAt()}">开始 —</span>
-              <span th:text="'耗时 ' + ${summaryStatus.formattedDuration()}">耗时 —</span>
+            <div class="item-summary-gen"
+                 th:with="pending=${summary == null and summaryStatus != null and (summaryStatus.queued() or summaryStatus.running())}"
+                 th:hx-get="${pending ? '/index/items/summary-status?link=' + #uris.escapeQueryParam(item.link) : null}"
+                 th:hx-trigger="${pending} ? 'every 2s' : null"
+                 hx-target="this" hx-swap="outerHTML">
+              <div th:if="${summary != null}"
+                   class="item-summary" th:text="${summary}"></div>
+              <div th:if="${summaryStatus != null}"
+                   class="item-summary-meta" role="status" aria-live="polite"
+                   th:classappend="${summaryStatus.error()} ? ' err' : (${pending} ? ' running' : '')">
+                <span th:text="${summaryStatus.queued()} ? '排队中' : (${summaryStatus.running()} ? '摘要中' : (${summaryStatus.success()} ? '摘要完成' : '摘要失败'))">摘要状态</span>
+                <span th:text="${(summaryStatus.queued() ? '入队 ' : '开始 ') + summaryStatus.formattedStartedAt()}">开始 —</span>
+                <span th:text="'耗时 ' + ${summaryStatus.formattedDuration()}">耗时 —</span>
+              </div>
+              <p th:if="${pending}" class="item-summary-hint"
+                 th:text="${!aiEnabled and summaryStatus.queued()} ? 'AI 已关闭，任务保留在队列中。' : '可以离开此页，完成后自动显示摘要。'"></p>
+              <p th:if="${summary == null and summaryStatus != null and summaryStatus.error()}"
+                 class="item-summary-error" th:text="${summaryStatus.errorMessage()}"></p>
+              <th:block th:if="${aiEnabled and summary == null and !pending}">
+                <input type="hidden" name="link" th:value="${item.link}">
+                <input type="hidden" name="title" th:value="${not #strings.isEmpty(item.title)} ? ${item.title} : ''">
+                <button type="button" class="sum-gen-btn"
+                        hx-post="/index/items/summarize"
+                        hx-target="closest .item-summary-gen"
+                        hx-swap="outerHTML"
+                        hx-include="closest .item-summary-gen"
+                        hx-disabled-elt="this"
+                        hx-indicator="next .sum-spinner"
+                        th:text="${summaryStatus != null and summaryStatus.error()} ? '✦ 重试生成' : '✦ 生成摘要'">✦ 生成摘要</button>
+                <span class="sum-spinner htmx-indicator">提交中…</span>
+              </th:block>
             </div>
 
-            <!-- Generate button (AI enabled, no summary yet) -->
-            <div th:if="${aiEnabled and summary == null}"
-                 class="item-summary-gen">
-              <input type="hidden" name="link" th:value="${item.link}">
-              <input type="hidden" name="title" th:value="${not #strings.isEmpty(item.title)} ? ${item.title} : ''">
-              <button type="button" class="sum-gen-btn"
-                      hx-post="/index/items/summarize"
-                      hx-target="closest .item-summary-gen"
-                      hx-swap="outerHTML"
-                      hx-include="closest .item-summary-gen"
-                      hx-indicator="next .sum-spinner">
-                ✦ 生成摘要
-              </button>
-              <span class="sum-spinner htmx-indicator"
-                    style="font-size:11px;color:var(--muted);">生成中…</span>
-            </div>
           </td>
           <td class="col-meta"
               th:text="${not #strings.isEmpty(item.author)} ? ${item.author} : '—'"></td>

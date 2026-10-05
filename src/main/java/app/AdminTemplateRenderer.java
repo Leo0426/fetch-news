@@ -5,10 +5,14 @@ import app.CredentialConfig;
 import app.ai.OllamaClient;
 import app.feishu.FeishuConfig;
 import app.core.RouteConfig;
+import app.reader.ArticlePageView;
 import app.reader.BriefingSection;
 import app.reader.ReaderGroup;
 import app.reader.ReaderItem;
+import app.reader.SearchPageView;
+import app.reader.UnreadPageView;
 import app.store.BookmarkedItem;
+import app.store.FeedRefreshState;
 import app.store.FeedStore;
 import app.store.FetchLogEntry;
 import app.store.RouteHealth;
@@ -60,6 +64,12 @@ public class AdminTemplateRenderer {
 
     record RouteStats(RouteConfig config, String category, String description,
                       int itemCount, String lastFetched) {
+    }
+
+    record RssRefreshStatus(String routePath, String status, String statusClass,
+                            String lastChecked, String lastSuccess, String lastChanged,
+                            String httpStatus, long responseBytes, long durationMs,
+                            int consecutiveFailures, String nextRetry, String error) {
     }
 
     public AdminTemplateRenderer(TemplateEngine engine, FeedStore feedStore,
@@ -245,6 +255,18 @@ public class AdminTemplateRenderer {
         return engine.process("reader/index", ctx);
     }
 
+    public String articlePage(ArticlePageView page) {
+        Context ctx = new Context();
+        ctx.setVariable("page", page);
+        return engine.process("reader/article", ctx);
+    }
+
+    public String unreadPage(UnreadPageView page) {
+        Context ctx = new Context();
+        ctx.setVariable("page", page);
+        return engine.process("reader/unread", ctx);
+    }
+
     private static final DateTimeFormatter BRIEFING_DATE_FMT =
             DateTimeFormatter.ofPattern("yyyy 年 M 月 d 日");
     private static final DateTimeFormatter BRIEFING_ISO_FMT =
@@ -258,6 +280,7 @@ public class AdminTemplateRenderer {
         ctx.setVariable("sections", sections);
         ctx.setVariable("date", date.format(BRIEFING_DATE_FMT));
         ctx.setVariable("dateIso", date.format(BRIEFING_ISO_FMT));
+        ctx.setVariable("todayIso", LocalDate.now().format(BRIEFING_ISO_FMT));
         ctx.setVariable("prevDate", date.minusDays(1).format(BRIEFING_ISO_FMT));
         ctx.setVariable("nextDate", date.plusDays(1).format(BRIEFING_ISO_FMT));
         ctx.setVariable("isToday", date.equals(LocalDate.now()));
@@ -277,10 +300,9 @@ public class AdminTemplateRenderer {
     /**
      * Reader search results page.
      */
-    public String searchPage(String query, List<ReaderItem> items) {
+    public String searchPage(SearchPageView page) {
         Context ctx = new Context();
-        ctx.setVariable("query", query);
-        ctx.setVariable("items", items);
+        ctx.setVariable("page", page);
         return engine.process("reader/search", ctx);
     }
 
@@ -291,6 +313,11 @@ public class AdminTemplateRenderer {
      * @param healthMap route path → health stats from fetch_log
      */
     public String healthSection(List<RouteConfig> routes, Map<String, RouteHealth> healthMap) {
+        return healthSection(routes, healthMap, List.of());
+    }
+
+    public String healthSection(List<RouteConfig> routes, Map<String, RouteHealth> healthMap,
+                                List<FeedRefreshState> refreshStates) {
         Map<String, RouteHealth> full = new LinkedHashMap<>(healthMap);
         for (RouteConfig r : routes) {
             if (r.hasSchedule() && !r.path().contains(":") && !full.containsKey(r.path())) {
@@ -306,7 +333,36 @@ public class AdminTemplateRenderer {
         ctx.setVariable("healthyCount", healthy);
         ctx.setVariable("failingCount", failing);
         ctx.setVariable("neverCount",   never);
+        Instant now = Instant.now();
+        List<RssRefreshStatus> rssRefreshStatuses = routes.stream()
+                .filter(route -> "/rss".equals(route.sourcePath()) && route.feedUrl() != null)
+                .flatMap(route -> refreshStates.stream()
+                        .filter(state -> route.path().equals(state.routePath())
+                                && route.feedUrl().equals(state.feedUrl())))
+                .map(state -> rssRefreshStatus(state, now))
+                .toList();
+        ctx.setVariable("rssRefreshStatuses", rssRefreshStatuses);
         return engine.process("index/health", ctx);
+    }
+
+    private static RssRefreshStatus rssRefreshStatus(FeedRefreshState state, Instant now) {
+        boolean waiting = state.nextRetryAt() != null && state.nextRetryAt().isAfter(now);
+        boolean failed = state.lastError() != null;
+        String status = waiting ? "等待重试"
+                : failed ? "刷新失败" : state.lastHttpStatus() == 304 ? "内容未变化" : "刷新成功";
+        String statusClass = waiting ? "pill sched" : failed ? "pill off" : "pill on";
+        String error = failed ? state.lastError().replace(state.feedUrl(), "[来源地址]") : "—";
+        return new RssRefreshStatus(
+                state.routePath(), status, statusClass,
+                formatRefreshTime(state.lastCheckedAt()), formatRefreshTime(state.lastSuccessAt()),
+                formatRefreshTime(state.lastChangedAt()),
+                state.lastHttpStatus() > 0 ? Integer.toString(state.lastHttpStatus()) : "—",
+                state.responseBytes(), state.lastDurationMs(), state.consecutiveFailures(),
+                formatRefreshTime(state.nextRetryAt()), error);
+    }
+
+    private static String formatRefreshTime(Instant instant) {
+        return instant != null ? instant.toString() : "—";
     }
 
     /**

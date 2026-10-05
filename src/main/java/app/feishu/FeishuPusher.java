@@ -3,7 +3,9 @@ package app.feishu;
 import app.core.RouteConfig;
 import app.store.FeedStore;
 import app.store.StoredItem;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -17,6 +19,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -33,6 +36,8 @@ import org.springframework.scheduling.support.CronExpression;
  *
  * <p>Last-push timestamps are kept in memory; on restart, the default lookback window
  * ({@link #DEFAULT_LOOKBACK}) applies so the first push after startup covers recent content.
+ * Batches advance only after every page succeeds. Retrying a partly sent batch can repeat
+ * already delivered pages, providing at-least-once delivery within the retained window.
  */
 public class FeishuPusher {
     private static final Logger log = LoggerFactory.getLogger(FeishuPusher.class);
@@ -46,6 +51,8 @@ public class FeishuPusher {
     private final ConcurrentHashMap<String, Instant> lastPushTime = new ConcurrentHashMap<>();
     /** Last digest time per category name — for digest mode. */
     private final ConcurrentHashMap<String, Instant> lastDigestTime = new ConcurrentHashMap<>();
+    private final Set<String> routesInFlight = ConcurrentHashMap.newKeySet();
+    private final Set<String> digestsInFlight = ConcurrentHashMap.newKeySet();
 
     public FeishuPusher(FeishuConfigStore configStore, ObjectMapper mapper) {
         this.configStore = configStore;
@@ -76,18 +83,25 @@ public class FeishuPusher {
 
         String webhook = cfg.effectiveWebhook(category);
         if (webhook.isBlank()) return;
+        if (!routesInFlight.add(routePath)) return;
 
         try {
+            Instant until = Instant.now();
             Instant since = lastPushTime.getOrDefault(routePath,
-                    Instant.now().minus(DEFAULT_LOOKBACK));
-            List<StoredItem> items = feedStore.loadNewItemsSince(routePath, since);
+                    until.minus(DEFAULT_LOOKBACK));
+            List<StoredItem> items = feedStore.loadNewItemsSince(routePath, since).stream()
+                    .filter(item -> item.firstSeenAt().isBefore(until))
+                    .toList();
             if (items.isEmpty()) return;
 
             int max = cfg.effectiveMaxItems(category);
-            doSend("📬 " + routeLabel + " · " + category, category, null, items, webhook, max);
-            lastPushTime.put(routePath, Instant.now());
+            if (doSend("📬 " + routeLabel + " · " + category, category, null, items, webhook, max)) {
+                lastPushTime.put(routePath, until);
+            }
         } catch (Exception e) {
             log.warn("[feishu] immediate push error for {}: {}", routePath, e.getMessage());
+        } finally {
+            routesInFlight.remove(routePath);
         }
     }
 
@@ -123,15 +137,19 @@ public class FeishuPusher {
             String cat = entry.getKey();
             List<RouteConfig> routes = entry.getValue();
             FeishuCategoryConfig catCfg = cfg.getCategory(cat);
-            if (!isDigestDue(catCfg, cat, now)) continue;
-
-            Instant since = lastDigestTime.getOrDefault(cat, now.minus(DEFAULT_LOOKBACK));
-            lastDigestTime.put(cat, now);   // always advance to avoid repeated triggers
+            if (!digestsInFlight.add(cat)) continue;
 
             try {
+                if (!isDigestDue(catCfg, cat, now)) continue;
+                Instant since = lastDigestTime.getOrDefault(cat, now.minus(DEFAULT_LOOKBACK));
                 List<String> paths = routes.stream().map(RouteConfig::path).toList();
-                List<StoredItem> items = feedStore.loadNewItemsSinceForRoutes(paths, since);
-                if (items.isEmpty()) continue;
+                List<StoredItem> items = feedStore.loadNewItemsSinceForRoutes(paths, since).stream()
+                        .filter(item -> item.firstSeenAt().isBefore(now))
+                        .toList();
+                if (items.isEmpty()) {
+                    lastDigestTime.put(cat, now);
+                    continue;
+                }
 
                 String webhook = cfg.effectiveWebhook(cat);
                 if (webhook.isBlank()) continue;
@@ -151,9 +169,13 @@ public class FeishuPusher {
                                 + "** (" + e.getValue() + ")")
                         .collect(java.util.stream.Collectors.joining(" · "));
 
-                doSend("📰 " + cat + " 摘要", cat, sources, items, webhook, max);
+                if (doSend("📰 " + cat + " 摘要", cat, sources, items, webhook, max)) {
+                    lastDigestTime.put(cat, now);
+                }
             } catch (Exception e) {
                 log.warn("[feishu] digest error for {}: {}", cat, e.getMessage());
+            } finally {
+                digestsInFlight.remove(cat);
             }
         }
     }
@@ -173,7 +195,7 @@ public class FeishuPusher {
 
     // ── connectivity test ─────────────────────────────────────────────────────
 
-    /** Sends a test message directly to {@code webhookUrl}. Returns true on HTTP 200. */
+    /** Sends a test message and checks both HTTP status and the webhook's business result. */
     public boolean test(String webhookUrl) {
         String now = ZonedDateTime.now(ZoneId.systemDefault())
                 .format(DateTimeFormatter.ofPattern("yyyy年M月d日 HH:mm"));
@@ -192,7 +214,10 @@ public class FeishuPusher {
                     .POST(HttpRequest.BodyPublishers.ofString(body))
                     .build();
             HttpResponse<String> resp = http.send(req, HttpResponse.BodyHandlers.ofString());
-            return resp.statusCode() == 200;
+            return isSuccessfulResponse(resp);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return false;
         } catch (Exception e) {
             log.warn("[feishu] test error: {}", e.getMessage());
             return false;
@@ -206,7 +231,7 @@ public class FeishuPusher {
      *
      * @param description optional line shown on the first card only (e.g. source breakdown)
      */
-    private void doSend(String title, String category, String description,
+    private boolean doSend(String title, String category, String description,
                         List<StoredItem> items, String webhookUrl, int maxItems) {
         int total = items.size();
         int pages  = (total + maxItems - 1) / maxItems;   // ceil division
@@ -258,17 +283,31 @@ public class FeishuPusher {
                         .POST(HttpRequest.BodyPublishers.ofString(body))
                         .build();
                 HttpResponse<String> resp = http.send(req, HttpResponse.BodyHandlers.ofString());
-                if (resp.statusCode() != 200) {
+                if (!isSuccessfulResponse(resp)) {
                     log.warn("[feishu] push failed (page {}/{}): HTTP {} — {}",
                             page + 1, pages, resp.statusCode(), resp.body());
+                    return false;
                 } else {
                     log.info("[feishu] pushed {}/{} items (page {}/{}): {}",
                             to, total, page + 1, pages, title);
                 }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return false;
             } catch (Exception e) {
                 log.warn("[feishu] send error (page {}/{}): {}", page + 1, pages, e.getMessage());
+                return false;
             }
         }
+        return true;
+    }
+
+    private boolean isSuccessfulResponse(HttpResponse<String> response) throws IOException {
+        if (response.statusCode() != 200) return false;
+        JsonNode body = mapper.readTree(response.body());
+        if (body == null) return false;
+        JsonNode code = body.has("code") ? body.get("code") : body.get("StatusCode");
+        return code != null && code.isIntegralNumber() && code.canConvertToInt() && code.intValue() == 0;
     }
 
     /**

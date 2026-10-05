@@ -37,7 +37,12 @@ public class OllamaClient {
      * @throws Exception on HTTP or JSON errors
      */
     public String generate(String prompt) throws Exception {
+        return generateWithMetadata(prompt).text();
+    }
+
+    public Generation generateWithMetadata(String prompt) throws Exception {
         AiConfig config = configStore.get();
+        if (!config.enabled()) throw new IllegalStateException("AI is disabled");
         String body = mapper.writeValueAsString(Map.of(
                 "model", config.model(),
                 "prompt", prompt,
@@ -52,8 +57,10 @@ public class OllamaClient {
             throw new RuntimeException("Ollama returned HTTP " + response.statusCode() + ": " + response.body());
         }
         JsonNode node = mapper.readTree(response.body());
-        return node.path("response").asText();
+        return new Generation(node.path("response").asText(), config.model());
     }
+
+    public record Generation(String text, String model) {}
 
     /**
      * Probes the Ollama server without triggering inference.

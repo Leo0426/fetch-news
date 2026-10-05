@@ -26,6 +26,49 @@
     </div>
   </div>
 
+  <section th:if="${not #lists.isEmpty(rssRefreshStatuses)}" id="rss-refresh-status"
+           class="card" style="padding:0;overflow-x:auto;margin-bottom:20px;">
+    <div class="card-head">
+      <span class="card-title">RSS 刷新状态</span>
+      <span style="font-size:11px;color:var(--subtle);">时间为 UTC · 正文大小按 UTF-8 计算</span>
+    </div>
+    <table class="rtable" style="margin:0;white-space:nowrap;">
+      <thead>
+        <tr>
+          <th style="padding-left:20px;">路径</th>
+          <th>状态</th>
+          <th>最后检查</th>
+          <th>最后成功</th>
+          <th>内容变化</th>
+          <th>HTTP 状态</th>
+          <th>正文大小</th>
+          <th>耗时</th>
+          <th>连续失败</th>
+          <th>下一次重试</th>
+          <th style="padding-right:20px;">错误信息</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr th:each="refresh : ${rssRefreshStatuses}">
+          <td class="stats-path-tpl" style="padding-left:20px;" th:text="${refresh.routePath()}">/feed</td>
+          <td><span th:class="${refresh.statusClass()}" th:text="${refresh.status()}">刷新成功</span></td>
+          <td class="stats-time" th:text="${refresh.lastChecked()}">—</td>
+          <td class="stats-time" th:text="${refresh.lastSuccess()}">—</td>
+          <td class="stats-time" th:text="${refresh.lastChanged()}">—</td>
+          <td th:text="${refresh.httpStatus()}">—</td>
+          <td th:text="${refresh.responseBytes()} + ' B'">0 B</td>
+          <td th:text="${refresh.durationMs()} + ' ms'">0 ms</td>
+          <td th:text="${refresh.consecutiveFailures()}">0</td>
+          <td class="stats-time" th:text="${refresh.nextRetry()}">—</td>
+          <td style="padding-right:20px;max-width:260px;">
+            <span class="health-err-text" th:title="${refresh.error()}"
+                  th:text="${#strings.abbreviate(refresh.error(), 80)}">—</span>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
   <!-- route health table -->
   <div th:if="${#maps.isEmpty(healthMap)}"
        style="padding:48px 0;color:var(--muted);font-size:13px;text-align:center;">

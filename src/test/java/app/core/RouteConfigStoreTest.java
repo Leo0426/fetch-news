@@ -26,10 +26,11 @@ class RouteConfigStoreTest {
     void returnsDefaultsForRegisteredRoutesWhenFileDoesNotExist() {
         RouteConfigStore store = new RouteConfigStore(tempDir.resolve("routes.json"), new ObjectMapper());
 
-        List<RouteConfig> configs = store.list(List.of("/example", "/zed/blog"));
+        List<RouteConfig> configs = store.list(List.of("/example", "/another"));
 
         assertEquals(2, configs.size());
-        assertTrue(configs.getFirst().enabled());
+        assertFalse(configs.getFirst().enabled());
+        assertFalse(configs.getLast().enabled());
         assertEquals(300, configs.getFirst().routeCacheTtlSeconds());
         assertEquals(1800, configs.getFirst().detailCacheTtlSeconds());
     }
@@ -109,6 +110,8 @@ class RouteConfigStoreTest {
     void saveFailureDoesNotMutateInMemoryConfig() throws Exception {
         Path configFile = tempDir.resolve("routes.json");
         RouteConfigStore store = new RouteConfigStore(configFile, new ObjectMapper());
+        RouteConfig original = store.save(new RouteConfig("/example", true, 120, 900));
+        Files.delete(configFile);
         Files.createDirectory(configFile);
 
         RouteException exception = assertThrows(
@@ -116,24 +119,25 @@ class RouteConfigStoreTest {
                 () -> store.save(new RouteConfig("/example", false, 60, 600)));
 
         assertEquals(RouteError.INVALID_PARAMETER, exception.error());
-        assertTrue(store.get("/example").enabled());
+        assertEquals(original, store.get("/example"));
     }
 
     /**
-     * Verifies that mount aliases are listed after registered routes.
+     * Verifies that mount aliases are listed immediately after their source route.
      */
     @Test
-    void listIncludesSavedMountAliasesAfterRegisteredRoutes() {
+    void listGroupsSavedMountAliasesWithTheirSourceRoutes() {
         RouteConfigStore store = new RouteConfigStore(tempDir.resolve("routes.json"), new ObjectMapper());
 
+        store.save(new RouteConfig("/another-short", "/another", true, 120, 900));
         store.save(new RouteConfig("/short", "/example", true, 120, 900));
-        List<RouteConfig> configs = store.list(List.of("/example", "/zed/blog"));
+        List<RouteConfig> configs = store.list(List.of("/example", "/another"));
 
-        assertEquals(3, configs.size());
-        assertEquals("/example", configs.get(0).path());
+        assertEquals(List.of("/example", "/short", "/another", "/another-short"),
+                configs.stream().map(RouteConfig::path).toList());
         assertEquals("/example", configs.get(0).sourcePath());
-        assertEquals("/short", configs.get(2).path());
-        assertEquals("/example", configs.get(2).sourcePath());
+        assertEquals("/example", configs.get(1).sourcePath());
+        assertEquals("/another", configs.get(3).sourcePath());
     }
 
     /**

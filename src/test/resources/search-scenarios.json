@@ -1,0 +1,316 @@
+{
+  "provenance": "Synthetic developer-authored regression fixtures; not user-labeled judgments or production performance evidence.",
+  "contract": "Whitespace-separated terms with AND across title/description/summary; Unicode letter/digit terms without Han retain unicode61 whole-word matching; Han or punctuation terms are literal substrings (ASCII case-insensitive). No advanced syntax. Expected exact result sets; ranking checked separately.",
+  "articles": [
+    {
+      "id": "local",
+      "title": "本地模型部署指南",
+      "description": "使用 Ollama 在笔记本上运行推理服务",
+      "summary": "离线处理个人文档，保护隐私。",
+      "link": "https://fixture.invalid/local"
+    },
+    {
+      "id": "knowledge",
+      "title": "个人知识库设计实践",
+      "description": "收集网页和笔记，保留来源",
+      "summary": "通过向量检索找回收藏文章。",
+      "link": "https://fixture.invalid/knowledge"
+    },
+    {
+      "id": "wal",
+      "title": "SQLite WAL checkpoint guide",
+      "description": "Write-ahead logging avoids busy errors.",
+      "summary": "整理事务与崩溃恢复的关系。",
+      "link": "https://fixture.invalid/wal"
+    },
+    {
+      "id": "java",
+      "title": "Java 25 migration",
+      "description": "Virtual threads simplify concurrent fetches.",
+      "summary": "升级版本前需要兼容性验证。",
+      "link": "https://fixture.invalid/java"
+    },
+    {
+      "id": "spring",
+      "title": "Spring Boot tuning",
+      "description": "Memory profiles and startup latency.",
+      "summary": "调整服务启动时间与资源占用。",
+      "link": "https://fixture.invalid/spring"
+    },
+    {
+      "id": "crossfield",
+      "title": "Vector retrieval notes",
+      "description": "Semantic ranking quality.",
+      "summary": "Embedding pipeline with local privacy.",
+      "link": "https://fixture.invalid/crossfield"
+    },
+    {
+      "id": "cpp",
+      "title": "C++ concurrency handbook",
+      "description": "Atomic memory ordering.",
+      "summary": "并发程序的同步原语。",
+      "link": "https://fixture.invalid/cpp"
+    },
+    {
+      "id": "literal",
+      "title": "100% backup coverage",
+      "description": "snake_case identifiers use a_b exactly.",
+      "summary": "用校验和检查归档。",
+      "link": "https://fixture.invalid/literal"
+    },
+    {
+      "id": "dot",
+      "title": "Node.js runtime notes",
+      "description": "JavaScript runtime performance.",
+      "summary": "事件循环响应延迟。",
+      "link": "https://fixture.invalid/dot"
+    },
+    {
+      "id": "unicode",
+      "title": "CAFÉ reader",
+      "description": "naïve résumé reading.",
+      "summary": "国际文本呈现。",
+      "link": "https://fixture.invalid/unicode"
+    },
+    {
+      "id": "flags",
+      "title": "Release --safe flag",
+      "description": "Star marker literal* appears verbatim. Includes \"quoted\" and %_ markers.",
+      "summary": "发布参数逐项检查。",
+      "link": "https://fixture.invalid/flags"
+    },
+    {
+      "id": "operators",
+      "title": "SQL OR semantics",
+      "description": "Terms AND and NOT are literal text here.",
+      "summary": "说明布尔词汇。",
+      "link": "https://fixture.invalid/operators"
+    }
+  ],
+  "queries": [
+    {
+      "query": "本地模型",
+      "expectedIds": [
+        "local"
+      ],
+      "scenario": "连续中文标题的四字子串"
+    },
+    {
+      "query": "模型",
+      "expectedIds": [
+        "local"
+      ],
+      "scenario": "二字中文"
+    },
+    {
+      "query": "知识库",
+      "expectedIds": [
+        "knowledge"
+      ],
+      "scenario": "标题中部三字"
+    },
+    {
+      "query": "收藏",
+      "expectedIds": [
+        "knowledge"
+      ],
+      "scenario": "摘要独有二字"
+    },
+    {
+      "query": "事务",
+      "expectedIds": [
+        "wal"
+      ],
+      "scenario": "摘要内二字"
+    },
+    {
+      "query": "恢复",
+      "expectedIds": [
+        "wal"
+      ],
+      "scenario": "摘要末尾二字"
+    },
+    {
+      "query": "兼容性",
+      "expectedIds": [
+        "java"
+      ],
+      "scenario": "摘要内三字"
+    },
+    {
+      "query": "资源",
+      "expectedIds": [
+        "spring"
+      ],
+      "scenario": "摘要内二字"
+    },
+    {
+      "query": "笔记本",
+      "expectedIds": [
+        "local"
+      ],
+      "scenario": "描述独有三字"
+    },
+    {
+      "query": "隐私",
+      "expectedIds": [
+        "local"
+      ],
+      "scenario": "摘要二字"
+    },
+    {
+      "query": "sqlite WAL",
+      "expectedIds": [
+        "wal"
+      ],
+      "scenario": "ASCII 不区分大小写"
+    },
+    {
+      "query": "WAL sqlite",
+      "expectedIds": [
+        "wal"
+      ],
+      "scenario": "词序无关"
+    },
+    {
+      "query": "Java threads",
+      "expectedIds": [
+        "java"
+      ],
+      "scenario": "英文标题与描述 AND"
+    },
+    {
+      "query": "Vector Embedding",
+      "expectedIds": [
+        "crossfield"
+      ],
+      "scenario": "英文标题和摘要 AND"
+    },
+    {
+      "query": "Spring Boot",
+      "expectedIds": [
+        "spring"
+      ],
+      "scenario": "英文多词"
+    },
+    {
+      "query": "CAFÉ",
+      "expectedIds": [
+        "unicode"
+      ],
+      "scenario": "带变音符原样匹配"
+    },
+    {
+      "query": "cafe",
+      "expectedIds": [
+        "unicode"
+      ],
+      "scenario": "保留 unicode61 重音折叠"
+    },
+    {
+      "query": "本地模型 Ollama",
+      "expectedIds": [
+        "local"
+      ],
+      "scenario": "中文子串与英文词 AND"
+    },
+    {
+      "query": "知识库 收藏",
+      "expectedIds": [
+        "knowledge"
+      ],
+      "scenario": "中文标题和摘要 AND"
+    },
+    {
+      "query": "sqlite 恢复",
+      "expectedIds": [
+        "wal"
+      ],
+      "scenario": "英文词与中文摘要 AND"
+    },
+    {
+      "query": "C++",
+      "expectedIds": [
+        "cpp"
+      ],
+      "scenario": "加号字面匹配"
+    },
+    {
+      "query": "Node.js",
+      "expectedIds": [
+        "dot"
+      ],
+      "scenario": "句点字面匹配"
+    },
+    {
+      "query": "100%",
+      "expectedIds": [
+        "literal"
+      ],
+      "scenario": "百分号非通配"
+    },
+    {
+      "query": "a_b",
+      "expectedIds": [
+        "literal"
+      ],
+      "scenario": "下划线非通配"
+    },
+    {
+      "query": "literal*",
+      "expectedIds": [
+        "flags"
+      ],
+      "scenario": "星号非前缀语法"
+    },
+    {
+      "query": "\"quoted\"",
+      "expectedIds": [
+        "flags"
+      ],
+      "scenario": "引号字面匹配"
+    },
+    {
+      "query": "%_",
+      "expectedIds": [
+        "flags"
+      ],
+      "scenario": "仅通配符字符须字面匹配"
+    },
+    {
+      "query": "NOT sqlite",
+      "expectedIds": [],
+      "scenario": "NOT 作为词不执行运算符"
+    },
+    {
+      "query": "不存在的关键词",
+      "expectedIds": [],
+      "scenario": "普通无匹配"
+    },
+    {
+      "query": "sqlite privacy",
+      "expectedIds": [],
+      "scenario": "词不在同一文章时不返回"
+    }
+  ],
+  "lifecycleCases": [
+    {
+      "scenario": "Same URL upsert",
+      "before": {
+        "link": "https://fixture.invalid/local",
+        "title": "过时配置说明",
+        "description": "oldmarker"
+      },
+      "after": {
+        "link": "https://fixture.invalid/local",
+        "title": "本地模型部署指南",
+        "description": "newmarker"
+      },
+      "expect": "oldmarker no longer found; newmarker and 模型 find exactly one article, original source ownership retained."
+    },
+    {
+      "scenario": "Summary upsert and reopen",
+      "expect": "New Chinese summary terms immediately searchable; replaced terms disappear; closing and reopening preserves identical results."
+    }
+  ]
+}

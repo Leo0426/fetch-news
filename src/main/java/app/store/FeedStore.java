@@ -17,8 +17,12 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeFormatterBuilder;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -26,12 +30,20 @@ import java.util.Map;
 /**
  * SQLite-backed store for feed items and fetch logs.
  *
- * <p>All write methods are synchronized to handle concurrent requests safely with a single
- * connection. SQLite WAL mode allows concurrent reads alongside the single writer.
+ * <p>All database access is synchronized because statements on the shared connection
+ * otherwise see in-progress transactions. WAL permits readers on separate connections.
  */
 public class FeedStore implements Closeable {
 
+    private static final int SEARCH_INDEX_VERSION = 1;
     private static final TypeReference<List<String>> LIST_TYPE = new TypeReference<>() {};
+    private static final DateTimeFormatter QUEUE_TIME_FORMAT =
+            new DateTimeFormatterBuilder().appendInstant(9).toFormatter();
+    private static final String UNREAD_CONDITION = """
+            trim(fi.title, char(9, 10, 11, 12, 13, 32)) <> ''
+            AND trim(fi.item_link, char(9, 10, 11, 12, 13, 32)) <> ''
+            AND NOT EXISTS (SELECT 1 FROM read_items r WHERE r.item_link = fi.item_link)
+            """;
 
     private final Connection conn;
     private final ObjectMapper mapper;
@@ -39,7 +51,12 @@ public class FeedStore implements Closeable {
     public FeedStore(Path dbPath, ObjectMapper mapper) throws SQLException {
         this.mapper = mapper;
         conn = DriverManager.getConnection("jdbc:sqlite:" + dbPath);
-        init();
+        try {
+            init();
+        } catch (SQLException | RuntimeException | Error failure) {
+            closeAfterFailure(failure);
+            throw failure;
+        }
     }
 
     // ── lifecycle ────────────────────────────────────────────────────────────
@@ -58,10 +75,18 @@ public class FeedStore implements Closeable {
              ResultSet rs = s.executeQuery("PRAGMA journal_mode=WAL")) {
             // result is "wal" — no action needed, just consume it
         }
+        inTransaction(() -> {
+            initializeSchema();
+            return null;
+        });
+    }
+
+    private void initializeSchema() throws SQLException {
         // Migration check must run before CREATE TABLE IF NOT EXISTS so that the
         // old schema (UNIQUE on route_path+item_link) is replaced before any new
         // rows are written under the new global-dedup constraint.
-        if (hasOldFeedItemsSchema()) {
+        boolean migratedItems = hasOldFeedItemsSchema();
+        if (migratedItems) {
             try (Statement s = conn.createStatement()) {
                 migrateToGlobalLinkDedup(s);
             }
@@ -99,6 +124,29 @@ public class FeedStore implements Closeable {
                     CREATE INDEX IF NOT EXISTS idx_fetch_log_route
                         ON fetch_log(route_path, fetched_at DESC)""");
             s.execute("""
+                    CREATE TABLE IF NOT EXISTS http_feed_snapshots (
+                        url           TEXT PRIMARY KEY NOT NULL,
+                        body          TEXT NOT NULL,
+                        etag          TEXT,
+                        last_modified TEXT
+                    )""");
+            s.execute("""
+                    CREATE TABLE IF NOT EXISTS feed_refresh_states (
+                        route_path           TEXT NOT NULL,
+                        feed_url             TEXT NOT NULL,
+                        last_checked_at      TEXT,
+                        last_success_at      TEXT,
+                        last_changed_at      TEXT,
+                        next_retry_at        TEXT,
+                        consecutive_failures INTEGER NOT NULL,
+                        last_http_status     INTEGER NOT NULL,
+                        response_bytes       INTEGER NOT NULL,
+                        last_duration_ms     INTEGER NOT NULL,
+                        last_error           TEXT,
+                        content_fingerprint  TEXT,
+                        PRIMARY KEY (route_path, feed_url)
+                    )""");
+            s.execute("""
                     CREATE TABLE IF NOT EXISTS ai_extracts (
                         item_link  TEXT PRIMARY KEY,
                         content    TEXT NOT NULL,
@@ -123,6 +171,9 @@ public class FeedStore implements Closeable {
                         error_detail TEXT
                     )""");
             s.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_ai_summary_queue
+                        ON ai_summary_runs(status, started_at)""");
+            s.execute("""
                     CREATE TABLE IF NOT EXISTS bookmarks (
                         item_link     TEXT PRIMARY KEY,
                         title         TEXT,
@@ -134,16 +185,12 @@ public class FeedStore implements Closeable {
                         item_link TEXT PRIMARY KEY,
                         read_at   TEXT NOT NULL
                     )""");
-            s.execute("""
-                    CREATE VIRTUAL TABLE IF NOT EXISTS feed_search_fts
-                    USING fts5(item_link UNINDEXED, title, description, summary)
-                    """);
             // Prune read state for items no longer in the feed store (keeps table small)
             s.execute("""
                     DELETE FROM read_items
                     WHERE item_link NOT IN (SELECT item_link FROM feed_items)""");
         }
-        rebuildSearchIndex();
+        initializeSearchIndex(migratedItems);
     }
 
     private boolean hasOldFeedItemsSchema() throws SQLException {
@@ -159,52 +206,209 @@ public class FeedStore implements Closeable {
     }
 
     private void migrateToGlobalLinkDedup(Statement s) throws SQLException {
+        s.execute("DROP TABLE IF EXISTS feed_items_v2");
+        s.execute("""
+                CREATE TABLE feed_items_v2 (
+                    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                    route_path    TEXT    NOT NULL,
+                    item_link     TEXT    NOT NULL,
+                    title         TEXT,
+                    description   TEXT,
+                    author        TEXT,
+                    pub_date      TEXT,
+                    categories    TEXT,
+                    first_seen_at TEXT    NOT NULL,
+                    last_seen_at  TEXT    NOT NULL,
+                    UNIQUE(item_link)
+                )""");
+        // Keep the earliest-seen row per item_link; update last_seen_at to the global max.
+        s.execute("""
+                INSERT INTO feed_items_v2
+                    (route_path,item_link,title,description,author,pub_date,
+                     categories,first_seen_at,last_seen_at)
+                SELECT fi.route_path, fi.item_link, fi.title, fi.description, fi.author,
+                       fi.pub_date, fi.categories, fi.first_seen_at,
+                       (SELECT MAX(last_seen_at) FROM feed_items WHERE item_link = fi.item_link)
+                FROM feed_items fi
+                WHERE fi.id = (SELECT MIN(id) FROM feed_items WHERE item_link = fi.item_link)
+                """);
+        s.execute("DROP TABLE feed_items");
+        s.execute("ALTER TABLE feed_items_v2 RENAME TO feed_items");
+    }
+
+    @FunctionalInterface
+    private interface SqlOperation<T> {
+        T run() throws SQLException;
+    }
+
+    private <T> T inTransaction(SqlOperation<T> operation) throws SQLException {
         conn.setAutoCommit(false);
+        T result;
         try {
-            s.execute("DROP TABLE IF EXISTS feed_items_v2");
-            s.execute("""
-                    CREATE TABLE feed_items_v2 (
-                        id            INTEGER PRIMARY KEY AUTOINCREMENT,
-                        route_path    TEXT    NOT NULL,
-                        item_link     TEXT    NOT NULL,
-                        title         TEXT,
-                        description   TEXT,
-                        author        TEXT,
-                        pub_date      TEXT,
-                        categories    TEXT,
-                        first_seen_at TEXT    NOT NULL,
-                        last_seen_at  TEXT    NOT NULL,
-                        UNIQUE(item_link)
-                    )""");
-            // Keep the earliest-seen row per item_link; update last_seen_at to the global max.
-            s.execute("""
-                    INSERT INTO feed_items_v2
-                        (route_path,item_link,title,description,author,pub_date,
-                         categories,first_seen_at,last_seen_at)
-                    SELECT fi.route_path, fi.item_link, fi.title, fi.description, fi.author,
-                           fi.pub_date, fi.categories, fi.first_seen_at,
-                           (SELECT MAX(last_seen_at) FROM feed_items WHERE item_link = fi.item_link)
-                    FROM feed_items fi
-                    WHERE fi.id = (SELECT MIN(id) FROM feed_items WHERE item_link = fi.item_link)
-                    """);
-            s.execute("DROP TABLE feed_items");
-            s.execute("ALTER TABLE feed_items_v2 RENAME TO feed_items");
+            result = operation.run();
             conn.commit();
-        } catch (SQLException e) {
-            conn.rollback();
-            throw e;
-        } finally {
+        } catch (SQLException | RuntimeException | Error failure) {
+            try {
+                conn.rollback();
+            } catch (SQLException rollbackFailure) {
+                failure.addSuppressed(rollbackFailure);
+                closeAfterFailure(failure);
+                throw failure;
+            }
+            try {
+                conn.setAutoCommit(true);
+            } catch (SQLException resetFailure) {
+                failure.addSuppressed(resetFailure);
+                closeAfterFailure(failure);
+            }
+            throw failure;
+        }
+        try {
             conn.setAutoCommit(true);
+        } catch (SQLException failure) {
+            closeAfterFailure(failure);
+            throw failure;
+        }
+        return result;
+    }
+
+    private void closeAfterFailure(Throwable failure) {
+        try {
+            conn.close();
+        } catch (SQLException closeFailure) {
+            failure.addSuppressed(closeFailure);
         }
     }
 
     @Override
-    public void close() throws IOException {
+    public synchronized void close() throws IOException {
         try {
             conn.close();
         } catch (SQLException e) {
             throw new IOException(e);
         }
+    }
+
+    public synchronized HttpFeedSnapshot loadHttpFeedSnapshot(String url) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement("""
+                SELECT url, body, etag, last_modified
+                FROM http_feed_snapshots WHERE url = ?
+                """)) {
+            ps.setString(1, url);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? new HttpFeedSnapshot(
+                        rs.getString("url"), rs.getString("body"),
+                        rs.getString("etag"), rs.getString("last_modified")) : null;
+            }
+        }
+    }
+
+    public synchronized void saveHttpFeedSnapshot(HttpFeedSnapshot snapshot) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement("""
+                INSERT INTO http_feed_snapshots (url, body, etag, last_modified)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(url) DO UPDATE SET
+                    body = excluded.body,
+                    etag = excluded.etag,
+                    last_modified = excluded.last_modified
+                """)) {
+            ps.setString(1, snapshot.url());
+            ps.setString(2, snapshot.body());
+            ps.setString(3, snapshot.etag());
+            ps.setString(4, snapshot.lastModified());
+            ps.executeUpdate();
+        }
+    }
+
+    public synchronized void deleteHttpFeedSnapshot(String url) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement("DELETE FROM http_feed_snapshots WHERE url = ?")) {
+            ps.setString(1, url);
+            ps.executeUpdate();
+        }
+    }
+
+    public synchronized FeedRefreshState loadFeedRefreshState(String routePath, String feedUrl) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement("""
+                SELECT route_path, feed_url, last_checked_at, last_success_at, last_changed_at,
+                       next_retry_at, consecutive_failures, last_http_status, response_bytes,
+                       last_duration_ms, last_error, content_fingerprint
+                FROM feed_refresh_states WHERE route_path = ? AND feed_url = ?
+                """)) {
+            ps.setString(1, routePath);
+            ps.setString(2, feedUrl);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? readFeedRefreshState(rs) : null;
+            }
+        }
+    }
+
+    public synchronized void saveFeedRefreshState(FeedRefreshState state) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement("""
+                INSERT INTO feed_refresh_states
+                    (route_path, feed_url, last_checked_at, last_success_at, last_changed_at,
+                     next_retry_at, consecutive_failures, last_http_status, response_bytes,
+                     last_duration_ms, last_error, content_fingerprint)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(route_path, feed_url) DO UPDATE SET
+                    last_checked_at = excluded.last_checked_at,
+                    last_success_at = excluded.last_success_at,
+                    last_changed_at = excluded.last_changed_at,
+                    next_retry_at = excluded.next_retry_at,
+                    consecutive_failures = excluded.consecutive_failures,
+                    last_http_status = excluded.last_http_status,
+                    response_bytes = excluded.response_bytes,
+                    last_duration_ms = excluded.last_duration_ms,
+                    last_error = excluded.last_error,
+                    content_fingerprint = excluded.content_fingerprint
+                """)) {
+            ps.setString(1, state.routePath());
+            ps.setString(2, state.feedUrl());
+            ps.setString(3, formatInstant(state.lastCheckedAt()));
+            ps.setString(4, formatInstant(state.lastSuccessAt()));
+            ps.setString(5, formatInstant(state.lastChangedAt()));
+            ps.setString(6, formatInstant(state.nextRetryAt()));
+            ps.setInt(7, state.consecutiveFailures());
+            ps.setInt(8, state.lastHttpStatus());
+            ps.setLong(9, state.responseBytes());
+            ps.setLong(10, state.lastDurationMs());
+            ps.setString(11, state.lastError());
+            ps.setString(12, state.contentFingerprint());
+            ps.executeUpdate();
+        }
+    }
+
+    public synchronized List<FeedRefreshState> loadFeedRefreshStates() throws SQLException {
+        List<FeedRefreshState> states = new ArrayList<>();
+        try (Statement statement = conn.createStatement();
+             ResultSet rs = statement.executeQuery("""
+                     SELECT route_path, feed_url, last_checked_at, last_success_at, last_changed_at,
+                            next_retry_at, consecutive_failures, last_http_status, response_bytes,
+                            last_duration_ms, last_error, content_fingerprint
+                     FROM feed_refresh_states
+                     """)) {
+            while (rs.next()) {
+                states.add(readFeedRefreshState(rs));
+            }
+        }
+        return states;
+    }
+
+    private static FeedRefreshState readFeedRefreshState(ResultSet rs) throws SQLException {
+        return new FeedRefreshState(
+                rs.getString("route_path"), rs.getString("feed_url"),
+                parseInstant(rs.getString("last_checked_at")), parseInstant(rs.getString("last_success_at")),
+                parseInstant(rs.getString("last_changed_at")), parseInstant(rs.getString("next_retry_at")),
+                rs.getInt("consecutive_failures"), rs.getInt("last_http_status"),
+                rs.getLong("response_bytes"), rs.getLong("last_duration_ms"), rs.getString("last_error"),
+                rs.getString("content_fingerprint"));
+    }
+
+    private static String formatInstant(Instant instant) {
+        return instant != null ? instant.toString() : null;
+    }
+
+    private static Instant parseInstant(String value) {
+        return value != null ? Instant.parse(value) : null;
     }
 
     // ── feed items ────────────────────────────────────────────────────────────
@@ -218,6 +422,10 @@ public class FeedStore implements Closeable {
                 .toList();
         if (valid.isEmpty()) return 0;
 
+        return inTransaction(() -> upsertItems(routePath, valid));
+    }
+
+    private int upsertItems(String routePath, List<FeedItem> valid) throws SQLException {
         // Count pre-existing items globally (cross-route dedup: same link = same article)
         String placeholders = String.join(",", Collections.nCopies(valid.size(), "?"));
         int existing = 0;
@@ -266,7 +474,7 @@ public class FeedStore implements Closeable {
      * Returns the most recently seen items for a route (offline fallback).
      * Items with no link are never stored, so all returned items have a link.
      */
-    public List<FeedItem> loadItems(String routePath) throws SQLException {
+    public synchronized List<FeedItem> loadItems(String routePath) throws SQLException {
         List<FeedItem> result = new ArrayList<>();
         try (PreparedStatement ps = conn.prepareStatement("""
                 SELECT item_link,title,description,author,pub_date,categories
@@ -297,7 +505,7 @@ public class FeedStore implements Closeable {
      * Builds a Feed from items stored in the DB for offline fallback.
      * Returns an empty Optional when no items have been saved for this path.
      */
-    public java.util.Optional<Feed> offlineFeed(String routePath) throws SQLException {
+    public synchronized java.util.Optional<Feed> offlineFeed(String routePath) throws SQLException {
         List<FeedItem> items = loadItems(routePath);
         if (items.isEmpty()) return java.util.Optional.empty();
         return java.util.Optional.of(new Feed(
@@ -311,64 +519,57 @@ public class FeedStore implements Closeable {
      * Returns items for {@code routePath} whose {@code first_seen_at} is at or after {@code since},
      * newest first. Used to identify items discovered in a single scheduled fetch.
      */
-    public List<StoredItem> loadNewItemsSince(String routePath, Instant since) throws SQLException {
-        List<StoredItem> result = new ArrayList<>();
+    public synchronized List<StoredItem> loadNewItemsSince(String routePath, Instant since) throws SQLException {
         try (PreparedStatement ps = conn.prepareStatement("""
                 SELECT route_path, title, item_link, author, pub_date, first_seen_at
                 FROM feed_items
                 WHERE route_path = ? AND first_seen_at >= ?
-                ORDER BY first_seen_at DESC
                 """)) {
             ps.setString(1, routePath);
-            ps.setString(2, since.toString());
+            ps.setString(2, firstSeenLowerBound(since));
             try (ResultSet rs = ps.executeQuery()) {
-                while (rs.next()) {
-                    String pubDateStr = rs.getString("pub_date");
-                    Instant pubDate = pubDateStr != null ? Instant.parse(pubDateStr) : null;
-                    result.add(new StoredItem(
-                            rs.getString("route_path"),
-                            rs.getString("title"),
-                            rs.getString("item_link"),
-                            rs.getString("author"),
-                            pubDate,
-                            Instant.parse(rs.getString("first_seen_at"))));
-                }
+                return readNewItemsSince(rs, since);
             }
         }
-        return result;
     }
 
     /**
      * Returns items across multiple routes whose {@code first_seen_at} is at or after
      * {@code since}, newest first. Used for category-level digest messages.
      */
-    public List<StoredItem> loadNewItemsSinceForRoutes(List<String> routePaths, Instant since)
+    public synchronized List<StoredItem> loadNewItemsSinceForRoutes(List<String> routePaths, Instant since)
             throws SQLException {
         if (routePaths.isEmpty()) return List.of();
-        List<StoredItem> result = new ArrayList<>();
         String placeholders = String.join(",", Collections.nCopies(routePaths.size(), "?"));
         try (PreparedStatement ps = conn.prepareStatement("""
                 SELECT route_path, title, item_link, author, pub_date, first_seen_at
                 FROM feed_items
                 WHERE route_path IN (%s) AND first_seen_at >= ?
-                ORDER BY first_seen_at DESC
                 """.formatted(placeholders))) {
             for (int i = 0; i < routePaths.size(); i++) ps.setString(i + 1, routePaths.get(i));
-            ps.setString(routePaths.size() + 1, since.toString());
+            ps.setString(routePaths.size() + 1, firstSeenLowerBound(since));
             try (ResultSet rs = ps.executeQuery()) {
-                while (rs.next()) {
-                    String pubDateStr = rs.getString("pub_date");
-                    Instant pubDate = pubDateStr != null ? Instant.parse(pubDateStr) : null;
-                    result.add(new StoredItem(
-                            rs.getString("route_path"),
-                            rs.getString("title"),
-                            rs.getString("item_link"),
-                            rs.getString("author"),
-                            pubDate,
-                            Instant.parse(rs.getString("first_seen_at"))));
-                }
+                return readNewItemsSince(rs, since);
             }
         }
+    }
+
+    private static String firstSeenLowerBound(Instant since) {
+        // Instant text has variable fractional precision, so SQL includes the entire boundary second.
+        String second = since.truncatedTo(ChronoUnit.SECONDS).toString();
+        return second.substring(0, second.length() - 1);
+    }
+
+    private static List<StoredItem> readNewItemsSince(ResultSet rs, Instant since) throws SQLException {
+        List<StoredItem> result = new ArrayList<>();
+        while (rs.next()) {
+            Instant firstSeen = Instant.parse(rs.getString("first_seen_at"));
+            if (firstSeen.isBefore(since)) continue;
+            result.add(new StoredItem(
+                    rs.getString("route_path"), rs.getString("title"), rs.getString("item_link"),
+                    rs.getString("author"), parseInstant(rs.getString("pub_date")), firstSeen));
+        }
+        result.sort(Comparator.comparing(StoredItem::firstSeenAt).reversed());
         return result;
     }
 
@@ -376,7 +577,7 @@ public class FeedStore implements Closeable {
      * Returns all items first seen within {@code window} of now, newest first.
      * Capped at 500 rows so the reader stays fast regardless of volume.
      */
-    public List<StoredItem> loadRecentItems(Duration window) throws SQLException {
+    public synchronized List<StoredItem> loadRecentItems(Duration window) throws SQLException {
         String since = Instant.now().minus(window).toString();
         List<StoredItem> result = new ArrayList<>();
         try (PreparedStatement ps = conn.prepareStatement("""
@@ -404,11 +605,101 @@ public class FeedStore implements Closeable {
         return result;
     }
 
+    public synchronized UnreadPage loadUnreadPage(
+            String source, String query, boolean bookmarkedOnly, Long beforeId, int limit)
+            throws SQLException {
+        if (limit < 1 || limit > 100) {
+            throw new IllegalArgumentException("Unread page limit must be between 1 and 100");
+        }
+        if (beforeId != null && beforeId <= 0) {
+            throw new IllegalArgumentException("Unread page cursor must be positive");
+        }
+        String normalizedSource = source == null ? "" : source.strip();
+        String normalizedQuery = query == null ? "" : query.strip();
+        StringBuilder where = new StringBuilder(UNREAD_CONDITION);
+        List<String> parameters = new ArrayList<>();
+        if (!normalizedSource.isEmpty()) {
+            where.append(" AND fi.route_path = ?");
+            parameters.add(normalizedSource);
+        }
+        if (!normalizedQuery.isEmpty()) {
+            where.append("""
+                     AND (instr(lower(fi.title), lower(?)) > 0
+                          OR instr(lower(fi.description), lower(?)) > 0
+                          OR EXISTS (SELECT 1 FROM ai_summaries s
+                                     WHERE s.item_link = fi.item_link
+                                       AND instr(lower(s.summary), lower(?)) > 0))
+                    """);
+            parameters.add(normalizedQuery);
+            parameters.add(normalizedQuery);
+            parameters.add(normalizedQuery);
+        }
+        if (bookmarkedOnly) {
+            where.append(" AND EXISTS (SELECT 1 FROM bookmarks b WHERE b.item_link = fi.item_link)");
+        }
+
+        long totalCount = countUnreadItems(where.toString(), parameters);
+        List<String> sources = loadUnreadSources();
+        String cursorClause = beforeId == null ? "" : " AND fi.id < ?";
+        List<StoredItem> items = new ArrayList<>();
+        List<String> bookmarkedLinks = new ArrayList<>();
+        Long lastId = null;
+        boolean hasMore = false;
+        try (PreparedStatement ps = conn.prepareStatement("""
+                SELECT fi.id, fi.route_path, fi.title, fi.item_link, fi.author, fi.pub_date, fi.first_seen_at,
+                       EXISTS (SELECT 1 FROM bookmarks b WHERE b.item_link = fi.item_link) AS bookmarked
+                FROM feed_items fi WHERE
+                """ + where + cursorClause + " ORDER BY fi.id DESC LIMIT ?")) {
+            int index = bindUnreadParameters(ps, parameters);
+            if (beforeId != null) ps.setLong(index++, beforeId);
+            ps.setInt(index, limit + 1);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    if (items.size() == limit) {
+                        hasMore = true;
+                        break;
+                    }
+                    items.add(new StoredItem(
+                            rs.getString("route_path"), rs.getString("title"), rs.getString("item_link"),
+                            rs.getString("author"), parseInstant(rs.getString("pub_date")),
+                            parseInstant(rs.getString("first_seen_at"))));
+                    if (rs.getBoolean("bookmarked")) bookmarkedLinks.add(rs.getString("item_link"));
+                    lastId = rs.getLong("id");
+                }
+            }
+        }
+        return new UnreadPage(items, bookmarkedLinks, totalCount, hasMore ? lastId : null, sources);
+    }
+
+    private long countUnreadItems(String where, List<String> parameters) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement("SELECT COUNT(*) FROM feed_items fi WHERE " + where)) {
+            bindUnreadParameters(ps, parameters);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? rs.getLong(1) : 0;
+            }
+        }
+    }
+
+    private List<String> loadUnreadSources() throws SQLException {
+        List<String> sources = new ArrayList<>();
+        try (Statement statement = conn.createStatement();
+             ResultSet rs = statement.executeQuery("SELECT DISTINCT fi.route_path FROM feed_items fi WHERE "
+                     + UNREAD_CONDITION + " ORDER BY fi.route_path")) {
+            while (rs.next()) sources.add(rs.getString("route_path"));
+        }
+        return sources;
+    }
+
+    private static int bindUnreadParameters(PreparedStatement ps, List<String> parameters) throws SQLException {
+        for (int i = 0; i < parameters.size(); i++) ps.setString(i + 1, parameters.get(i));
+        return parameters.size() + 1;
+    }
+
     /**
      * Returns items whose {@code first_seen_at} falls within the given calendar date
      * (system default timezone), ordered newest-first.
      */
-    public List<StoredItem> loadItemsForDate(LocalDate date) throws SQLException {
+    public synchronized List<StoredItem> loadItemsForDate(LocalDate date) throws SQLException {
         ZoneId tz = ZoneId.systemDefault();
         String from = date.atStartOfDay(tz).toInstant().toString();
         String to   = date.plusDays(1).atStartOfDay(tz).toInstant().toString();
@@ -443,7 +734,7 @@ public class FeedStore implements Closeable {
      * Returns the total number of stored items for a route.
      * Parameterized patterns like {@code /hn/:feed} are matched via SQL LIKE.
      */
-    public int countItems(String routePath) throws SQLException {
+    public synchronized int countItems(String routePath) throws SQLException {
         String likePattern = routePath.replaceAll("/:[^/]+", "/%");
         boolean exact = likePattern.equals(routePath);
         String sql = exact
@@ -461,7 +752,7 @@ public class FeedStore implements Closeable {
      * Returns a page of stored items for a route, newest first.
      * Parameterized patterns like {@code /hn/:feed} are matched via SQL LIKE.
      */
-    public List<StoredItem> browseItems(String routePath, int offset, int limit) throws SQLException {
+    public synchronized List<StoredItem> browseItems(String routePath, int offset, int limit) throws SQLException {
         String likePattern = routePath.replaceAll("/:[^/]+", "/%");
         boolean exact = likePattern.equals(routePath);
         String sql = (exact
@@ -523,7 +814,7 @@ public class FeedStore implements Closeable {
      * Parameterized patterns like {@code /hn/:feed} are matched via SQL LIKE
      * (each {@code :param} segment becomes {@code %}).
      */
-    public List<FetchLogEntry> getRecentLogs(String routePath, int limit) throws SQLException {
+    public synchronized List<FetchLogEntry> getRecentLogs(String routePath, int limit) throws SQLException {
         String likePattern = routePath.replaceAll("/:[^/]+", "/%");
         boolean exact = likePattern.equals(routePath);
         List<FetchLogEntry> result = new ArrayList<>();
@@ -554,7 +845,7 @@ public class FeedStore implements Closeable {
      * Returns recent fetch log entries across all routes, newest first.
      * Optionally filtered to routes whose path contains {@code routeFilter} (case-insensitive).
      */
-    public List<FetchLogEntry> getAllRecentLogs(String routeFilter, int offset, int limit)
+    public synchronized List<FetchLogEntry> getAllRecentLogs(String routeFilter, int offset, int limit)
             throws SQLException {
         boolean filtered = routeFilter != null && !routeFilter.isBlank();
         String sql = filtered
@@ -592,7 +883,7 @@ public class FeedStore implements Closeable {
     }
 
     /** Counts fetch log entries, optionally filtered by route path substring. */
-    public int countLogs(String routeFilter) throws SQLException {
+    public synchronized int countLogs(String routeFilter) throws SQLException {
         boolean filtered = routeFilter != null && !routeFilter.isBlank();
         String sql = filtered
                 ? "SELECT COUNT(*) FROM fetch_log WHERE route_path LIKE ?"
@@ -606,7 +897,7 @@ public class FeedStore implements Closeable {
     }
 
     /** Counts fetch log entries for today (local timezone). */
-    public int countLogsToday() throws SQLException {
+    public synchronized int countLogsToday() throws SQLException {
         String today = java.time.LocalDate.now().toString();
         try (PreparedStatement ps = conn.prepareStatement(
                 "SELECT COUNT(*) FROM fetch_log WHERE fetched_at >= ?")) {
@@ -618,7 +909,7 @@ public class FeedStore implements Closeable {
     }
 
     /** Counts fetch log error entries for today. */
-    public int countErrorsToday() throws SQLException {
+    public synchronized int countErrorsToday() throws SQLException {
         String today = java.time.LocalDate.now().toString();
         try (PreparedStatement ps = conn.prepareStatement(
                 "SELECT COUNT(*) FROM fetch_log WHERE status='error' AND fetched_at >= ?")) {
@@ -632,7 +923,7 @@ public class FeedStore implements Closeable {
     /**
      * Returns the most recent successful fetch time for a path, or {@code null} if never fetched.
      */
-    public Instant lastFetchedAt(String routePath) throws SQLException {
+    public synchronized Instant lastFetchedAt(String routePath) throws SQLException {
         try (PreparedStatement ps = conn.prepareStatement(
                 "SELECT MAX(fetched_at) FROM fetch_log WHERE route_path=? AND status='ok'")) {
             ps.setString(1, routePath);
@@ -653,7 +944,7 @@ public class FeedStore implements Closeable {
      * when one exists. Items without a matching extract are returned unchanged.
      * Uses a single batch SELECT for efficiency.
      */
-    public List<FeedItem> mergeExtracts(List<FeedItem> items) throws SQLException {
+    public synchronized List<FeedItem> mergeExtracts(List<FeedItem> items) throws SQLException {
         if (items.isEmpty()) return items;
         List<String> links = items.stream()
                 .filter(i -> i.link() != null && !i.link().isBlank())
@@ -684,7 +975,7 @@ public class FeedStore implements Closeable {
     /**
      * Returns the AI-extracted content for an article URL, or {@code null} if not cached.
      */
-    public String loadExtract(String itemLink) throws SQLException {
+    public synchronized String loadExtract(String itemLink) throws SQLException {
         try (PreparedStatement ps = conn.prepareStatement(
                 "SELECT content FROM ai_extracts WHERE item_link=?")) {
             ps.setString(1, itemLink);
@@ -696,8 +987,115 @@ public class FeedStore implements Closeable {
 
     // ── ai summaries ──────────────────────────────────────────────────────────
 
+    public synchronized StoredArticle loadArticle(String link) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement("""
+                SELECT fi.*, s.summary, e.content AS extract,
+                       EXISTS (SELECT 1 FROM read_items r WHERE r.item_link = fi.item_link) AS is_read,
+                       EXISTS (SELECT 1 FROM bookmarks b WHERE b.item_link = fi.item_link) AS is_bookmarked
+                FROM feed_items fi
+                LEFT JOIN ai_summaries s ON s.item_link = fi.item_link
+                LEFT JOIN ai_extracts e ON e.item_link = fi.item_link
+                WHERE fi.item_link = ?
+                """)) {
+            ps.setString(1, link);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) return null;
+                FeedItem item = new FeedItem(rs.getString("title"), rs.getString("item_link"),
+                        rs.getString("description"), parseInstant(rs.getString("pub_date")),
+                        rs.getString("author"), fromJson(rs.getString("categories")));
+                return new StoredArticle(item, rs.getString("route_path"), parseInstant(rs.getString("first_seen_at")),
+                        rs.getString("summary"), rs.getString("extract"), rs.getBoolean("is_read"),
+                        rs.getBoolean("is_bookmarked"));
+            }
+        }
+    }
+
+    public synchronized FeedItem loadItem(String link) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement("""
+                SELECT item_link, title, description, author, pub_date, categories
+                FROM feed_items WHERE item_link = ?
+                """)) {
+            ps.setString(1, link);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? new FeedItem(
+                        rs.getString("title"),
+                        rs.getString("item_link"),
+                        rs.getString("description"),
+                        parseInstant(rs.getString("pub_date")),
+                        rs.getString("author"),
+                        fromJson(rs.getString("categories"))) : null;
+            }
+        }
+    }
+
+    public synchronized boolean enqueueSummary(String link, Instant queuedAt, boolean retryFailed)
+            throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement("""
+                INSERT INTO ai_summary_runs
+                    (item_link, status, started_at, completed_at, duration_ms, model, error_detail)
+                SELECT item_link, 'queued', ?, NULL, NULL, '', NULL
+                FROM feed_items fi WHERE item_link = ?
+                    AND NOT EXISTS (SELECT 1 FROM ai_summaries s
+                        WHERE s.item_link = fi.item_link
+                          AND trim(s.summary, char(9, 10, 11, 12, 13, 32)) <> '')
+                ON CONFLICT(item_link) DO UPDATE SET
+                    status = 'queued', started_at = excluded.started_at,
+                    completed_at = NULL, duration_ms = NULL, model = '', error_detail = NULL
+                WHERE ai_summary_runs.status = 'error' AND ?
+                """)) {
+            // SQLite compares queued timestamps as text; fixed precision preserves nanosecond order.
+            ps.setString(1, QUEUE_TIME_FORMAT.format(queuedAt));
+            ps.setString(2, link);
+            ps.setBoolean(3, retryFailed);
+            return ps.executeUpdate() > 0;
+        }
+    }
+
+    public synchronized FeedItem claimNextSummary(Instant startedAt, String model) throws SQLException {
+        String link;
+        try (PreparedStatement ps = conn.prepareStatement("""
+                UPDATE ai_summary_runs
+                SET status = 'running', started_at = ?, model = ?
+                WHERE item_link = (
+                    SELECT r.item_link FROM ai_summary_runs r
+                    JOIN feed_items fi ON fi.item_link = r.item_link
+                    WHERE r.status = 'queued'
+                        AND NOT EXISTS (SELECT 1 FROM ai_summaries s
+                            WHERE s.item_link = r.item_link
+                              AND trim(s.summary, char(9, 10, 11, 12, 13, 32)) <> '')
+                    ORDER BY r.started_at, r.rowid LIMIT 1)
+                RETURNING item_link
+                """)) {
+            ps.setString(1, startedAt.toString());
+            ps.setString(2, model);
+            try (ResultSet rs = ps.executeQuery()) {
+                link = rs.next() ? rs.getString("item_link") : null;
+            }
+        }
+        return link == null ? null : loadItem(link);
+    }
+
+    public synchronized void recoverInterruptedSummaries(Instant now) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement("""
+                UPDATE ai_summary_runs
+                SET status = CASE WHEN EXISTS (
+                        SELECT 1 FROM ai_summaries s WHERE s.item_link = ai_summary_runs.item_link
+                            AND trim(s.summary, char(9, 10, 11, 12, 13, 32)) <> '')
+                        THEN 'success' ELSE 'error' END,
+                    completed_at = ?, duration_ms = NULL,
+                    error_detail = CASE WHEN EXISTS (
+                        SELECT 1 FROM ai_summaries s WHERE s.item_link = ai_summary_runs.item_link
+                            AND trim(s.summary, char(9, 10, 11, 12, 13, 32)) <> '')
+                        THEN NULL ELSE 'Task interrupted by application restart; retry to continue.' END
+                WHERE status = 'running'
+                """)) {
+            ps.setString(1, now.toString());
+            ps.executeUpdate();
+        }
+    }
+
     /** Returns the cached summary for an article URL, or {@code null} if not cached. */
-    public String loadSummary(String itemLink) throws SQLException {
+    public synchronized String loadSummary(String itemLink) throws SQLException {
         try (PreparedStatement ps = conn.prepareStatement(
                 "SELECT summary FROM ai_summaries WHERE item_link=?")) {
             ps.setString(1, itemLink);
@@ -711,7 +1109,7 @@ public class FeedStore implements Closeable {
      * Batch-loads summaries for a list of links.
      * Returns a map of {@code itemLink -> summary} for links that have a cached summary.
      */
-    public java.util.Map<String, String> loadSummaries(List<String> links) throws SQLException {
+    public synchronized java.util.Map<String, String> loadSummaries(List<String> links) throws SQLException {
         java.util.Map<String, String> result = new java.util.HashMap<>();
         if (links.isEmpty()) return result;
         String placeholders = String.join(",", java.util.Collections.nCopies(links.size(), "?"));
@@ -727,33 +1125,36 @@ public class FeedStore implements Closeable {
 
     /** Upserts an AI-generated summary for an article URL. */
     public synchronized void saveSummary(String itemLink, String summary, String model) throws SQLException {
-        String now = Instant.now().toString();
-        try (PreparedStatement ps = conn.prepareStatement("""
-                INSERT INTO ai_summaries (item_link, summary, model, created_at)
-                VALUES (?, ?, ?, ?)
-                ON CONFLICT(item_link) DO UPDATE SET
-                    summary    = excluded.summary,
-                    model      = excluded.model,
-                    created_at = excluded.created_at
-                """)) {
-            ps.setString(1, itemLink);
-            ps.setString(2, summary);
-            ps.setString(3, model);
-            ps.setString(4, now);
-            ps.executeUpdate();
-        }
-        try (PreparedStatement ps = conn.prepareStatement("""
-                INSERT OR IGNORE INTO ai_summary_runs
-                    (item_link, status, started_at, completed_at, duration_ms, model, error_detail)
-                VALUES (?, 'success', ?, ?, 0, ?, NULL)
-                """)) {
-            ps.setString(1, itemLink);
-            ps.setString(2, now);
-            ps.setString(3, now);
-            ps.setString(4, model);
-            ps.executeUpdate();
-        }
-        refreshSearchIndex(List.of(itemLink));
+        inTransaction(() -> {
+            String now = Instant.now().toString();
+            try (PreparedStatement ps = conn.prepareStatement("""
+                    INSERT INTO ai_summaries (item_link, summary, model, created_at)
+                    VALUES (?, ?, ?, ?)
+                    ON CONFLICT(item_link) DO UPDATE SET
+                        summary    = excluded.summary,
+                        model      = excluded.model,
+                        created_at = excluded.created_at
+                    """)) {
+                ps.setString(1, itemLink);
+                ps.setString(2, summary);
+                ps.setString(3, model);
+                ps.setString(4, now);
+                ps.executeUpdate();
+            }
+            try (PreparedStatement ps = conn.prepareStatement("""
+                    INSERT OR IGNORE INTO ai_summary_runs
+                        (item_link, status, started_at, completed_at, duration_ms, model, error_detail)
+                    VALUES (?, 'success', ?, ?, 0, ?, NULL)
+                    """)) {
+                ps.setString(1, itemLink);
+                ps.setString(2, now);
+                ps.setString(3, now);
+                ps.setString(4, model);
+                ps.executeUpdate();
+            }
+            refreshSearchIndex(List.of(itemLink));
+            return null;
+        });
     }
 
     /** Records that AI summarization has started for an article URL. */
@@ -810,7 +1211,7 @@ public class FeedStore implements Closeable {
     }
 
     /** Batch-loads latest AI summarization status for a list of links. */
-    public Map<String, SummaryStatus> loadSummaryStatuses(List<String> links) throws SQLException {
+    public synchronized Map<String, SummaryStatus> loadSummaryStatuses(List<String> links) throws SQLException {
         Map<String, SummaryStatus> result = new LinkedHashMap<>();
         if (links.isEmpty()) return result;
         String placeholders = String.join(",", Collections.nCopies(links.size(), "?"));
@@ -870,7 +1271,7 @@ public class FeedStore implements Closeable {
     }
 
     /** Returns the total number of cached AI summaries. */
-    public int countSummaries() throws SQLException {
+    public synchronized int countSummaries() throws SQLException {
         try (PreparedStatement ps = conn.prepareStatement("SELECT COUNT(*) FROM ai_summaries");
              ResultSet rs = ps.executeQuery()) {
             return rs.next() ? rs.getInt(1) : 0;
@@ -878,7 +1279,7 @@ public class FeedStore implements Closeable {
     }
 
     /** Returns the total number of cached AI extracts. */
-    public int countExtracts() throws SQLException {
+    public synchronized int countExtracts() throws SQLException {
         try (PreparedStatement ps = conn.prepareStatement("SELECT COUNT(*) FROM ai_extracts");
              ResultSet rs = ps.executeQuery()) {
             return rs.next() ? rs.getInt(1) : 0;
@@ -910,8 +1311,9 @@ public class FeedStore implements Closeable {
     public synchronized void saveBookmark(String link, String title, String routePath)
             throws SQLException {
         try (PreparedStatement ps = conn.prepareStatement("""
-                INSERT OR REPLACE INTO bookmarks (item_link, title, route_path, bookmarked_at)
+                INSERT INTO bookmarks (item_link, title, route_path, bookmarked_at)
                 VALUES (?, ?, ?, ?)
+                ON CONFLICT(item_link) DO UPDATE SET title = excluded.title, route_path = excluded.route_path
                 """)) {
             ps.setString(1, link);
             ps.setString(2, title);
@@ -929,7 +1331,7 @@ public class FeedStore implements Closeable {
         }
     }
 
-    public boolean isBookmarked(String link) throws SQLException {
+    public synchronized boolean isBookmarked(String link) throws SQLException {
         try (PreparedStatement ps = conn.prepareStatement(
                 "SELECT 1 FROM bookmarks WHERE item_link = ?")) {
             ps.setString(1, link);
@@ -940,7 +1342,7 @@ public class FeedStore implements Closeable {
     }
 
     /** Returns all bookmarked item links for initialising client-side state. */
-    public List<String> loadBookmarkLinks() throws SQLException {
+    public synchronized List<String> loadBookmarkLinks() throws SQLException {
         List<String> result = new ArrayList<>();
         try (Statement s = conn.createStatement();
              ResultSet rs = s.executeQuery(
@@ -951,7 +1353,7 @@ public class FeedStore implements Closeable {
     }
 
     /** Returns full bookmark records newest first. */
-    public List<BookmarkedItem> loadBookmarks() throws SQLException {
+    public synchronized List<BookmarkedItem> loadBookmarks() throws SQLException {
         List<BookmarkedItem> result = new ArrayList<>();
         try (Statement s = conn.createStatement();
              ResultSet rs = s.executeQuery("""
@@ -992,7 +1394,7 @@ public class FeedStore implements Closeable {
     }
 
     /** Returns true if the item has been marked as read. */
-    public boolean isRead(String link) throws SQLException {
+    public synchronized boolean isRead(String link) throws SQLException {
         try (PreparedStatement ps = conn.prepareStatement(
                 "SELECT 1 FROM read_items WHERE item_link = ?")) {
             ps.setString(1, link);
@@ -1003,7 +1405,7 @@ public class FeedStore implements Closeable {
     }
 
     /** Returns all read item links, newest first. */
-    public List<String> loadReadLinks() throws SQLException {
+    public synchronized List<String> loadReadLinks() throws SQLException {
         List<String> result = new ArrayList<>();
         try (Statement s = conn.createStatement();
              ResultSet rs = s.executeQuery(
@@ -1013,18 +1415,19 @@ public class FeedStore implements Closeable {
         return result;
     }
 
-    /** Marks all supplied links as read in a single batch. */
+    /** Marks all supplied links as read atomically. */
     public synchronized void markAllRead(List<String> links) throws SQLException {
         if (links.isEmpty()) return;
         String now = Instant.now().toString();
+        String values = String.join(",", Collections.nCopies(links.size(), "(?, ?)"));
         try (PreparedStatement ps = conn.prepareStatement(
-                "INSERT OR IGNORE INTO read_items (item_link, read_at) VALUES (?, ?)")) {
+                "INSERT OR IGNORE INTO read_items (item_link, read_at) VALUES " + values)) {
+            int index = 1;
             for (String link : links) {
-                ps.setString(1, link);
-                ps.setString(2, now);
-                ps.addBatch();
+                ps.setString(index++, link);
+                ps.setString(index++, now);
             }
-            ps.executeBatch();
+            ps.executeUpdate();
         }
     }
 
@@ -1033,41 +1436,124 @@ public class FeedStore implements Closeable {
     /**
      * Full-text search across item titles, descriptions, and AI summaries.
      */
-    public List<StoredItem> search(String query, int limit) throws SQLException {
+    public synchronized List<StoredItem> search(String query, int limit) throws SQLException {
+        return searchHits(query, limit).stream().map(SearchHit::item).toList();
+    }
+
+    public synchronized List<SearchHit> searchHits(String query, int limit) throws SQLException {
         if (query == null || query.isBlank()) return List.of();
         if (limit < 1) return List.of();
-        String ftsQuery = toFtsQuery(query);
-        List<StoredItem> result = new ArrayList<>();
-        try (PreparedStatement ps = conn.prepareStatement("""
-                WITH matches AS (
-                    SELECT item_link, bm25(feed_search_fts) AS rank
+        if (query.codePointCount(0, query.length()) > 200) {
+            throw new IllegalArgumentException("Search queries must not exceed 200 characters");
+        }
+        List<String> terms = java.util.Arrays.stream(query.strip().split("(?U)\\s+"))
+                .filter(term -> !term.isBlank()).distinct().toList();
+        if (terms.isEmpty()) return List.of();
+        List<String> literals = terms.stream().filter(FeedStore::isLiteralSearchTerm).toList();
+        List<String> words = terms.stream().filter(term -> !isLiteralSearchTerm(term)).toList();
+        List<String> parameters = new ArrayList<>();
+        StringBuilder sql = new StringBuilder();
+        if (!words.isEmpty()) {
+            sql.append("""
+                WITH word_matches AS (
+                    SELECT rowid, bm25(feed_search_fts, 0, 8, 1, 3) AS rank
                     FROM feed_search_fts
                     WHERE feed_search_fts MATCH ?
                 )
+                """);
+            parameters.add(toFtsQuery(String.join(" ", words)));
+        }
+        sql.append("""
                 SELECT fi.route_path, fi.item_link, fi.title,
-                       fi.author, fi.pub_date, fi.first_seen_at
-                FROM matches m
-                JOIN feed_items fi ON fi.item_link = m.item_link
-                ORDER BY m.rank, fi.first_seen_at DESC
-                LIMIT ?
-                """)) {
-            ps.setString(1, ftsQuery);
-            ps.setInt(2, limit);
+                       fi.author, fi.pub_date, fi.first_seen_at, fi.description, s.summary,
+                       (0
+                """);
+        for (String term : literals) {
+            sql.append(" + (instr(lower(coalesce(fi.title, '')), lower(?)) > 0)");
+            parameters.add(term);
+        }
+        sql.append(") AS title_matches FROM feed_items fi ");
+        if (!words.isEmpty()) sql.append("JOIN word_matches m ON m.rowid = fi.id ");
+        sql.append("""
+                LEFT JOIN ai_summaries s ON s.item_link = fi.item_link
+                WHERE trim(fi.title, char(9, 10, 11, 12, 13, 32)) <> ''
+                  AND trim(fi.item_link, char(9, 10, 11, 12, 13, 32)) <> ''
+                """);
+        for (String term : literals) {
+            sql.append("""
+                    AND (instr(lower(coalesce(fi.title, '')), lower(?)) > 0
+                      OR instr(lower(coalesce(fi.description, '')), lower(?)) > 0
+                      OR instr(lower(coalesce(s.summary, '')), lower(?)) > 0)
+                    """);
+            parameters.addAll(List.of(term, term, term));
+        }
+        sql.append("ORDER BY title_matches DESC, ");
+        if (!words.isEmpty()) sql.append("m.rank, ");
+        sql.append("fi.id DESC LIMIT ?");
+        List<SearchHit> result = new ArrayList<>();
+        try (PreparedStatement ps = conn.prepareStatement(sql.toString())) {
+            int index = 1;
+            for (String parameter : parameters) ps.setString(index++, parameter);
+            ps.setInt(index, limit);
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
-                    String pubDateStr = rs.getString("pub_date");
-                    Instant pubDate = pubDateStr != null ? Instant.parse(pubDateStr) : null;
-                    result.add(new StoredItem(
+                    StoredItem item = new StoredItem(
                             rs.getString("route_path"),
                             rs.getString("title"),
                             rs.getString("item_link"),
                             rs.getString("author"),
-                            pubDate,
-                            Instant.parse(rs.getString("first_seen_at"))));
+                            parseInstant(rs.getString("pub_date")),
+                            parseInstant(rs.getString("first_seen_at")));
+                    result.add(new SearchHit(item, rs.getString("description"), rs.getString("summary")));
                 }
             }
         }
         return result;
+    }
+
+    private static boolean isLiteralSearchTerm(String term) {
+        return term.codePoints().anyMatch(character ->
+                Character.UnicodeScript.of(character) == Character.UnicodeScript.HAN
+                        || !Character.isLetterOrDigit(character));
+    }
+
+    private void initializeSearchIndex(boolean migratedItems) throws SQLException {
+        try (Statement statement = conn.createStatement()) {
+            statement.execute("""
+                    CREATE TABLE IF NOT EXISTS search_index_state (
+                        id INTEGER PRIMARY KEY CHECK(id = 1),
+                        version INTEGER NOT NULL
+                    )
+                    """);
+        }
+        boolean indexExists;
+        try (Statement statement = conn.createStatement();
+             ResultSet result = statement.executeQuery("""
+                     SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'feed_search_fts'
+                     """)) {
+            indexExists = result.next();
+        }
+        try (Statement statement = conn.createStatement();
+             ResultSet result = statement.executeQuery("SELECT version FROM search_index_state WHERE id = 1")) {
+            if (!migratedItems && indexExists && result.next() && result.getInt(1) == SEARCH_INDEX_VERSION) {
+                return;
+            }
+        }
+        try (Statement statement = conn.createStatement()) {
+            statement.execute("DROP TABLE IF EXISTS feed_search_fts");
+            statement.execute("""
+                    CREATE VIRTUAL TABLE feed_search_fts
+                    USING fts5(item_link UNINDEXED, title, description, summary)
+                    """);
+        }
+        rebuildSearchIndex();
+        try (PreparedStatement statement = conn.prepareStatement("""
+                INSERT INTO search_index_state (id, version) VALUES (1, ?)
+                ON CONFLICT(id) DO UPDATE SET version = excluded.version
+                """)) {
+            statement.setInt(1, SEARCH_INDEX_VERSION);
+            statement.executeUpdate();
+        }
     }
 
     private void rebuildSearchIndex() throws SQLException {
@@ -1121,7 +1607,7 @@ public class FeedStore implements Closeable {
      * computed from the most recent 10 fetch attempts per route.
      * Results are ordered by most-recently-fetched first.
      */
-    public Map<String, RouteHealth> loadRouteHealth() throws SQLException {
+    public synchronized Map<String, RouteHealth> loadRouteHealth() throws SQLException {
         Map<String, RouteHealth> result = new LinkedHashMap<>();
         try (Statement s = conn.createStatement();
              ResultSet rs = s.executeQuery("""

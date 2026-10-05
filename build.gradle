@@ -33,6 +33,23 @@ tasks.withType(JavaCompile).configureEach {
 
 tasks.withType(Test).configureEach {
     useJUnitPlatform()
-    systemProperty 'fetch-news.route-config', layout.buildDirectory.file('test-route-config.json').get().asFile.absolutePath
-    systemProperty 'fetch-news.db', layout.buildDirectory.file('test-feed-store.db').get().asFile.absolutePath
+    def testRuntimeDir = layout.buildDirectory.dir("test-runtime/${name}").get().asFile
+    // Relative credential paths must not resolve inside the developer checkout.
+    workingDir testRuntimeDir
+    systemProperty 'fetch-news.route-config', new File(testRuntimeDir, 'route-config.json').absolutePath
+    systemProperty 'fetch-news.db', new File(testRuntimeDir, 'feed-store.db').absolutePath
+    systemProperty 'fetch-news.ai-config', new File(testRuntimeDir, 'ai-config.json').absolutePath
+    systemProperty 'fetch-news.feishu-config', new File(testRuntimeDir, 'feishu-config.json').absolutePath
+    environment = environment.findAll { key, value ->
+        key != 'OLLAMA_HOST' && key != 'TWITTER_COOKIE' &&
+                key != 'BILIBILI_COOKIE' && !key.startsWith('BILIBILI_COOKIE_')
+    }
+    doFirst {
+        if (testRuntimeDir.exists() && !testRuntimeDir.deleteDir()) {
+            throw new GradleException('Could not clean isolated test runtime directory')
+        }
+        if (!testRuntimeDir.mkdirs()) {
+            throw new GradleException('Could not create isolated test runtime directory')
+        }
+    }
 }

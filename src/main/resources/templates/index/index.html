@@ -7,76 +7,19 @@
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/admin.css">
   <script src="/htmx.min.js"></script>
-  <script>
-    document.addEventListener('alpine:init', () => {
-      Alpine.data('appShell', () => ({
-        modal: false,
-        activePage: 'stats',
-        pageTitle: '数据统计',
-        sbOpen: false,
-        init() {
-          const hash = window.location.hash.slice(1);
-          if (!hash || hash === 'stats') return;
-          const pageMap = {
-            ai:          ['/index/ai',          'AI 设置'],
-            credentials: ['/index/credentials', '凭据配置'],
-            feishu:      ['/index/feishu',      '飞书推送'],
-            health:      ['/index/health',      'Feed 健康'],
-            logs:        ['/index/logs',        '抓取日志']
-          };
-          if (hash.startsWith('cat=')) {
-            const cat = decodeURIComponent(hash.slice(4));
-            this.activePage = 'cat:' + cat;
-            this.pageTitle  = cat;
-            htmx.ajax('GET', '/index/category?name=' + encodeURIComponent(cat),
-                      {target: '#main-content', swap: 'innerHTML'});
-          } else if (pageMap[hash]) {
-            this.activePage = hash;
-            this.pageTitle  = pageMap[hash][1];
-            htmx.ajax('GET', pageMap[hash][0], {target: '#main-content', swap: 'innerHTML'});
-          }
-        }
-      }));
-    });
-
-    /* Re-trigger page-settle animation on htmx swap */
-    document.body.addEventListener('htmx:afterSwap', function (e) {
-      if (e.detail.target.id === 'main-content') {
-        var el = e.detail.target;
-        el.style.animation = 'none';
-        el.offsetHeight; // reflow
-        el.style.animation = '';
-      }
-    });
-
-    /* Topbar loading indicator */
-    document.body.addEventListener('htmx:beforeRequest', function (e) {
-      if (e.detail.target && e.detail.target.id === 'main-content') {
-        var tb = document.querySelector('.topbar');
-        if (tb) tb.classList.add('htmx-loading');
-      }
-    });
-    document.body.addEventListener('htmx:afterRequest', function (e) {
-      if (e.detail.target && e.detail.target.id === 'main-content') {
-        var tb = document.querySelector('.topbar');
-        if (tb) {
-          tb.classList.remove('htmx-loading');
-          tb.classList.add('htmx-loaded');
-          setTimeout(function () { tb.classList.remove('htmx-loaded'); }, 500);
-        }
-      }
-    });
-  </script>
+  <script defer src="/ui.js"></script>
+  <script defer src="/admin.js"></script>
   <script defer src="/alpine.min.js"></script>
 </head>
-<body x-data="appShell()"
-      @htmx:after-swap.window="if ($event.detail.target.id === 'modal-inner' && $event.detail.target.innerHTML.trim() !== '') modal = true"
-      @closemodal.window="modal = false"
-      @keydown.escape.window="sbOpen = false; modal = false">
+<body x-data="appShell()">
+  <a class="skip-link" href="#main-content">跳至主要内容</a>
 
-  <div class="app">
+  <div class="app" id="app-shell">
     <!-- ── Sidebar ──────────────────────────────────────────── -->
-    <nav class="sidebar" :class="sbOpen && 'sb-open'" @click="sbOpen = false">
+    <nav class="sidebar" id="console-sidebar" aria-label="控制台导航"
+         :class="sbOpen && 'sb-open'" :inert="isMobile && !sbOpen"
+         :aria-hidden="isMobile && !sbOpen ? 'true' : null"
+         hx-sync="#main-content:replace">
       <div class="sb-brand">
         <div class="sb-logo">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="18" height="18">
@@ -94,14 +37,13 @@
         </div>
       </div>
 
+      <button class="sidebar-close" type="button" @click="sbOpen = false" aria-label="关闭导航">✕</button>
       <div class="sb-nav">
         <div class="nav-label">概览</div>
         <a class="nav-item" :class="{ active: activePage === 'stats' }"
-           hx-get="/index/stats"
-           hx-target="#main-content"
-           hx-swap="innerHTML"
-           @click="activePage = 'stats'; pageTitle = '数据统计'; window.location.hash = 'stats'"
-           href="javascript:void(0)">
+           :aria-current="activePage === 'stats' ? 'page' : null"
+           @click="navigate($event, 'stats')"
+           href="/index#stats">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <rect x="3" y="12" width="4" height="9"/><rect x="10" y="7" width="4" height="14"/>
             <rect x="17" y="3" width="4" height="18"/>
@@ -110,14 +52,14 @@
         </a>
 
         <div class="nav-label" style="margin-top:10px;">阅读</div>
-        <a class="nav-item" href="/reader" target="_blank">
+        <a class="nav-item" href="/reader">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
             <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
           </svg>
           今日速览
         </a>
-        <a class="nav-item" href="/reader/briefing" target="_blank">
+        <a class="nav-item" href="/reader/briefing">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <rect x="3" y="3" width="18" height="18" rx="2"/>
             <line x1="3" y1="9" x2="21" y2="9"/>
@@ -128,22 +70,18 @@
 
         <div class="nav-label" style="margin-top:10px;">工具</div>
         <a class="nav-item" :class="{ active: activePage === 'ai' }"
-           hx-get="/index/ai"
-           hx-target="#main-content"
-           hx-swap="innerHTML"
-           @click="activePage = 'ai'; pageTitle = 'AI 设置'; window.location.hash = 'ai'"
-           href="javascript:void(0)">
+           :aria-current="activePage === 'ai' ? 'page' : null"
+           @click="navigate($event, 'ai')"
+           href="/index#ai">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"/>
           </svg>
           AI 设置
         </a>
         <a class="nav-item" :class="{ active: activePage === 'credentials' }"
-           hx-get="/index/credentials"
-           hx-target="#main-content"
-           hx-swap="innerHTML"
-           @click="activePage = 'credentials'; pageTitle = '凭据配置'; window.location.hash = 'credentials'"
-           href="javascript:void(0)">
+           :aria-current="activePage === 'credentials' ? 'page' : null"
+           @click="navigate($event, 'credentials')"
+           href="/index#credentials">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
             <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
@@ -151,33 +89,27 @@
           凭据配置
         </a>
         <a class="nav-item" :class="{ active: activePage === 'feishu' }"
-           hx-get="/index/feishu"
-           hx-target="#main-content"
-           hx-swap="innerHTML"
-           @click="activePage = 'feishu'; pageTitle = '飞书推送'; window.location.hash = 'feishu'"
-           href="javascript:void(0)">
+           :aria-current="activePage === 'feishu' ? 'page' : null"
+           @click="navigate($event, 'feishu')"
+           href="/index#feishu">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M22 2L11 13"/><path d="M22 2L15 22 11 13 2 9l20-7z"/>
           </svg>
           飞书推送
         </a>
         <a class="nav-item" :class="{ active: activePage === 'health' }"
-           hx-get="/index/health"
-           hx-target="#main-content"
-           hx-swap="innerHTML"
-           @click="activePage = 'health'; pageTitle = 'Feed 健康'; window.location.hash = 'health'"
-           href="javascript:void(0)">
+           :aria-current="activePage === 'health' ? 'page' : null"
+           @click="navigate($event, 'health')"
+           href="/index#health">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
           </svg>
           Feed 健康
         </a>
         <a class="nav-item" :class="{ active: activePage === 'logs' }"
-           hx-get="/index/logs"
-           hx-target="#main-content"
-           hx-swap="innerHTML"
-           @click="activePage = 'logs'; pageTitle = '抓取日志'; window.location.hash = 'logs'"
-           href="javascript:void(0)">
+           :aria-current="activePage === 'logs' ? 'page' : null"
+           @click="navigate($event, 'logs')"
+           href="/index#logs">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
             <polyline points="14 2 14 8 20 8"/>
@@ -193,11 +125,9 @@
           <a class="nav-item"
              :class="{ active: activePage === 'cat:' + $el.dataset.cat }"
              th:attr="data-cat=${cat.name}"
-             th:hx-get="'/index/category?name=' + ${cat.name}"
-             hx-target="#main-content"
-             hx-swap="innerHTML"
-             @click="activePage = 'cat:' + $el.dataset.cat; pageTitle = $el.dataset.cat; window.location.hash = 'cat=' + $el.dataset.cat"
-             href="javascript:void(0)">
+             :aria-current="activePage === 'cat:' + $el.dataset.cat ? 'page' : null"
+             th:href="'/index#cat=' + ${#uris.escapeQueryParam(cat.name)}"
+             @click="navigate($event, 'cat=' + encodeURIComponent($el.dataset.cat))">
             <span th:text="${cat.name}">分类</span>
             <span class="nav-badge" th:text="${cat.count}">0</span>
             <span th:if="${failingCategories != null and failingCategories.contains(cat.name)}"
@@ -211,7 +141,7 @@
       <div class="sb-footer">
         <div class="sb-status-head">
           <span class="dot-live"></span>
-          <span>系统运行正常</span>
+          <span>控制台已连接</span>
         </div>
         <div class="sb-row">
           <span>运行时间</span>
@@ -229,23 +159,31 @@
     </nav>
 
     <!-- ── Sidebar overlay (mobile) ─────────────────────────── -->
-    <div class="sidebar-overlay" :class="sbOpen && 'sb-open'" @click="sbOpen = false"></div>
+    <div class="sidebar-overlay" :class="sbOpen && 'sb-open'" @click="sbOpen = false" aria-hidden="true"></div>
 
     <!-- ── Main ─────────────────────────────────────────────── -->
-    <div class="app-main">
+    <div class="app-main" id="console-main">
       <header class="topbar">
-        <button class="hamburger" @click="sbOpen = !sbOpen" aria-label="菜单">☰</button>
-        <span class="topbar-title" x-text="pageTitle">数据统计</span>
-        <span class="ver-tag" th:text="'v' + ${version}">v0.1.0</span>
+        <button class="hamburger" type="button" @click="sbOpen = !sbOpen"
+                aria-label="打开导航" aria-controls="console-sidebar" :aria-expanded="sbOpen">☰</button>
+        <div class="topbar-heading">
+          <span class="console-eyebrow">我的信息工作台</span>
+          <h1 class="topbar-title" x-text="pageTitle">数据统计</h1>
+        </div>
+        <div class="topbar-actions">
+          <a class="topbar-reader-link" href="/reader">开始阅读 <span aria-hidden="true">↗</span></a>
+          <span class="ver-tag" th:text="'v' + ${version}">v0.1.0</span>
+        </div>
       </header>
 
-      <div class="content" id="main-content" th:insert="~{index/stats}"></div>
+      <main class="content" id="main-content" tabindex="-1" aria-busy="false"
+            :aria-label="pageTitle" th:insert="~{index/stats}"></main>
     </div>
   </div>
 
   <!-- ── Modal overlay ───────────────────────────────────────── -->
   <div class="modal-back" x-show="modal" x-cloak @click.self="modal = false">
-    <div class="modal" @click.stop>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title" tabindex="-1" @click.stop>
       <div id="modal-inner">
         <!-- loaded via HTMX -->
       </div>

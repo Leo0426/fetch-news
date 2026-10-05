@@ -97,7 +97,7 @@ public class CacheService {
     }
 
     /**
-     * Reads a cache entry, evicts expired values, and stores freshly loaded values.
+     * Reads a cache entry and atomically reloads missing or expired values for each key.
      *
      * @param cache target cache
      * @param key cache key
@@ -110,16 +110,31 @@ public class CacheService {
     @SuppressWarnings("unchecked")
     private <T> T get(Cache<String, CacheEntry> cache, String key, Duration ttl, Callable<T> loader) throws Exception {
         CacheEntry cached = cache.getIfPresent(key);
-        Instant now = Instant.now();
-        if (cached != null && cached.expiresAt().isAfter(now)) {
+        if (cached != null && cached.expiresAt().isAfter(Instant.now())) {
             return (T) cached.value();
         }
-        if (cached != null) {
-            cache.invalidate(key);
+        try {
+            CacheEntry loaded = cache.asMap().compute(key, (ignored, current) -> {
+                if (current != null && current.expiresAt().isAfter(Instant.now())) {
+                    return current;
+                }
+                try {
+                    T value = loader.call();
+                    return new CacheEntry(value, Instant.now().plus(ttl));
+                } catch (Exception e) {
+                    throw new CacheLoadException(e);
+                }
+            });
+            return (T) loaded.value();
+        } catch (CacheLoadException e) {
+            throw (Exception) e.getCause();
         }
-        T value = loader.call();
-        cache.put(key, new CacheEntry(value, now.plus(ttl)));
-        return value;
+    }
+
+    private static final class CacheLoadException extends RuntimeException {
+        private CacheLoadException(Exception cause) {
+            super(cause);
+        }
     }
 
     /**

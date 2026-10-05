@@ -1,7 +1,6 @@
 package app;
 
 import app.ai.AiConfigStore;
-import app.ai.ArticleExtractor;
 import app.ai.ArticleSummarizer;
 import app.core.Feed;
 import app.core.RouteConfig;
@@ -9,6 +8,7 @@ import app.core.RouteContext;
 import app.core.RouteMatch;
 import app.feishu.FeishuPusher;
 import app.store.FeedStore;
+import app.store.FeedRefreshState;
 import jakarta.annotation.PreDestroy;
 import java.time.Duration;
 import java.time.Instant;
@@ -16,6 +16,8 @@ import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -36,20 +38,18 @@ public class FetchScheduler {
     private final AppRuntime runtime;
     private final FeedStore feedStore;
     private final FeedFetcher feedFetcher;
-    private final ArticleExtractor articleExtractor;
     private final ArticleSummarizer articleSummarizer;
     private final AiConfigStore aiConfigStore;
     private final FeishuPusher feishuPusher;
     private final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
-    private final ExecutorService aiExecutor = Executors.newVirtualThreadPerTaskExecutor();
+    private final Set<String> inFlight = ConcurrentHashMap.newKeySet();
 
     public FetchScheduler(AppRuntime runtime, FeedStore feedStore,
-                          ArticleExtractor articleExtractor, ArticleSummarizer articleSummarizer,
+                          ArticleSummarizer articleSummarizer,
                           AiConfigStore aiConfigStore, FeishuPusher feishuPusher) {
         this.runtime = runtime;
         this.feedStore = feedStore;
-        this.feedFetcher = new FeedFetcher(feedStore);
-        this.articleExtractor = articleExtractor;
+        this.feedFetcher = new FeedFetcher(feedStore, runtime.fetchCoordinator());
         this.articleSummarizer = articleSummarizer;
         this.aiConfigStore = aiConfigStore;
         this.feishuPusher = feishuPusher;
@@ -64,15 +64,11 @@ public class FetchScheduler {
     @PreDestroy
     public void shutdown() {
         executor.shutdown();
-        aiExecutor.shutdown();
         try {
             if (!executor.awaitTermination(15, TimeUnit.SECONDS))
                 executor.shutdownNow();
-            if (!aiExecutor.awaitTermination(15, TimeUnit.SECONDS))
-                aiExecutor.shutdownNow();
         } catch (InterruptedException e) {
             executor.shutdownNow();
-            aiExecutor.shutdownNow();
             Thread.currentThread().interrupt();
         }
     }
@@ -91,13 +87,24 @@ public class FetchScheduler {
         }
 
         // Digest check runs in the background every tick; FeishuPusher gates on cron.
-        executor.submit(() ->
-                feishuPusher.checkDigests(now, routes, categoryByPath, feedStore));
+        if (feishuPusher != null && feedStore != null) {
+            executor.submit(() ->
+                    feishuPusher.checkDigests(now, routes, categoryByPath, feedStore));
+        }
     }
 
     private boolean isDue(RouteConfig config, Instant now) {
         try {
-            Instant last = feedStore.lastFetchedAt(config.path());
+            Instant last;
+            if (feedStore != null && "/rss".equals(config.sourcePath()) && config.feedUrl() != null) {
+                FeedRefreshState refresh = feedStore.loadFeedRefreshState(config.path(), config.feedUrl());
+                if (refresh != null && refresh.nextRetryAt() != null) {
+                    return !refresh.nextRetryAt().isAfter(now);
+                }
+                last = refresh == null ? null : refresh.lastCheckedAt();
+            } else {
+                last = feedStore != null ? feedStore.lastFetchedAt(config.path()) : null;
+            }
             if (config.scheduleCron() != null) {
                 ZonedDateTime lastZdt = (last != null ? last : Instant.EPOCH)
                         .atZone(ZoneId.systemDefault());
@@ -112,6 +119,7 @@ public class FetchScheduler {
     }
 
     void fetchNow(RouteConfig config) {
+        if (!inFlight.add(config.path())) return;
         log.info("[sched] start {}", config.path());
         try {
             RouteMatch match = runtime.resolveRoute(config.path(), config.sourcePath());
@@ -121,31 +129,28 @@ public class FetchScheduler {
                     Map.of(),
                     Duration.ofSeconds(config.detailCacheTtlSeconds()),
                     config.feedUrl());
-            Feed feed = feedFetcher.fetch(match, context, config.path(), 0);
+            Feed feed = feedFetcher.fetch(match, context, config.path());
             log.info("[sched] done {} — {} items", config.path(), feed.items().size());
             pushImmediateItems(config);
-            if (aiConfigStore.get().enabled()) {
-                aiExecutor.submit(() -> summarizeAsync(config, feed));
-            }
+            enqueueSummaries(feed);
         } catch (Exception e) {
             log.warn("[sched] error {}: {}", config.path(), e.getMessage());
+        } finally {
+            inFlight.remove(config.path());
         }
     }
 
-    private void summarizeAsync(RouteConfig config, Feed feed) {
-        log.info("[sched] ai queued {}", config.path());
+    private void enqueueSummaries(Feed feed) {
+        if (articleSummarizer == null || aiConfigStore == null || !aiConfigStore.get().enabled()) return;
         try {
-            log.info("[sched] ai start {}", config.path());
-            articleExtractor.enrich(feed.items());
-            articleSummarizer.summarize(feed.items());
-            log.info("[sched] ai done {}", config.path());
+            articleSummarizer.enqueue(feed.items());
         } catch (Exception e) {
-            log.warn("[sched] ai error {}: {}", config.path(), e.getMessage());
+            log.warn("[sched] summary enqueue failed: {}", e.toString());
         }
     }
 
     private void pushImmediateItems(RouteConfig config) {
-        if (feishuPusher == null) return;
+        if (feishuPusher == null || feedStore == null) return;
         String category = runtime.routeRegistry().categories()
                 .getOrDefault(config.sourcePath(), null);
         if (category == null) return;

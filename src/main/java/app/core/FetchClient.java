@@ -23,4 +23,8 @@ public interface FetchClient {
     default String get(String url, Map<String, String> extraHeaders) throws Exception {
         return get(url);
     }
+
+    default FetchResponse fetch(String url, Map<String, String> extraHeaders) throws Exception {
+        return new FetchResponse(200, Map.of(), get(url, extraHeaders));
+    }
 }

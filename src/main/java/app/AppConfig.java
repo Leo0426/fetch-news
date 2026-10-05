@@ -63,16 +63,17 @@ public class AppConfig {
      * Article extractor that enriches feed items using Ollama and caches results in SQLite.
      */
     @Bean
-    public ArticleExtractor articleExtractor(OllamaClient ollamaClient, FeedStore feedStore) {
-        return new ArticleExtractor(ollamaClient, feedStore);
+    public ArticleExtractor articleExtractor(OllamaClient ollamaClient, FeedStore feedStore, AppRuntime runtime) {
+        return new ArticleExtractor(ollamaClient, feedStore, runtime.fetchClient());
     }
 
     /**
      * Article summarizer — generates 2-3 sentence Chinese summaries for reader cards.
      */
-    @Bean
-    public ArticleSummarizer articleSummarizer(OllamaClient ollamaClient, FeedStore feedStore) {
-        return new ArticleSummarizer(ollamaClient, feedStore);
+    @Bean(initMethod = "start", destroyMethod = "close")
+    public ArticleSummarizer articleSummarizer(OllamaClient ollamaClient, FeedStore feedStore,
+                                             ArticleExtractor extractor, AiConfigStore config) throws SQLException {
+        return new ArticleSummarizer(ollamaClient, feedStore, extractor, config);
     }
 
     /**

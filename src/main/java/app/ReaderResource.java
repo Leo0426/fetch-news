@@ -2,14 +2,23 @@ package app;
 
 import app.ai.AiConfigStore;
 import app.ai.ArticleSummarizer;
-import app.core.FeedItem;
+import app.ai.SummaryProgress;
+import app.reader.ArticleNavigation;
+import app.reader.ArticlePageView;
 import app.reader.BriefingSection;
 import app.reader.ReaderGroup;
 import app.reader.ReaderItem;
+import app.reader.SearchPageView;
+import app.reader.SearchResultView;
+import app.reader.UnreadPageView;
 import app.store.BookmarkedItem;
 import app.store.FeedStore;
+import app.store.SearchHit;
+import app.store.StoredArticle;
 import app.store.StoredItem;
 import app.store.SummaryStatus;
+import app.store.UnreadPage;
+import java.sql.SQLException;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
@@ -17,6 +26,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.NoSuchElementException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.MediaType;
@@ -25,8 +35,10 @@ import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
+import org.springframework.web.util.UriComponentsBuilder;
 
 /**
  * Serves the reader page — a daily digest of all recently fetched items grouped by category.
@@ -128,78 +140,178 @@ public class ReaderResource {
         return templates.readerPage(groups, date, stored.size(), safeHours, aiEnabled, bookmarkedLinks, readLinks);
     }
 
-    /**
-     * Full-text search across cached item titles and AI summaries.
-     *
-     * @param q search query (minimum 2 characters)
-     */
-    @GetMapping(value = "/reader/search", produces = MediaType.TEXT_HTML_VALUE)
+    @GetMapping(value = "/reader/article", produces = MediaType.TEXT_HTML_VALUE)
     @ResponseBody
-    public String search(@RequestParam(defaultValue = "") String q) {
-        q = q.strip();
-        List<ReaderItem> items = List.of();
-        if (q.length() >= 2 && feedStore != null) {
-            try {
-                List<StoredItem> stored = feedStore.search(q, 100);
-                if (!stored.isEmpty()) {
-                    List<String> links = stored.stream()
-                            .filter(s -> s.link() != null).map(StoredItem::link).toList();
-                    java.util.Map<String, String> summaries = feedStore.loadSummaries(links);
-                    java.util.Map<String, SummaryStatus> summaryStatuses = feedStore.loadSummaryStatuses(links);
-                    items = stored.stream()
-                            .map(s -> new ReaderItem(
-                                    s.routePath(), s.title(), s.link(),
-                                    s.pubDate(), s.firstSeenAt(),
-                                    summaries.get(s.link()), summaryStatuses.get(s.link())))
-                            .toList();
-                }
-            } catch (Exception e) {
-                log.warn("search failed for '{}': {}", q, e.getMessage());
-            }
+    public ResponseEntity<String> article(
+            @RequestParam(defaultValue = "") String link,
+            @RequestParam(defaultValue = "") String returnTo) {
+        if (ArticleNavigation.originalUrl(link) == null) {
+            return articleError(400, "文章链接无效，请从阅读列表重新打开。", returnTo, null);
         }
-        return templates.searchPage(q, items);
+        if (feedStore == null) return articleError(503, "文章库暂时不可用，请稍后重试。", returnTo, link);
+        try {
+            StoredArticle article = feedStore.loadArticle(link);
+            if (article == null) return articleError(404, "这篇文章没有保存在本地，可以打开原文继续阅读。", returnTo, link);
+            return ResponseEntity.ok().header("Cache-Control", "no-store")
+                    .body(templates.articlePage(ArticlePageView.from(article, returnTo)));
+        } catch (SQLException e) {
+            log.warn("failed to load article: {}", e.toString());
+            return articleError(500, "已保存内容暂时加载失败，请稍后重试。", returnTo, link);
+        }
     }
 
-    /**
-     * Generates (or returns cached) an AI summary for a single article.
-     *
-     * <p>Returns the summary as plain text on success, or an error message on failure.
-     * The summary is persisted so subsequent calls return the cached result immediately.
-     */
-    @PostMapping(
-            value = "/reader/summarize",
-            consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE,
-            produces = "text/plain;charset=UTF-8")
+    private ResponseEntity<String> articleError(int status, String message, String returnTo, String link) {
+        return ResponseEntity.status(status).header("Cache-Control", "no-store")
+                .body(templates.articlePage(ArticlePageView.error(message, returnTo, link)));
+    }
+
+    @PutMapping(value = "/reader/article/bookmark",
+            consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE, produces = "text/plain;charset=UTF-8")
     @ResponseBody
-    public ResponseEntity<String> summarize(
-            @RequestParam String link,
-            @RequestParam(required = false, defaultValue = "") String title) {
-        if (link == null || link.isBlank()) {
-            return ResponseEntity.badRequest().body("缺少 link 参数");
+    public ResponseEntity<String> setArticleBookmark(@RequestParam String link, @RequestParam boolean bookmarked) {
+        if (ArticleNavigation.originalUrl(link) == null) return ResponseEntity.badRequest().body("文章链接无效。");
+        if (feedStore == null) return ResponseEntity.status(503).body("文章库暂时不可用。");
+        try {
+            StoredArticle article = feedStore.loadArticle(link);
+            if (article == null) return ResponseEntity.status(404).body("文章没有保存在本地。");
+            if (bookmarked) {
+                feedStore.saveBookmark(article.item().link(), article.item().title(), article.routePath());
+            } else {
+                feedStore.removeBookmark(article.item().link());
+            }
+            return ResponseEntity.ok(bookmarked ? "bookmarked" : "removed");
+        } catch (SQLException e) {
+            log.warn("failed to set article bookmark: {}", e.toString());
+            return ResponseEntity.status(500).body("收藏状态暂时无法确认，请重试。");
         }
-        if (aiConfigStore == null || !aiConfigStore.get().enabled()) {
-            return ResponseEntity.badRequest().body("AI 功能未启用，请先在后台配置 Ollama");
+    }
+
+    @GetMapping(value = "/reader/unread", produces = MediaType.TEXT_HTML_VALUE)
+    @ResponseBody
+    public ResponseEntity<String> unread(
+            @RequestParam(defaultValue = "") String source,
+            @RequestParam(defaultValue = "") String q,
+            @RequestParam(defaultValue = "false") boolean bookmarked,
+            @RequestParam(required = false) Long before) {
+        source = source.strip();
+        q = q.strip();
+        if ((before != null && before <= 0) || source.length() > 2048 || q.length() > 200) {
+            return unreadError(400, source, q, bookmarked,
+                    "筛选或翻页参数无效。关键词最多 200 个字符，请重新选择条件。");
+        }
+        if (feedStore == null) {
+            return unreadError(503, source, q, bookmarked, "文章库暂时不可用，请稍后重试。");
+        }
+        UnreadPageView page;
+        try {
+            UnreadPage stored = feedStore.loadUnreadPage(source, q, bookmarked, before, 50);
+            List<String> links = stored.items().stream().map(StoredItem::link).toList();
+            Map<String, String> summaries = feedStore.loadSummaries(links);
+            Map<String, SummaryStatus> statuses = feedStore.loadSummaryStatuses(links);
+            List<ReaderItem> items = stored.items().stream()
+                    .map(item -> new ReaderItem(item.routePath(), item.title(), item.link(),
+                            item.pubDate(), item.firstSeenAt(), summaries.get(item.link()), statuses.get(item.link())))
+                    .toList();
+            page = new UnreadPageView(items, stored.bookmarkedLinks(), stored.sources(), source, q,
+                    bookmarked, stored.totalCount(), stored.nextCursor() == null ? null
+                            : unreadUrl(source, q, bookmarked, stored.nextCursor()),
+                    unreadUrl(source, q, bookmarked, null), before != null,
+                    aiConfigStore != null && aiConfigStore.get().enabled(), null);
+        } catch (SQLException e) {
+            log.warn("failed to load unread inbox: {}", e.getMessage());
+            return unreadError(500, source, q, bookmarked, "待读内容暂时加载失败，请重试。");
+        }
+        return ResponseEntity.ok(templates.unreadPage(page));
+    }
+
+    private ResponseEntity<String> unreadError(int status, String source, String query,
+                                               boolean bookmarked, String message) {
+        UnreadPageView page = new UnreadPageView(List.of(), List.of(), List.of(), source, query,
+                bookmarked, 0, null, status == 400 ? "/reader/unread" : unreadUrl(source, query, bookmarked, null),
+                false, false, message);
+        return ResponseEntity.status(status).body(templates.unreadPage(page));
+    }
+
+    private static String unreadUrl(String source, String query, boolean bookmarked, Long before) {
+        UriComponentsBuilder url = UriComponentsBuilder.fromPath("/reader/unread");
+        if (!source.isEmpty()) url.queryParam("source", "{source}");
+        if (!query.isEmpty()) url.queryParam("q", "{query}");
+        if (bookmarked) url.queryParam("bookmarked", true);
+        if (before != null) url.queryParam("before", before);
+        return url.encode().buildAndExpand(Map.of("source", source, "query", query)).toUriString();
+    }
+
+    @GetMapping(value = "/reader/search", produces = MediaType.TEXT_HTML_VALUE)
+    @ResponseBody
+    public ResponseEntity<String> search(@RequestParam(defaultValue = "") String q) {
+        String query = q.replaceAll("(?U)^\\s+|\\s+$", "");
+        if (query.isEmpty()) {
+            return ResponseEntity.ok(templates.searchPage(new SearchPageView(query, List.of(), false, null)));
+        }
+        int length = query.codePointCount(0, query.length());
+        if (length < 2 || length > 200) {
+            return searchError(400, query, "请输入 2–200 个字符，多个关键词用空格分隔。");
+        }
+        if (feedStore == null) {
+            return searchError(503, query, "文章库暂时不可用，请稍后重试。");
         }
         try {
-            // Return cached summary when available
-            String cached = feedStore.loadSummary(link);
-            if (cached != null && !cached.isBlank()) {
-                return ResponseEntity.ok(cached);
-            }
-            // Generate and persist a new summary
-            FeedItem item = new FeedItem(
-                    title.isBlank() ? null : title, link, null, null, null, List.of());
-            articleSummarizer.summarize(List.of(item));
-
-            String result = feedStore.loadSummary(link);
-            if (result == null || result.isBlank()) {
-                return ResponseEntity.status(500).body("摘要生成失败，请确认 Ollama 服务正常");
-            }
-            return ResponseEntity.ok(result);
-        } catch (Exception e) {
-            log.warn("manual summarize failed for {}: {}", link, e.getMessage());
-            return ResponseEntity.status(500).body("生成失败：" + e.getMessage());
+            List<SearchHit> hits = feedStore.searchHits(query, 101);
+            List<SearchResultView> items = hits.stream().limit(100).map(hit -> {
+                StoredItem item = hit.item();
+                ReaderItem article = new ReaderItem(item.routePath(), item.title(), item.link(),
+                        item.pubDate(), item.firstSeenAt(), hit.summary(), null);
+                return SearchResultView.from(article, hit.description(), query);
+            }).toList();
+            return ResponseEntity.ok(templates.searchPage(new SearchPageView(query, items, hits.size() > 100, null)));
+        } catch (SQLException e) {
+            log.warn("history search failed: {}", e.getMessage());
+            return searchError(500, query, "搜索暂时失败，请稍后重试；已保存的文章仍保留在文章库中。");
         }
+    }
+
+    private ResponseEntity<String> searchError(int status, String query, String message) {
+        return ResponseEntity.status(status)
+                .body(templates.searchPage(new SearchPageView(query, List.of(), false, message)));
+    }
+
+    @PostMapping(value = "/reader/summarize",
+            consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE,
+            produces = MediaType.APPLICATION_JSON_VALUE)
+    @ResponseBody
+    public ResponseEntity<SummaryProgress> summarize(
+            @RequestParam String link,
+            @RequestParam(required = false, defaultValue = "") String title) {
+        if (aiConfigStore == null || !aiConfigStore.get().enabled()) {
+            return summaryError(400, "AI 功能未启用，请先在后台配置 Ollama。");
+        }
+        return summaryResponse(link, true);
+    }
+
+    @GetMapping(value = "/reader/summary-status", produces = MediaType.APPLICATION_JSON_VALUE)
+    @ResponseBody
+    public ResponseEntity<SummaryProgress> summaryStatus(@RequestParam String link) {
+        return summaryResponse(link, false);
+    }
+
+    private ResponseEntity<SummaryProgress> summaryResponse(String link, boolean submit) {
+        if (link == null || link.isBlank()) return summaryError(400, "缺少文章链接。");
+        if (feedStore == null || articleSummarizer == null) return summaryError(503, "文章库暂时不可用。");
+        try {
+            SummaryProgress progress = submit ? articleSummarizer.request(link) : articleSummarizer.progress(link);
+            return ResponseEntity.status(submit && progress.pending() ? 202 : 200).body(progress);
+        } catch (NoSuchElementException e) {
+            return summaryError(404, "文章尚未保存，无法生成摘要。");
+        } catch (IllegalStateException e) {
+            return summaryError(503, "摘要服务暂时不可用，请稍后重试。");
+        } catch (SQLException e) {
+            log.warn("summary request failed: {}", e.toString());
+            return summaryError(500, "摘要状态暂时不可用，请稍后重试。");
+        }
+    }
+
+    private ResponseEntity<SummaryProgress> summaryError(int status, String message) {
+        return ResponseEntity.status(status).body(new SummaryProgress("error", null, message));
     }
 
     /**
@@ -260,7 +372,7 @@ public class ReaderResource {
             return ResponseEntity.ok("");
         } catch (Exception e) {
             log.warn("bookmark remove failed for {}: {}", link, e.getMessage());
-            return ResponseEntity.ok("");
+            return ResponseEntity.status(500).body("取消收藏失败，请稍后重试");
         }
     }
 

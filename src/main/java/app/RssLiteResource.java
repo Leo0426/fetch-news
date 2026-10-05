@@ -13,11 +13,13 @@ import app.core.RouteMatch;
 import app.core.RssRenderer;
 import app.store.FeedStore;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import java.util.List;
 import java.net.URI;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
-import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
@@ -49,7 +51,7 @@ public class RssLiteResource {
     public RssLiteResource(AppRuntime runtime, ObjectMapper objectMapper, FeedStore feedStore) {
         this.runtime = runtime;
         this.cacheService = runtime.cacheService();
-        this.feedFetcher = new FeedFetcher(feedStore);
+        this.feedFetcher = new FeedFetcher(feedStore, runtime.fetchCoordinator());
         this.feedStore = feedStore;
         RssRenderer rss = new RssRenderer();
         JsonRenderer json = new JsonRenderer(objectMapper);
@@ -81,13 +83,14 @@ public class RssLiteResource {
                     .header(HttpHeaders.LOCATION, "/index")
                     .build();
         }
-        Map<String, String> query = new LinkedHashMap<>();
-        if (format != null) query.put("format", format);
-        if (limit != null) query.put("limit", limit);
+        String outputFormat = format == null || format.isBlank() ? "rss" : format;
+        int itemLimit = 0;
         log.info("[req] {} format={} limit={}", path, format == null ? "rss" : format, limit == null ? "-" : limit);
         try {
-            String outputFormat = format == null || format.isBlank() ? "rss" : format;
-            int itemLimit = parseLimit(limit);
+            if (!renderers.containsKey(outputFormat)) {
+                throw new RouteException(RouteError.INVALID_PARAMETER, "unsupported format: " + outputFormat);
+            }
+            itemLimit = parseLimit(limit);
             RouteConfig config = runtime.routeConfigStore().get(path);
             RouteMatch match = runtime.resolveRoute(path, config.sourcePath());
             if (!config.enabled()) {
@@ -96,23 +99,22 @@ public class RssLiteResource {
             RouteContext context = new RouteContext(
                     path,
                     match.context().pathParams(),
-                    query,
+                    Map.of(),
                     Duration.ofSeconds(config.detailCacheTtlSeconds()),
                     config.feedUrl());
             String cacheKey = path
-                    + "?source=" + config.sourcePath()
-                    + "&format=" + outputFormat
-                    + "&limit=" + itemLimit
-                    + "&params=" + context.pathParams();
+                    + "?source=" + URLEncoder.encode(config.sourcePath(), StandardCharsets.UTF_8)
+                    + "&feedUrl=" + URLEncoder.encode(
+                            config.feedUrl() == null ? "" : config.feedUrl(), StandardCharsets.UTF_8)
+                    + "&routeTtl=" + config.routeCacheTtlSeconds()
+                    + "&detailTtl=" + config.detailCacheTtlSeconds();
             boolean[] cacheHit = {true};
             Feed feed = cacheService.getRouteFeed(
                     cacheKey,
                     Duration.ofSeconds(config.routeCacheTtlSeconds()),
-                    () -> { cacheHit[0] = false; return feedFetcher.fetch(match, context, path, itemLimit); });
+                    () -> { cacheHit[0] = false; return feedFetcher.fetch(match, context, path); });
             log.info("[req] {} → {} ({} items)", path, cacheHit[0] ? "cache" : "fetched", feed.items().size());
-            if (feed.items().isEmpty()) {
-                throw new RouteException(RouteError.EMPTY_FEED);
-            }
+            feed = applyLimit(feed, itemLimit);
             if (feedStore != null) {
                 try {
                     List<FeedItem> merged = feedStore.mergeExtracts(feed.items());
@@ -128,10 +130,10 @@ public class RssLiteResource {
             log.warn("[req] {} → error {} {}", path, e.error(), e.getMessage());
             if (feedStore != null && isRecoverableUpstreamError(e)) {
                 try {
-                    java.util.Optional<Feed> offline = feedStore.offlineFeed(path);
+                    Optional<Feed> offline = feedStore.offlineFeed(path);
                     if (offline.isPresent()) {
                         log.info("[req] {} → offline fallback", path);
-                        return render(offline.get(), format == null ? "rss" : format, 60);
+                        return render(applyLimit(offline.get(), itemLimit), outputFormat, 60);
                     }
                 } catch (Exception dbEx) {
                     log.warn("offline fallback failed for {}: {}", path, dbEx.getMessage());
@@ -145,6 +147,11 @@ public class RssLiteResource {
     }
 
     // ── private helpers ───────────────────────────────────────────────────────
+
+    private static Feed applyLimit(Feed feed, int limit) {
+        if (limit <= 0 || feed.items().size() <= limit) return feed;
+        return new Feed(feed.title(), feed.link(), feed.description(), feed.items().subList(0, limit));
+    }
 
     private ResponseEntity<?> render(Feed feed, String outputFormat, int cacheTtlSeconds) {
         FeedRenderer renderer = renderers.get(outputFormat);

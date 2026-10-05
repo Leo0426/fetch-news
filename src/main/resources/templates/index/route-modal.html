@@ -1,8 +1,8 @@
 <th:block th:fragment="modal">
   <div class="modal-head">
-    <span class="modal-ttl"
-          th:text="${isNew} ? '新建挂载' : (${selected.alias()} != null ? ${selected.alias()} : ${selected.path})">路由设置</span>
-    <button class="modal-x" type="button" @click="modal = false">✕</button>
+    <h2 class="modal-ttl" id="modal-title"
+          th:text="${isNew} ? '新建挂载' : (${selected.alias()} != null ? ${selected.alias()} : ${selected.path})">路由设置</h2>
+    <button class="modal-x" type="button" aria-label="关闭设置" @click="modal = false">✕</button>
   </div>
 
   <div class="modal-body">
@@ -15,26 +15,30 @@
     <form hx-post="/index/routes"
           hx-target="#modal-inner"
           hx-swap="innerHTML"
-          x-data="{ srcPath: [[${isNew} ? '' : ${selected.sourcePath}]] }">
+          th:attr="data-source-path=${isNew ? (#lists.isEmpty(sourceRoutes) ? '' : sourceRoutes[0].path) : selected.sourcePath}"
+          x-data="{ srcPath: $el.dataset.sourcePath || '' }">
       <input type="hidden" name="isNew" th:value="${isNew}">
 
       <div class="field-row">
         <div class="field">
-          <span>挂载路径</span>
-          <input name="path" type="text"
+          <label class="field-label" for="modal-path">挂载路径</label>
+          <input id="modal-path" name="path" type="text"
                  autocomplete="off"
                  th:readonly="${!isNew}"
                  th:value="${isNew} ? '' : ${selected.path}"
                  th:placeholder="${isNew} ? '/my-hn' : ''">
         </div>
         <div class="field">
-          <span>来源路由</span>
-          <select name="sourcePath"
+          <label class="field-label" for="modal-sourcePath">来源路由</label>
+          <select id="modal-sourcePath" name="sourcePath"
                   th:disabled="${!isNew and selected.path == selected.sourcePath}"
                   x-model="srcPath">
+            <option th:if="${!isNew}"
+                    th:value="${selected.sourcePath}"
+                    th:text="${selected.sourcePath}" selected></option>
             <option th:each="r : ${sourceRoutes}"
+                    th:if="${isNew or r.path != selected.sourcePath}"
                     th:value="${r.path}"
-                    th:selected="${!isNew and r.path == selected.sourcePath}"
                     th:text="${r.path}"></option>
           </select>
           <input th:if="${!isNew and selected.path == selected.sourcePath}"
@@ -45,8 +49,8 @@
 
       <!-- feedUrl: shown when source is /rss -->
       <div class="field" x-show="srcPath === '/rss'" x-cloak>
-        <span>Feed URL</span>
-        <input name="feedUrl" type="url" autocomplete="off"
+        <label class="field-label" for="modal-feedUrl">Feed URL</label>
+        <input id="modal-feedUrl" name="feedUrl" type="url" autocomplete="off"
                placeholder="https://example.com/feed.xml"
                th:value="${!isNew and selected.feedUrl() != null} ? ${selected.feedUrl()} : ''">
         <span class="field-hint">RSS 2.0 或 Atom 订阅地址</span>
@@ -54,21 +58,21 @@
 
       <div class="field-row">
         <div class="field">
-          <span>路由缓存（秒）</span>
-          <input name="routeCacheTtlSeconds" type="number" min="1" step="1"
+          <label class="field-label" for="modal-routeCacheTtlSeconds">路由缓存（秒）</label>
+          <input id="modal-routeCacheTtlSeconds" name="routeCacheTtlSeconds" type="number" min="1" step="1"
                  th:value="${isNew} ? 300 : ${selected.routeCacheTtlSeconds}">
         </div>
         <div class="field">
-          <span>详情缓存（秒）</span>
-          <input name="detailCacheTtlSeconds" type="number" min="1" step="1"
+          <label class="field-label" for="modal-detailCacheTtlSeconds">详情缓存（秒）</label>
+          <input id="modal-detailCacheTtlSeconds" name="detailCacheTtlSeconds" type="number" min="1" step="1"
                  th:value="${isNew} ? 1800 : ${selected.detailCacheTtlSeconds}">
         </div>
       </div>
 
       <div class="field-row">
         <div class="field">
-          <span>定时间隔（分钟）</span>
-          <input name="scheduleMinutes" type="number" min="0" step="1"
+          <label class="field-label" for="modal-scheduleMinutes">定时间隔（分钟）</label>
+          <input id="modal-scheduleMinutes" name="scheduleMinutes" type="number" min="0" step="1"
                  placeholder="0"
                  th:value="${isNew} ? 0 : ${selected.scheduleMinutes}"
                  th:readonly="${!isNew and !selected.isSchedulable()}">
@@ -80,8 +84,8 @@
                 th:class="${(!isNew and selected.scheduleMinutes > 0 and selected.scheduleCron == null)} ? 'field-hint ok' : 'field-hint'"></span>
         </div>
         <div class="field">
-          <span>Cron 表达式（优先）</span>
-          <input name="scheduleCron" type="text"
+          <label class="field-label" for="modal-scheduleCron">Cron 表达式（优先）</label>
+          <input id="modal-scheduleCron" name="scheduleCron" type="text"
                  autocomplete="off"
                  placeholder="0 0 8 * * *"
                  th:value="${isNew or selected.scheduleCron == null} ? '' : ${selected.scheduleCron}"
@@ -95,8 +99,8 @@
       </div>
 
       <div class="field">
-        <span>别名 <span class="field-hint" style="display:inline;">(可选，显示在 UI 中替代路径)</span></span>
-        <input name="alias" type="text" autocomplete="off"
+        <label class="field-label" for="modal-alias">别名 <span class="field-hint" style="display:inline;">(可选，显示在 UI 中替代路径)</span></label>
+        <input id="modal-alias" name="alias" type="text" autocomplete="off"
                placeholder="如：我的哔哩哔哩动态"
                th:value="${isNew or selected.alias() == null} ? '' : ${selected.alias()}">
       </div>
@@ -112,7 +116,7 @@
                 th:text="${isNew} ? '添加挂载' : '保存'">保存</button>
         <button class="btn" type="button" @click="modal = false">取消</button>
         <span th:if="${message != null}" class="form-msg ok" th:text="${message}">已保存</span>
-        <span th:if="${error != null}"   class="form-msg err" th:text="${error}">保存失败</span>
+        <span th:if="${error != null}"   class="form-msg err" role="alert" tabindex="-1" th:text="${error}">保存失败</span>
       </div>
 
     </form>
@@ -134,7 +138,7 @@
         <input type="hidden" name="uid" th:value="${cookieUid}">
 
         <div class="field" style="margin-bottom:10px;">
-          <textarea name="cookie" rows="3" autocomplete="off"
+          <textarea name="cookie" aria-label="Bilibili Cookie" rows="3" autocomplete="off"
                     style="font-family:monospace;font-size:11px;resize:vertical;"
                     placeholder="完整 Cookie 字符串（动态路由）或 SESSDATA=xxx（视频/专栏路由）"
                     th:text="${cookieStored}"></textarea>

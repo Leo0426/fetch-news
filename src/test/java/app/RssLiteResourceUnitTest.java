@@ -104,7 +104,6 @@ class RssLiteResourceUnitTest {
                     runtime,
                     feedStore,
                     null,
-                    null,
                     new AiConfigStore(tempDir.resolve("ai-config.json"), objectMapper),
                     null);
 

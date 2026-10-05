@@ -6,31 +6,45 @@
   <title>收藏夹</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/admin.css">
+  <link rel="stylesheet" href="/article.css">
   <script src="/htmx.min.js"></script>
+  <script defer src="/ui.js"></script>
+  <script defer src="/article.js"></script>
+  <script defer src="/reader.js"></script>
 </head>
-<body>
+<body class="reader-page">
+<a class="skip-link" href="#bookmark-content">跳到收藏文章</a>
 
-<div class="rd-progress-bar" id="rd-progress-bar"></div>
+<div class="rd-progress-bar" id="rd-progress-bar" aria-hidden="true"></div>
 
-<div class="bm-wrap">
+<main class="bm-wrap">
+  <nav class="reader-nav" aria-label="阅读导航">
+    <a href="/reader">速览</a>
+    <a href="/reader/unread">待读</a>
+    <a href="/reader/briefing">每日简报</a>
+    <a href="/reader/bookmarks" aria-current="page">收藏</a>
+    <a href="/reader/search">搜索</a>
+    <a href="/index" class="reader-nav-admin">管理 ↗</a>
+  </nav>
 
-  <div class="bm-head">
+
+  <header class="bm-head">
     <div>
-      <div class="bm-title">★ 收藏夹</div>
-      <div class="bm-count" th:text="${#lists.size(items)} + ' 条收藏'">0 条收藏</div>
+      <div class="page-eyebrow">留给下一次阅读</div>
+      <h1 class="bm-title">收藏夹</h1>
+      <div id="bookmark-count" class="bm-count" role="status" aria-live="polite" th:text="${#lists.size(items)} + ' 条收藏'">0 条收藏</div>
     </div>
-    <div class="bm-nav">
-      <a href="/reader" class="bm-link">← 返回速览</a>
-      <a href="/index" class="bm-link">路由配置 →</a>
-    </div>
+    <p class="reader-header-note">保存值得回看的内容。</p>
+  </header>
+
+  <section id="bookmark-content" tabindex="-1" aria-label="已收藏文章">
+  <div id="bookmark-empty" th:hidden="${not #lists.isEmpty(items)}" class="bm-empty">
+    <strong>值得留下的文章，会在这里等你</strong>
+    <p>在速览中点击书签图标，即可随时回来继续阅读。</p>
+    <a href="/reader" class="reader-empty-action">去速览发现内容 →</a>
   </div>
 
-  <div th:if="${#lists.isEmpty(items)}" class="bm-empty">
-    还没有收藏任何文章<br>
-    <span style="font-size:12px;">在速览页点击文章卡片右下角的书签图标即可收藏</span>
-  </div>
-
-  <div th:if="${not #lists.isEmpty(items)}" class="bm-grid">
+  <div class="bm-grid" data-bookmark-grid th:hidden="${#lists.isEmpty(items)}">
     <div th:each="item, is : ${items}" class="bm-card reveal">
 
       <a class="bm-card-title"
@@ -41,14 +55,17 @@
       <div class="bm-card-meta">
         <span class="bm-src" th:text="${item.sourceLabel()}">来源</span>
         <span class="bm-date" th:text="${item.formattedAge()}">收藏时间</span>
+        <a class="reader-article-link" th:href="${'/reader/article?link=' + #uris.escapeQueryParam(item.link())}" data-article-link>站内阅读</a>
         <form style="display:contents">
           <input type="hidden" name="link" th:value="${item.link()}">
           <button type="button" class="bm-remove"
                   hx-delete="/reader/bookmark"
                   hx-target="closest .bm-card"
-                  hx-swap="outerHTML swap:0.3s"
+                  hx-swap="outerHTML"
+                  hx-disabled-elt="this"
                   hx-include="closest form"
-                  hx-confirm="确认取消收藏？">
+                  hx-confirm="取消收藏这篇文章？"
+                  th:attr="aria-label='取消收藏：' + ${item.title()}">
             取消收藏
           </button>
         </form>
@@ -57,40 +74,7 @@
     </div>
   </div>
 
-</div>
-
-<script>
-  /* Progress bar */
-  (function () {
-    var bar = document.getElementById('rd-progress-bar');
-    if (!bar) return;
-    function tick() {
-      var total = document.documentElement.scrollHeight - window.innerHeight;
-      var pct   = total > 0 ? (window.scrollY / total) * 100 : 0;
-      bar.style.width = pct.toFixed(2) + '%';
-      if (pct >= 99.5) bar.classList.add('done');
-      else             bar.classList.remove('done');
-    }
-    window.addEventListener('scroll', tick, { passive: true });
-    tick();
-  })();
-
-  /* Scroll reveal with stagger */
-  (function () {
-    document.querySelectorAll('.bm-grid .reveal').forEach(function (card, i) {
-      card.style.transitionDelay = Math.min(i, 8) * 50 + 'ms';
-    });
-    var io = new IntersectionObserver(function (entries) {
-      entries.forEach(function (entry) {
-        if (entry.isIntersecting) {
-          entry.target.classList.add('in');
-          io.unobserve(entry.target);
-        }
-      });
-    }, { threshold: 0.06, rootMargin: '0px 0px -24px 0px' });
-    document.querySelectorAll('.reveal').forEach(function (el) { io.observe(el); });
-  })();
-</script>
-
+  </section>
+</main>
 </body>
 </html>

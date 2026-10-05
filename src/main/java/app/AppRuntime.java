@@ -10,10 +10,10 @@ import app.core.RouteException;
 import app.core.RouteMatch;
 import app.core.RouteRegistry;
 import app.routes.ArxivRoute;
-import app.routes.GenericRssRoute;
 import app.routes.CctvNewsRoute;
 import app.routes.CnblogsRoute;
 import app.routes.DiygodRoute;
+import app.routes.GenericRssRoute;
 import app.routes.HackerNewsRoute;
 import app.routes.MritdRoute;
 import app.routes.MsDevOpsRoute;
@@ -34,6 +34,7 @@ import app.routes.github.GithubReleaseRoute;
 import app.routes.huanqiu.HuanqiuRoute;
 import app.routes.huanqiu.HuanqiuTechRoute;
 import app.routes.twitter.TwitterUserRoute;
+import app.store.FeedStore;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.nio.file.Path;
@@ -47,7 +48,9 @@ import org.springframework.stereotype.Component;
  */
 @Component
 public class AppRuntime {
+    private final FetchClient defaultFetchClient = new DefaultFetchClient();
     private final CacheService cacheService;
+    private final FeedFetchCoordinator fetchCoordinator = new FeedFetchCoordinator();
     private final RouteRegistry routeRegistry;
     private final RouteConfigStore routeConfigStore;
     private final CredentialConfigStore credentialConfigStore;
@@ -58,11 +61,10 @@ public class AppRuntime {
      * @param objectMapper JSON mapper shared with configuration persistence
      */
     @Autowired
-    public AppRuntime(ObjectMapper objectMapper) {
+    public AppRuntime(ObjectMapper objectMapper, FeedStore feedStore) {
         this.cacheService = new CacheService();
         this.credentialConfigStore = new CredentialConfigStore(
                 Path.of("data/credential-config.json"), objectMapper);
-        FetchClient defaultFetchClient = new DefaultFetchClient();
         this.routeRegistry = new RouteRegistry(List.of(
                 // ── tech blogs ────────────────────────────────────────────────
                 new Route("/techcrunch",
@@ -193,11 +195,15 @@ public class AppRuntime {
                         "调用 dynamic_svr/dynamic_new?type=64；:uid 为已登录用户 UID；需 BILIBILI_COOKIE_{uid}(SESSDATA 即可)；返回封面+摘要"),
                 // ── generic ───────────────────────────────────────────────────
                 new Route("/rss",
-                        new GenericRssRoute(defaultFetchClient),
+                        new GenericRssRoute(defaultFetchClient, feedStore),
                         "Generic RSS 2.0 / Atom feed — set feedUrl in route config to point at any feed",
                         "通用", "通用 RSS",
                         "代理路由配置中 feedUrl 指定的任意外部地址，自动识别 RSS 2.0 / Atom 格式并标准化")));
         this.routeConfigStore = new RouteConfigStore(configPath(), objectMapper);
+    }
+
+    public AppRuntime(ObjectMapper objectMapper) {
+        this(objectMapper, null);
     }
 
     /**
@@ -223,6 +229,14 @@ public class AppRuntime {
      */
     public CacheService cacheService() {
         return cacheService;
+    }
+
+    public FetchClient fetchClient() {
+        return defaultFetchClient;
+    }
+
+    public FeedFetchCoordinator fetchCoordinator() {
+        return fetchCoordinator;
     }
 
     /**

@@ -1,0 +1,35 @@
+.search-page .rd-wrap { max-width: 1080px; }
+.search-head { margin: 28px 0 24px; }
+.search-head .rd-date { max-width: 640px; line-height: 1.8; }
+.search-toolbar .reader-toolbar-hint { margin-bottom: 0; line-height: 1.8; }
+.search-toolbar .rd-search-input { min-width: 0; }
+.search-result-meta { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 14px; }
+.search-query { max-width: 100%; overflow-wrap: anywhere; }
+.search-results { display: grid; gap: 12px; }
+.search-results .search-result { min-width: 0; min-height: 0; padding: 24px 26px; }
+.search-result-heading { font-size: inherit; }
+.search-result .rd-card-title { margin-bottom: 0; font-size: 18px; line-height: 1.7; }
+.search-result mark { padding: 0; border-radius: 2px; color: inherit; background: #f5e4b4; box-shadow: 0 1px 0 #dcc181; }
+.search-excerpt { margin-top: 13px; }
+.search-excerpt-label { display: block; margin-bottom: 5px; color: var(--ink-faint); font-size: 10px; letter-spacing: 0.05em; }
+.search-excerpt-text { color: var(--ink-soft); font-size: 14px; line-height: 1.9; overflow-wrap: anywhere; }
+.search-result .rd-card-meta { margin-top: 2px; }
+.search-original-hint { margin-left: auto; color: var(--ink-faint); font-size: 11px; }
+.search-limit-note { margin-top: 22px; padding: 15px 18px; border: 1px solid var(--line); border-radius: 8px; color: var(--ink-soft); background: var(--paper-deep); font-size: 13px; line-height: 1.8; }
+.search-empty-symbol { display: block; margin-bottom: 8px; color: var(--accent); font-size: 38px; line-height: 1; }
+.search-empty-note { color: var(--ink-faint); font-size: 12px; }
+.search-error { border-color: var(--warn); }
+.search-error p { overflow-wrap: anywhere; }
+.search-page .reader-empty-action:hover { color: var(--accent-dk); border-color: var(--accent); }
+@media (max-width: 620px) {
+  .search-head { margin: 20px 0; padding-bottom: 18px; }
+  .search-head .page-eyebrow { display: none; }
+  .search-head .rd-date { margin-top: 8px; font-size: 12px; }
+  .search-results .search-result { padding: 18px; }
+  .search-result .rd-card-title { font-size: 17px; }
+  .search-excerpt-text { font-size: 13px; }
+  .search-result .rd-card-meta { gap: 6px 8px; }
+  .search-original-hint { display: none; }
+  .search-page .reader-empty-action { min-height: 44px; }
+  .search-welcome strong { display: block; font-size: 17px; }
+}

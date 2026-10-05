@@ -2,10 +2,13 @@ package app;
 
 import app.core.Feed;
 import app.core.FeedItem;
+import app.core.FetchDeferredException;
 import app.core.RouteContext;
+import app.core.RouteError;
 import app.core.RouteException;
 import app.core.RouteMatch;
 import app.store.FeedStore;
+import java.sql.SQLException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -23,6 +26,7 @@ public class FeedFetcher {
     private static final Logger log = LoggerFactory.getLogger(FeedFetcher.class);
 
     private final FeedStore feedStore;
+    private final FeedFetchCoordinator coordinator;
 
     /**
      * Creates a fetcher backed by the supplied store.
@@ -31,7 +35,12 @@ public class FeedFetcher {
      * @param feedStore store used for item persistence and fetch logging, or {@code null}
      */
     public FeedFetcher(FeedStore feedStore) {
+        this(feedStore, new FeedFetchCoordinator());
+    }
+
+    public FeedFetcher(FeedStore feedStore, FeedFetchCoordinator coordinator) {
         this.feedStore = feedStore;
+        this.coordinator = coordinator;
     }
 
     /**
@@ -40,48 +49,64 @@ public class FeedFetcher {
      * @param match resolved handler and context carrying path parameters
      * @param context fully built request context (includes query params and TTL)
      * @param routePath canonical route path used as the persistence key
-     * @param limit maximum number of items to return and persist; 0 means unlimited
-     * @return fetched and optionally limited feed
+     * @return complete fetched feed
      * @throws Exception when the handler fails
      */
-    public Feed fetch(RouteMatch match, RouteContext context, String routePath, int limit)
+    public Feed fetch(RouteMatch match, RouteContext context, String routePath)
             throws Exception {
-        if (feedStore == null) {
-            return applyLimit(match.handler().handle(context), limit);
-        }
+        return coordinator.fetch(match, context, () -> fetchAndPersist(match, context, routePath));
+    }
+
+    private Feed fetchAndPersist(RouteMatch match, RouteContext context, String routePath) throws Exception {
         Instant start = Instant.now();
         try {
-            Feed feed = applyLimit(match.handler().handle(context), limit);
+            Feed feed = match.handler().handle(context);
+            if (feed.items().isEmpty()) {
+                throw new RouteException(RouteError.EMPTY_FEED);
+            }
             long ms = Duration.between(start, Instant.now()).toMillis();
             persist(routePath, feed.items(), ms);
             return feed;
         } catch (Exception e) {
             long ms = Duration.between(start, Instant.now()).toMillis();
-            logError(routePath, ms, e);
+            if (!(e instanceof FetchDeferredException)) logError(routePath, ms, e);
             throw e;
         }
     }
 
     private void persist(String path, List<FeedItem> items, long ms) {
+        if (feedStore == null) return;
+        int newCount;
         try {
-            int newCount = feedStore.saveItems(path, items);
-            feedStore.logFetch(path, Instant.now(), ms, items.size(), newCount, null);
+            newCount = feedStore.saveItems(path, items);
         } catch (Exception e) {
             log.warn("failed to persist feed items for {}: {}", path, e.getMessage());
+            logError(path, ms, persistenceError(e));
+            return;
+        }
+        try {
+            feedStore.logFetch(path, Instant.now(), ms, items.size(), newCount, null);
+        } catch (Exception e) {
+            log.warn("failed to log successful fetch for {}: {}", path, e.getMessage());
         }
     }
 
     private void logError(String path, long ms, Exception e) {
+        String detail = e instanceof SQLException ? persistenceError(e)
+                : e instanceof RouteException re ? re.getMessage() : e.getClass().getSimpleName();
+        logError(path, ms, detail);
+    }
+
+    private void logError(String path, long ms, String detail) {
+        if (feedStore == null) return;
         try {
-            String detail = e instanceof RouteException re ? re.getMessage() : e.getClass().getSimpleName();
             feedStore.logFetch(path, Instant.now(), ms, 0, 0, detail);
         } catch (Exception dbEx) {
             log.warn("failed to log fetch error for {}: {}", path, dbEx.getMessage());
         }
     }
 
-    private static Feed applyLimit(Feed feed, int limit) {
-        if (limit <= 0 || feed.items().size() <= limit) return feed;
-        return new Feed(feed.title(), feed.link(), feed.description(), feed.items().subList(0, limit));
+    private static String persistenceError(Exception failure) {
+        return "persistence failed: " + failure.getClass().getSimpleName() + ": " + failure.getMessage();
     }
 }

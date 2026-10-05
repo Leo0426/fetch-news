@@ -6,34 +6,48 @@
   <title th:text="'每日简报 · ' + ${date}">每日简报</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/admin.css">
+  <link rel="stylesheet" href="/article.css">
+  <script defer src="/ui.js"></script>
+  <script defer src="/article.js"></script>
 </head>
-<body>
+<body class="reader-page">
+<a class="skip-link" href="#briefing-content">跳到每日简报</a>
 
-<div class="rd-progress-bar" id="rd-progress-bar"></div>
+<div class="rd-progress-bar" id="rd-progress-bar" aria-hidden="true"></div>
 
-<div class="bf-wrap">
+<main class="bf-wrap">
+  <nav class="reader-nav" aria-label="阅读导航">
+    <a href="/reader">速览</a>
+    <a href="/reader/unread">待读</a>
+    <a href="/reader/briefing" aria-current="page">每日简报</a>
+    <a href="/reader/bookmarks">收藏</a>
+    <a href="/reader/search">搜索</a>
+    <a href="/index" class="reader-nav-admin">管理 ↗</a>
+  </nav>
+
 
   <!-- ── Header ──────────────────────────────────────────────── -->
-  <div class="bf-header">
+  <header class="bf-header">
     <div>
-      <div class="bf-title">每日简报</div>
+      <div class="page-eyebrow">一天的信息切片</div>
+      <h1 class="bf-title">每日简报</h1>
       <div class="bf-date" th:text="${date}">2026-06-26</div>
     </div>
 
     <!-- Date navigation -->
-    <div class="bf-date-nav">
-      <a th:href="'/reader/briefing?date=' + ${prevDate}" class="bf-nav-btn" title="前一天">‹</a>
+    <div class="bf-date-nav" aria-label="简报日期">
+      <a th:href="'/reader/briefing?date=' + ${prevDate}" class="bf-nav-btn" aria-label="前一天" title="前一天">‹</a>
       <label class="bf-date-label">
         <input type="date" class="bf-date-picker"
-               th:value="${dateIso}"
-               onchange="location.href='/reader/briefing?date='+this.value">
+               th:value="${dateIso}" th:max="${todayIso}" aria-label="选择简报日期"
+               onchange="if (this.value &amp;&amp; this.validity.valid) location.href='/reader/briefing?date='+encodeURIComponent(this.value)">
         <span class="bf-date-display" th:text="${dateIso}">2026-06-26</span>
       </label>
-      <a th:href="'/reader/briefing?date=' + ${nextDate}"
+      <a th:href="${dateIso &lt; todayIso} ? '/reader/briefing?date=' + ${nextDate} : null"
          class="bf-nav-btn"
-         th:classappend="${isToday} ? ' bf-nav-btn--disabled'"
-         th:attr="aria-disabled=${isToday}"
-         title="后一天">›</a>
+         th:classappend="${dateIso >= todayIso} ? ' bf-nav-btn--disabled'"
+         th:attr="aria-disabled=${dateIso >= todayIso},tabindex=${dateIso >= todayIso ? '-1' : null}"
+         aria-label="后一天" title="后一天">›</a>
       <a th:if="${!isToday}" href="/reader/briefing" class="bf-nav-today">今天</a>
     </div>
 
@@ -42,18 +56,15 @@
         <span class="bf-total" th:text="${totalCount}">0</span>
         <span class="bf-total-label">条内容</span>
       </div>
-      <div class="bf-nav-links">
-        <a href="/reader" class="bf-link">← 速览</a>
-        <a href="/index"  class="bf-link">控制台 →</a>
-      </div>
     </div>
-  </div>
+  </header>
+  <section id="briefing-content" tabindex="-1" aria-label="当日内容">
 
   <!-- ── Empty state ─────────────────────────────────────────── -->
   <div th:if="${sections.isEmpty()}" class="bf-empty">
-    <div style="font-size:32px;margin-bottom:12px;">📭</div>
-    当日暂无抓取内容<br>
-    <span style="font-size:12px;">可切换日期查看历史简报</span>
+    <strong>这一天还没有内容</strong>
+    <p>切换日期回看历史简报，或到速览查看最近的更新。</p>
+    <a href="/reader" class="reader-empty-action">查看最近内容 →</a>
   </div>
 
   <!-- ── Sections grid ───────────────────────────────────────── -->
@@ -61,7 +72,7 @@
     <div th:each="sec, si : ${sections}" class="bf-section reveal">
 
       <div class="bf-section-head">
-        <span class="bf-cat-name" th:text="${sec.category()}">分类</span>
+        <h2 class="bf-cat-name" th:text="${sec.category()}">分类</h2>
         <span class="bf-cat-count"
               th:text="${sec.totalCount() > #lists.size(sec.items())} ?
                         ${#lists.size(sec.items())} + ' / ' + ${sec.totalCount()} + ' 条' :
@@ -77,20 +88,15 @@
                th:text="${item.title()}"
                target="_blank" rel="noopener noreferrer">标题</a>
             <div class="bf-item-meta">
+              <a class="reader-article-link" th:href="${'/reader/article?link=' + #uris.escapeQueryParam(item.link())}" data-article-link>站内阅读</a>
               <span class="bf-item-src" th:text="${item.sourceLabel()}">来源</span>
               <span class="bf-item-age" th:text="'获取 ' + ${item.formattedFetchedAt()}">获取 —</span>
               <span class="bf-item-age" th:text="'发布 ' + ${item.formattedPublishedAt()}">发布 —</span>
             </div>
+            <div th:replace="~{reader/fragments :: summaryStatus(${item})}"></div>
             <div th:if="${item.hasSummary()}"
                  class="bf-item-summary"
                  th:text="${item.summary()}"></div>
-            <div th:if="${item.hasSummaryStatus()}"
-                 class="bf-ai-meta"
-                 th:classappend="${item.summaryStatus().error()} ? ' err' : (${item.summaryStatus().running()} ? ' running' : '')">
-              <span th:text="${item.summaryStatus().running()} ? '摘要中' : (${item.summaryStatus().success()} ? '摘要完成' : '摘要失败')">摘要状态</span>
-              <span th:text="'开始 ' + ${item.summaryStatus().formattedStartedAt()}">开始 —</span>
-              <span th:text="'耗时 ' + ${item.summaryStatus().formattedDuration()}">耗时 —</span>
-            </div>
           </div>
         </div>
       </div>
@@ -102,40 +108,7 @@
     </div>
   </div>
 
-</div>
-
-<script>
-  /* Progress bar */
-  (function () {
-    var bar = document.getElementById('rd-progress-bar');
-    if (!bar) return;
-    function tick() {
-      var total = document.documentElement.scrollHeight - window.innerHeight;
-      var pct   = total > 0 ? (window.scrollY / total) * 100 : 0;
-      bar.style.width = pct.toFixed(2) + '%';
-      if (pct >= 99.5) bar.classList.add('done');
-      else             bar.classList.remove('done');
-    }
-    window.addEventListener('scroll', tick, { passive: true });
-    tick();
-  })();
-
-  /* Scroll reveal */
-  (function () {
-    document.querySelectorAll('.bf-section.reveal').forEach(function (el, i) {
-      el.style.transitionDelay = Math.min(i, 10) * 45 + 'ms';
-    });
-    var io = new IntersectionObserver(function (entries) {
-      entries.forEach(function (entry) {
-        if (entry.isIntersecting) {
-          entry.target.classList.add('in');
-          io.unobserve(entry.target);
-        }
-      });
-    }, { threshold: 0.04, rootMargin: '0px 0px -20px 0px' });
-    document.querySelectorAll('.reveal').forEach(function (el) { io.observe(el); });
-  })();
-</script>
-
+  </section>
+</main>
 </body>
 </html>

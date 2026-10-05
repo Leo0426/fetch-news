@@ -6,415 +6,143 @@
   <title th:text="${hours <= 24 ? '今日速览' : hours <= 48 ? '近 48 小时' : hours <= 72 ? '近 3 天' : '近 7 天'}">今日速览</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/admin.css">
-  <script>
-    function readerState() {
-      return {
-        reads:       Object.fromEntries((_fnReads || []).map(l => [l, true])),
-        bookmarks:   Object.fromEntries((_fnBookmarks || []).map(l => [l, true])),
-        filter:      'all',
-        activeTag:   'all',
-        searchQuery: '',
-        listView:    !!localStorage.getItem('fn-list-view'),
-        summarizing: {},
-        aiSummaries: {},
-        aiErrors:    {},
-
-        toggleListView() {
-          this.listView = !this.listView;
-          this.listView
-            ? localStorage.setItem('fn-list-view', '1')
-            : localStorage.removeItem('fn-list-view');
-        },
-
-        isRead(link)       { return !!this.reads[link]; },
-        async markRead(link) {
-          if (this.reads[link]) return;
-          this.reads = {...this.reads, [link]: true};
-          try { await fetch('/reader/read', { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body: new URLSearchParams({link}).toString() }); } catch(e) {}
-        },
-        async toggleRead(link) {
-          const r = {...this.reads};
-          r[link] ? delete r[link] : r[link] = true;
-          this.reads = r;
-          try { await fetch('/reader/read', { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body: new URLSearchParams({link}).toString() }); } catch(e) {}
-        },
-        async markAllRead() {
-          const links = [...document.querySelectorAll('[data-link]')].map(el => el.dataset.link);
-          const r = {...this.reads};
-          links.forEach(l => r[l] = true);
-          this.reads = r; this.filter = 'all';
-          if (!links.length) return;
-          try {
-            const body = links.map(l => 'links=' + encodeURIComponent(l)).join('&');
-            await fetch('/reader/read-all', { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body });
-          } catch(e) {}
-        },
-        unreadCount() {
-          const reads = this.reads;
-          return [...document.querySelectorAll('[data-link]')]
-            .filter(el => !reads[el.dataset.link]).length;
-        },
-
-        isBookmarked(link) { return !!this.bookmarks[link]; },
-        bookmarkCount() {
-          const bm = this.bookmarks;
-          return [...document.querySelectorAll('[data-link]')]
-            .filter(el => bm[el.dataset.link]).length;
-        },
-        async toggleBookmark(link, title, routePath) {
-          const r = {...this.bookmarks};
-          r[link] ? delete r[link] : r[link] = true;
-          this.bookmarks = r;
-          try {
-            await fetch('/reader/bookmark', {
-              method: 'POST',
-              headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-              body: new URLSearchParams({link, title: title||'', routePath: routePath||''}).toString()
-            });
-          } catch(e) {}
-        },
-
-        isSummarizing(link) { return !!this.summarizing[link]; },
-        summary(link)       { return this.aiSummaries[link] || null; },
-        summaryError(link)  { return this.aiErrors[link] || null; },
-
-        async summarize(link, title) {
-          this.summarizing = {...this.summarizing, [link]: true};
-          const errs = {...this.aiErrors}; delete errs[link]; this.aiErrors = errs;
-          try {
-            const r = await fetch('/reader/summarize', {
-              method:  'POST',
-              headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-              body:    new URLSearchParams({link, title: title || ''}).toString()
-            });
-            const text = await r.text();
-            if (!r.ok) { this.aiErrors = {...this.aiErrors, [link]: text || '生成失败'}; }
-            else        { this.aiSummaries = {...this.aiSummaries, [link]: text}; }
-          } catch(e) {
-            this.aiErrors = {...this.aiErrors, [link]: '请求失败，请检查 Ollama 服务'};
-          } finally {
-            this.summarizing = {...this.summarizing, [link]: false};
-          }
-        }
-      };
-    }
-
-    /* ── keyboard navigation ── */
-    document.addEventListener('keydown', function(e) {
-      if (['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName)) return;
-      var cards = Array.from(document.querySelectorAll('.rd-card'))
-                       .filter(function(c) { return c.offsetParent !== null; });
-      if (!cards.length) return;
-      var idx = cards.findIndex(function(c) { return c.classList.contains('fn-focused'); });
-
-      function moveFocus(i) {
-        cards.forEach(function(c) { c.classList.remove('fn-focused'); });
-        if (i < 0 || i >= cards.length) return i;
-        cards[i].classList.add('fn-focused');
-        cards[i].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-        return i;
-      }
-
-      if      (e.key === 'j') { e.preventDefault(); idx = moveFocus(idx < 0 ? 0 : Math.min(idx+1, cards.length-1)); }
-      else if (e.key === 'k') { e.preventDefault(); idx = moveFocus(Math.max(idx-1, 0)); }
-      else if (e.key === 'o' && idx >= 0) { e.preventDefault(); var a = cards[idx].querySelector('.rd-card-title'); if (a) window.open(a.href, '_blank'); }
-      else if (e.key === 'b' && idx >= 0) { e.preventDefault(); var btn = cards[idx].querySelector('.rd-bookmark-btn'); if (btn) btn.click(); }
-      else if (e.key === 'r' && idx >= 0) { e.preventDefault(); var dot = cards[idx].querySelector('.rd-read-dot'); if (dot) dot.click(); }
-      else if (e.key === '?') { e.preventDefault(); alert('键盘快捷键\n  j / k — 下一条 / 上一条\n  o — 打开文章\n  b — 收藏 / 取消收藏\n  r — 标记已读 / 未读\n  ? — 显示此帮助'); }
-    });
-  </script>
+  <link rel="stylesheet" href="/article.css">
   <script th:inline="javascript">
     const _fnBookmarks = /*[[${bookmarkedLinks}]]*/ [];
-    const _fnReads     = /*[[${readLinks}]]*/ [];
+    const _fnReads = /*[[${readLinks}]]*/ [];
   </script>
-  <script src="/htmx.min.js"></script>
+  <script defer src="/ui.js"></script>
+  <script defer src="/article.js"></script>
+  <script defer src="/reader.js"></script>
   <script defer src="/alpine.min.js"></script>
 </head>
-<body x-data="readerState()">
-
-<!-- Reading progress bar -->
-<div class="rd-progress-bar" id="rd-progress-bar"></div>
-
-<div class="rd-wrap">
-
-  <!-- ── Header ─────────────────────────────────────────────── -->
-  <div class="rd-head">
-    <div>
-      <div class="rd-title"
-           th:text="${hours <= 24 ? '今日速览' : hours <= 48 ? '近 48 小时' : hours <= 72 ? '近 3 天' : '近 7 天'}">今日速览</div>
-      <div class="rd-date" th:text="${date}">2026-06-05</div>
+<body class="reader-page" x-data="readerState()" data-reader>
+<a class="skip-link" href="#rd-main">跳到文章</a>
+<div class="rd-progress-bar" id="rd-progress-bar" aria-hidden="true"></div>
+<main class="rd-wrap">
+  <nav class="reader-nav" aria-label="阅读导航">
+    <a href="/reader" aria-current="page">速览</a>
+    <a href="/reader/unread">待读</a>
+    <a href="/reader/briefing">每日简报</a>
+    <a href="/reader/bookmarks">收藏</a>
+    <a href="/reader/search">搜索</a>
+    <a href="/index" class="reader-nav-admin">管理 ↗</a>
+  </nav>
+  <header class="rd-head reader-digest-head">
+    <div class="reader-heading-copy">
+      <div class="page-eyebrow">个人阅读工作台</div>
+      <h1 class="rd-title" th:text="${hours <= 24 ? '今日速览' : hours <= 48 ? '近 48 小时' : hours <= 72 ? '近 3 天' : '近 7 天'}">今日速览</h1>
+      <div class="rd-date"><span th:text="${date}">2026-10-04</span><span class="reader-heading-note"><span class="reader-meta-divider">·</span>按来源整理，专注值得读的内容</span></div>
     </div>
     <div class="rd-meta">
-      <span class="rd-count" th:text="${totalCount} + ' 条'">0 条</span>
-      <button class="rd-mark-all" @click="toggleListView()"
+      <span class="rd-count" th:text="${totalCount} + ' 条内容'">0 条内容</span>
+      <button type="button" class="rd-mark-all" @click="toggleListView()" :aria-pressed="listView"
               :title="listView ? '切换为卡片视图' : '切换为列表视图'">
         <span x-show="!listView">☰ 列表</span>
-        <span x-show="listView" style="display:none">⊞ 卡片</span>
+        <span x-show="listView" x-cloak>⊞ 卡片</span>
       </button>
-      <a href="/reader/briefing" class="rd-mark-all" style="text-decoration:none;">简报</a>
-      <a href="/index" class="rd-admin">路由配置 →</a>
     </div>
-  </div>
+  </header>
 
-  <!-- ── Search ─────────────────────────────────────────────── -->
-  <form action="/reader/search" method="get" class="rd-search-form">
-    <input class="rd-search-input" type="search" name="q"
-           @input.debounce.200ms="searchQuery = $event.target.value.trim()"
-           @search="if(!$event.target.value) searchQuery = ''"
-           placeholder="实时过滤标题…" autocomplete="off">
-    <button type="submit" class="rd-search-submit" title="在全部历史数据中搜索">全库</button>
-  </form>
-  <div x-show="searchQuery"
-       style="font-size:12px;color:var(--muted);margin-bottom:8px;display:none;">
-    实时过滤：<strong x-text="searchQuery"></strong>
-    <button @click="searchQuery = ''; document.querySelector('.rd-search-input').value = ''"
-            style="margin-left:6px;font-size:11px;color:var(--accent);border:none;background:none;cursor:pointer;">清除</button>
-  </div>
+  <section class="reader-toolbar" aria-label="筛选文章">
+    <form action="/reader/search" method="get" class="rd-search-form" role="search">
+      <label class="sr-only" for="reader-search">筛选当前文章标题</label>
+      <input id="reader-search" class="rd-search-input" type="search" name="q"
+             x-model.debounce.200ms="searchQuery" @search="searchQuery = $event.target.value"
+             placeholder="筛选当前文章标题…" autocomplete="off" aria-describedby="reader-search-hint">
+      <button type="submit" class="rd-search-submit" title="搜索全部已保存的标题与摘要">搜索历史</button>
+    </form>
+    <p class="reader-toolbar-hint" id="reader-search-hint">输入即筛选当前内容，按 Enter 搜索历史标题与摘要。</p>
+    <div class="rd-filter" th:if="${totalCount > 0}" role="group" aria-label="阅读状态">
+      <button type="button" class="rd-filter-btn" :class="filter === 'all' && 'active'" :aria-pressed="filter === 'all'" @click="setFilter('all')">全部</button>
+      <button type="button" class="rd-filter-btn" :class="filter === 'unread' && 'active'" :aria-pressed="filter === 'unread'" @click="setFilter('unread')">未读 <span x-text="unreadCount()"></span></button>
+      <button type="button" class="rd-filter-btn" :class="filter === 'read' && 'active'" :aria-pressed="filter === 'read'" @click="setFilter('read')">已读</button>
+      <button type="button" class="rd-filter-btn" :class="filter === 'bookmarked' && 'active'" :aria-pressed="filter === 'bookmarked'" @click="setFilter('bookmarked')">收藏 <span x-text="bookmarkCount()"></span></button>
+    </div>
+    <details class="reader-refinements">
+      <summary>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M7 12h10M10 17h4"/></svg>
+        <span>筛选与操作</span>
+        <span class="reader-filter-overview"><span th:text="${hours == 24 ? '今天' : hours == 48 ? '48 小时' : hours == 72 ? '3 天' : '7 天'}">今天</span><span aria-hidden="true"> · </span><span x-text="activeTag === 'all' ? '全部分类' : activeTag">全部分类</span></span>
+        <svg class="reader-disclosure-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+      </summary>
+      <div class="reader-refinements-body">
+        <div class="reader-filter-group">
+          <span class="reader-filter-label">时间范围</span>
+          <nav class="rd-tabs" aria-label="时间范围">
+            <a href="/reader?hours=24" class="rd-tab" th:classappend="${hours == 24} ? ' active'" th:attr="aria-current=${hours == 24 ? 'page' : null}">今天</a>
+            <a href="/reader?hours=48" class="rd-tab" th:classappend="${hours == 48} ? ' active'" th:attr="aria-current=${hours == 48 ? 'page' : null}">48 小时</a>
+            <a href="/reader?hours=72" class="rd-tab" th:classappend="${hours == 72} ? ' active'" th:attr="aria-current=${hours == 72 ? 'page' : null}">3 天</a>
+            <a href="/reader?hours=168" class="rd-tab" th:classappend="${hours == 168} ? ' active'" th:attr="aria-current=${hours == 168 ? 'page' : null}">7 天</a>
+          </nav>
+        </div>
+        <div class="reader-filter-group" th:if="${#lists.size(uniqueTags) > 1}">
+          <span class="reader-filter-label">来源分类</span>
+          <div class="rd-tabs reader-category-tabs" role="group" aria-label="来源分类">
+            <button type="button" class="rd-tab" :class="activeTag === 'all' && 'active'" :aria-pressed="activeTag === 'all'" @click="activeTag = 'all'">全部分类</button>
+            <button th:each="tag : ${uniqueTags}" type="button" class="rd-tab" th:attr="data-tag=${tag}"
+                    :class="activeTag === $el.dataset.tag && 'active'" :aria-pressed="activeTag === $el.dataset.tag"
+                    @click="activeTag = $el.dataset.tag" th:text="${tag}">分类</button>
+          </div>
+        </div>
+        <div class="reader-bulk-action" th:if="${totalCount > 0}">
+          <button type="button" class="rd-mark-all" @click="markAllRead()" :disabled="anyReadPending() || unreadCount() === 0"
+                  :aria-busy="readAllPending" aria-describedby="reader-bulk-hint"
+                  x-text="readAllPending ? '正在保存…' : '本页全部标为已读'">本页全部标为已读</button>
+          <span id="reader-bulk-hint" th:text="'将本页加载的 ' + ${totalCount} + ' 条内容标为已读，包含被筛选隐藏的文章。'">包含被筛选隐藏的文章。</span>
+        </div>
+      </div>
+    </details>
+    <div class="reader-result-line" th:if="${totalCount > 0}">
+      <span role="status" aria-live="polite" aria-atomic="true">显示 <strong x-text="visibleCount()" th:text="${totalCount}">0</strong> / <span th:text="${totalCount}">0</span> 条</span>
+      <button type="button" class="rd-mark-all" @click="resetFilters()" x-show="filter !== 'all' || activeTag !== 'all' || searchQuery" x-cloak>重置筛选</button>
+      <details class="reader-shortcuts"><summary id="reader-shortcuts">键盘快捷键 <kbd>?</kbd></summary><p><kbd>j</kbd> / <kbd>k</kbd> 上下移动 · <kbd>o</kbd> 打开 · <kbd>b</kbd> 收藏 · <kbd>r</kbd> 已读</p></details>
+    </div>
+  </section>
 
-  <!-- ── Time-window tabs ───────────────────────────────────── -->
-  <div class="rd-tabs">
-    <a th:href="'/reader?hours=24'"  class="rd-tab" th:classappend="${hours == 24}  ? ' active'">今天</a>
-    <a th:href="'/reader?hours=48'"  class="rd-tab" th:classappend="${hours == 48}  ? ' active'">48 小时</a>
-    <a th:href="'/reader?hours=72'"  class="rd-tab" th:classappend="${hours == 72}  ? ' active'">3 天</a>
-    <a th:href="'/reader?hours=168'" class="rd-tab" th:classappend="${hours == 168} ? ' active'">7 天</a>
+  <div th:if="${groups.isEmpty()}" class="rd-empty" id="rd-main" tabindex="-1">
+    <strong>阅读从一个订阅开始</strong>
+    <p>启用来源并配置定时抓取后，新内容会整理在这里。</p>
+    <a href="/index" class="reader-empty-action">添加或启用订阅 →</a>
   </div>
-
-  <!-- ── Category tabs ─────────────────────────────────────── -->
-  <div class="rd-tabs" th:if="${#lists.size(uniqueTags) > 1}" style="flex-wrap:wrap;">
-    <button class="rd-tab" :class="activeTag === 'all' && 'active'" @click="activeTag = 'all'">全部</button>
-    <button th:each="tag : ${uniqueTags}"
-            class="rd-tab"
-            th:attr="data-tag=${tag}"
-            :class="activeTag === $el.dataset.tag && 'active'"
-            @click="activeTag = $el.dataset.tag"
-            th:text="${tag}">分类</button>
+  <div th:if="${!groups.isEmpty()}" class="rd-empty" x-show="visibleCount() === 0" x-cloak>
+    <strong x-text="filter === 'unread' && activeTag === 'all' && !searchQuery.trim() ? '这段时间的内容已读完' : '没有符合筛选条件的内容'"></strong>
+    <p x-text="filter === 'unread' && activeTag === 'all' && !searchQuery.trim() ? '可以回顾已读内容，或稍后再来看更新。' : '试试其他关键词，或重置分类与阅读状态。'"></p>
+    <button type="button" @click="resetFilters()" class="reader-empty-action">查看本页全部内容</button>
   </div>
-
-  <!-- ── Filter bar ─────────────────────────────────────────── -->
-  <div class="rd-filter" th:if="${totalCount > 0}">
-    <button class="rd-filter-btn" :class="filter === 'all'        && 'active'" @click="filter = 'all'">全部</button>
-    <button class="rd-filter-btn" :class="filter === 'unread'     && 'active'" @click="filter = 'unread'">
-      未读&nbsp;<span x-text="'(' + unreadCount() + ')'"></span>
-    </button>
-    <button class="rd-filter-btn" :class="filter === 'read'       && 'active'" @click="filter = 'read'">已读</button>
-    <button class="rd-filter-btn" :class="filter === 'bookmarked' && 'active'" @click="filter = 'bookmarked'">
-      ★&nbsp;收藏&nbsp;<span x-text="'(' + bookmarkCount() + ')'"></span>
-    </button>
-    <span class="rd-filter-sep"></span>
-    <a href="/reader/bookmarks" class="rd-mark-all" style="text-decoration:none;">收藏夹 →</a>
-    <button class="rd-mark-all" @click="markAllRead()">全部标为已读</button>
-  </div>
-
-  <!-- ── Empty state ───────────────────────────────────────── -->
-  <div th:if="${groups.isEmpty()}" class="rd-empty">
-    暂无内容<br>
-    <span style="font-size:12px;">请先在管理后台启用路由并配置定时抓取，或等待首次抓取完成</span>
-  </div>
-
-  <!-- ── Main layout: TOC + sections ───────────────────────── -->
   <div class="rd-layout" th:if="${!groups.isEmpty()}">
 
     <!-- TOC sidebar (populated by JS) -->
     <nav class="rd-toc" id="rd-toc" aria-label="目录导航"></nav>
 
     <!-- Content area -->
-    <div id="rd-main">
+    <div id="rd-main" tabindex="-1">
 
       <div th:each="group, gs : ${groups}"
            class="rd-section reveal"
            th:id="'sec-' + ${gs.index}"
            th:attr="data-tag=${group.tag()}"
-           x-show="(activeTag === 'all' || $el.dataset.tag === activeTag) &&
-                   (!searchQuery || [...$el.querySelectorAll('[data-link]')].some(el =>
-                     (el.dataset.title || '').toLowerCase().includes(searchQuery.toLowerCase()))) &&
-                   (filter === 'all' || [...$el.querySelectorAll('[data-link]')].some(el =>
-                     filter === 'unread'     ? !isRead(el.dataset.link) :
-                     filter === 'read'       ?  isRead(el.dataset.link) :
-                     filter === 'bookmarked' ?  isBookmarked(el.dataset.link) : true))">
+           x-show="sectionVisible($el)">
 
         <div class="rd-section-head">
-          <span style="display:flex;align-items:center;gap:7px;">
-            <span th:text="${group.name()}">来源</span>
-            <span th:if="${group.tag() != null}"
-                  style="font-size:9px;font-weight:700;background:var(--accent-bg);color:var(--accent);
-                         border:1px solid var(--accent);border-radius:3px;padding:1px 5px;"
+          <div class="reader-source-heading">
+            <h2 class="rd-section-name" tabindex="-1" th:text="${group.name()}">来源</h2>
+            <span th:if="${group.tag() != null}" class="reader-source-tag"
                   th:text="${group.tag()}">分类</span>
-          </span>
-          <span class="rd-badge" th:text="${#lists.size(group.items())}">0</span>
+          </div>
+          <span class="rd-badge" x-text="visibleCount($el.closest('.rd-section'))" th:text="${#lists.size(group.items())}">0</span>
         </div>
 
         <div class="rd-grid" :class="listView && 'rd-list'">
-          <div th:each="item, is : ${group.items()}"
-               class="rd-card reveal"
-               th:attr="data-link=${item.link()},data-title=${item.title()},data-route-path=${item.routePath()}"
-               :class="isRead($el.dataset.link) ? 'rd-card--read' : (isBookmarked($el.dataset.link) ? 'rd-card--bookmarked' : '')"
-               x-show="(!searchQuery || ($el.dataset.title || '').toLowerCase().includes(searchQuery.toLowerCase()))
-                    && (filter === 'all'
-                    || (filter === 'unread'     && !isRead($el.dataset.link))
-                    || (filter === 'read'       &&  isRead($el.dataset.link))
-                    || (filter === 'bookmarked' &&  isBookmarked($el.dataset.link)))">
-
-            <a class="rd-card-title"
-               th:href="${item.link()}"
-               th:text="${item.title()}"
-               @click="markRead($el.closest('[data-link]').dataset.link)"
-               target="_blank" rel="noopener noreferrer">标题</a>
-
-            <p th:if="${item.hasSummary()}"
-               class="rd-summary"
-               th:text="${item.summary()}"></p>
-            <div th:if="${item.hasSummaryStatus()}"
-                 class="rd-ai-meta"
-                 th:classappend="${item.summaryStatus().error()} ? ' err' : (${item.summaryStatus().running()} ? ' running' : '')">
-              <span th:text="${item.summaryStatus().running()} ? '摘要中' : (${item.summaryStatus().success()} ? '摘要完成' : '摘要失败')">摘要状态</span>
-              <span th:text="'开始 ' + ${item.summaryStatus().formattedStartedAt()}">开始 —</span>
-              <span th:text="'耗时 ' + ${item.summaryStatus().formattedDuration()}">耗时 —</span>
-            </div>
-
-            <div th:if="${!item.hasSummary() and aiEnabled}" class="rd-summarize-wrap">
-              <p x-show="summary($el.closest('[data-link]').dataset.link)"
-                 x-text="summary($el.closest('[data-link]').dataset.link) || ''"
-                 class="rd-summary" style="display:none"></p>
-              <p x-show="isSummarizing($el.closest('[data-link]').dataset.link)"
-                 class="rd-summarize-loading" style="display:none">✦ 生成中…</p>
-              <div x-show="summaryError($el.closest('[data-link]').dataset.link)"
-                   class="rd-summarize-err" style="display:none">
-                <span x-text="summaryError($el.closest('[data-link]').dataset.link) || ''"></span>
-                <button @click.stop="summarize($el.closest('[data-link]').dataset.link,
-                                               $el.closest('[data-link]').dataset.title)"
-                        class="rd-summarize-retry">重试</button>
-              </div>
-              <button x-show="!isSummarizing($el.closest('[data-link]').dataset.link)
-                           && !summary($el.closest('[data-link]').dataset.link)
-                           && !summaryError($el.closest('[data-link]').dataset.link)"
-                      @click.stop="summarize($el.closest('[data-link]').dataset.link,
-                                             $el.closest('[data-link]').dataset.title)"
-                      :disabled="isSummarizing($el.closest('[data-link]').dataset.link)"
-                      class="rd-summarize-btn">
-                <svg width="9" height="9" viewBox="0 0 24 24" fill="none"
-                     stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-                  <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
-                </svg>
-                AI 摘要
-              </button>
-            </div>
-
-            <div class="rd-card-meta">
-              <span class="rd-src" th:text="${item.sourceLabel()}">来源</span>
-              <span class="rd-age" th:text="'获取 ' + ${item.formattedFetchedAt()}">获取 —</span>
-              <span class="rd-age" th:text="'发布 ' + ${item.formattedPublishedAt()}">发布 —</span>
-              <button class="rd-bookmark-btn"
-                      :class="isBookmarked($el.closest('[data-link]').dataset.link) && 'bookmarked'"
-                      :title="isBookmarked($el.closest('[data-link]').dataset.link) ? '取消收藏' : '收藏'"
-                      @click.stop="toggleBookmark(
-                        $el.closest('[data-link]').dataset.link,
-                        $el.closest('[data-link]').dataset.title,
-                        $el.closest('[data-link]').dataset.routePath)">
-                <svg width="12" height="12" viewBox="0 0 24 24"
-                     stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-                     :fill="isBookmarked($el.closest('[data-link]').dataset.link) ? 'currentColor' : 'none'">
-                  <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
-                </svg>
-              </button>
-              <button class="rd-read-dot"
-                      @click.stop="toggleRead($el.closest('[data-link]').dataset.link)"
-                      :title="isRead($el.closest('[data-link]').dataset.link) ? '标为未读' : '标为已读'"></button>
-            </div>
-          </div>
+          <th:block th:each="item : ${group.items()}">
+            <th:block th:replace="~{reader/fragments :: articleCard(${item}, ${aiEnabled})}"></th:block>
+          </th:block>
         </div>
 
       </div>
     </div><!-- /rd-main -->
   </div><!-- /rd-layout -->
 
-</div><!-- /rd-wrap -->
-
-<script>
-  /* ── Reading progress bar ── */
-  (function () {
-    var bar = document.getElementById('rd-progress-bar');
-    if (!bar) return;
-    function tick() {
-      var scrolled = window.scrollY;
-      var total    = document.documentElement.scrollHeight - window.innerHeight;
-      var pct      = total > 0 ? (scrolled / total) * 100 : 0;
-      bar.style.width = pct.toFixed(2) + '%';
-      if (pct >= 99.5) bar.classList.add('done');
-      else             bar.classList.remove('done');
-    }
-    window.addEventListener('scroll', tick, { passive: true });
-    tick();
-  })();
-
-  /* ── Scroll reveal (Intersection Observer) ── */
-  (function () {
-    /* stagger cards within each grid */
-    document.querySelectorAll('.rd-grid').forEach(function (grid) {
-      grid.querySelectorAll('.rd-card.reveal').forEach(function (card, i) {
-        card.style.transitionDelay = Math.min(i, 7) * 55 + 'ms';
-      });
-    });
-
-    var io = new IntersectionObserver(function (entries) {
-      entries.forEach(function (entry) {
-        if (entry.isIntersecting) {
-          entry.target.classList.add('in');
-          io.unobserve(entry.target);
-        }
-      });
-    }, { threshold: 0.06, rootMargin: '0px 0px -32px 0px' });
-
-    document.querySelectorAll('.reveal').forEach(function (el) {
-      io.observe(el);
-    });
-  })();
-
-  /* ── TOC: build from section headings ── */
-  (function () {
-    var toc      = document.getElementById('rd-toc');
-    var sections = Array.from(document.querySelectorAll('.rd-section[id]'));
-    if (!toc || sections.length < 2) {
-      if (toc) toc.style.display = 'none';
-      var layout = document.querySelector('.rd-layout');
-      if (layout) layout.style.display = 'block';
-      return;
-    }
-
-    var label = document.createElement('div');
-    label.className = 'rd-toc-label';
-    label.textContent = 'Contents';
-    toc.appendChild(label);
-
-    sections.forEach(function (sec) {
-      var nameEl = sec.querySelector('.rd-section-head span span:first-child');
-      if (!nameEl) return;
-      var a = document.createElement('a');
-      a.href = '#' + sec.id;
-      a.className = 'rd-toc-link';
-      a.textContent = nameEl.textContent.trim();
-      a.addEventListener('click', function (e) {
-        e.preventDefault();
-        sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      });
-      toc.appendChild(a);
-    });
-
-    /* scroll-spy */
-    var links = Array.from(toc.querySelectorAll('.rd-toc-link'));
-    var spy = new IntersectionObserver(function (entries) {
-      entries.forEach(function (entry) {
-        if (entry.isIntersecting) {
-          var id = entry.target.id;
-          links.forEach(function (l) {
-            l.classList.toggle('active', l.getAttribute('href') === '#' + id);
-          });
-        }
-      });
-    }, { rootMargin: '-80px 0px -60% 0px', threshold: 0 });
-
-    sections.forEach(function (s) { spy.observe(s); });
-  })();
-</script>
-
+</main>
 </body>
 </html>

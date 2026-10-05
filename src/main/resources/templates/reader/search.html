@@ -3,79 +3,99 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title th:text="${query.isEmpty()} ? '搜索' : '搜索：' + ${query}">搜索</title>
+  <title th:text="${page.query.isEmpty()} ? '搜索' : '搜索：' + ${page.query}">搜索</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/admin.css">
-  <style>
-    body { background: var(--bg); }
-  </style>
+  <link rel="stylesheet" href="/article.css">
+  <link rel="stylesheet" href="/search.css">
+  <script defer src="/ui.js"></script>
+  <script defer src="/article.js"></script>
 </head>
-<body>
-<div class="rd-wrap">
+<body class="reader-page search-page">
+<a class="skip-link" href="#search-content">跳到搜索结果</a>
+<main class="rd-wrap">
+  <nav class="reader-nav" aria-label="阅读导航">
+    <a href="/reader">速览</a>
+    <a href="/reader/unread">待读</a>
+    <a href="/reader/briefing">每日简报</a>
+    <a href="/reader/bookmarks">收藏</a>
+    <a href="/reader/search" aria-current="page">搜索</a>
+    <a href="/index" class="reader-nav-admin">管理 ↗</a>
+  </nav>
 
-  <div class="rd-head">
-    <div class="rd-title">搜索</div>
-    <div style="display:flex;gap:14px;align-items:center;">
-      <a href="/reader" class="rd-admin">← 返回速览</a>
-      <a href="/index" class="rd-admin">路由配置 →</a>
+
+  <header class="rd-head search-head">
+    <div>
+      <div class="page-eyebrow">找回读过的线索</div>
+      <h1 class="rd-title">搜索历史</h1>
+      <p class="rd-date">从已保存的标题、正文描述与 AI 摘要中，找回值得重读的内容。</p>
     </div>
-  </div>
+  </header>
 
-  <form action="/reader/search" method="get" class="rd-search-form">
-    <input class="rd-search-input" type="search" name="q"
-           th:value="${query}"
-           placeholder="搜索标题和摘要…"
-           autocomplete="off" autofocus>
-    <button type="submit" class="rd-search-submit">搜索</button>
-  </form>
+  <section class="reader-toolbar search-toolbar" aria-label="搜索历史内容">
+    <form action="/reader/search" method="get" class="rd-search-form" role="search">
+      <label class="sr-only" for="history-query">搜索标题、正文描述与 AI 摘要</label>
+      <input id="history-query" class="rd-search-input" type="search" name="q"
+             th:value="${page.query}"
+             placeholder="输入关键词，找回旧文章…" minlength="2" maxlength="200" required
+             aria-describedby="history-search-hint" autocomplete="off" autofocus>
+      <button type="submit" class="rd-search-submit">搜索</button>
+    </form>
+    <p id="history-search-hint" class="reader-toolbar-hint">输入 2–200 个字符；多个关键词用空格分隔，同时匹配。</p>
+  </section>
 
-  <!-- result count -->
-  <div th:if="${not query.isEmpty()}" class="rd-result-meta">
-    <th:block th:if="${#lists.isEmpty(items)}">
-      未找到与 <strong th:text="${query}"></strong> 相关的内容
-    </th:block>
-    <th:block th:if="${not #lists.isEmpty(items)}">
-      共找到 <strong th:text="${#lists.size(items)}"></strong> 条与
-      <strong th:text="${query}"></strong> 相关的内容
-    </th:block>
-  </div>
-
-  <!-- empty query hint -->
-  <div th:if="${query.isEmpty()}" class="rd-empty">
-    输入关键词搜索标题和 AI 摘要
-  </div>
-
-  <!-- no results -->
-  <div th:if="${not query.isEmpty() and #lists.isEmpty(items)}" class="rd-empty">
-    暂无匹配结果<br>
-    <span style="font-size:12px;">尝试更短或不同的关键词，或等待更多内容被抓取</span>
-  </div>
-
-  <!-- results grid -->
-  <div th:if="${not #lists.isEmpty(items)}" class="rd-grid">
-    <div th:each="item : ${items}" class="rd-card">
-      <a class="rd-card-title"
-         th:href="${item.link()}"
-         th:text="${item.title()}"
-         target="_blank" rel="noopener noreferrer">标题</a>
-      <p th:if="${item.hasSummary()}"
-         class="rd-summary"
-         th:text="${item.summary()}"></p>
-      <div th:if="${item.hasSummaryStatus()}"
-           class="rd-ai-meta"
-           th:classappend="${item.summaryStatus().error()} ? ' err' : (${item.summaryStatus().running()} ? ' running' : '')">
-        <span th:text="${item.summaryStatus().running()} ? '摘要中' : (${item.summaryStatus().success()} ? '摘要完成' : '摘要失败')">摘要状态</span>
-        <span th:text="'开始 ' + ${item.summaryStatus().formattedStartedAt()}">开始 —</span>
-        <span th:text="'耗时 ' + ${item.summaryStatus().formattedDuration()}">耗时 —</span>
-      </div>
-      <div class="rd-card-meta">
-        <span class="rd-src" th:text="${item.sourceLabel()}">来源</span>
-        <span class="rd-age" th:text="'获取 ' + ${item.formattedFetchedAt()}">获取 —</span>
-        <span class="rd-age" th:text="'发布 ' + ${item.formattedPublishedAt()}">发布 —</span>
-      </div>
+  <section id="search-content" tabindex="-1" aria-label="搜索结果">
+    <div th:if="${page.error != null}" class="rd-empty search-error" role="alert">
+      <strong>暂时无法完成搜索</strong>
+      <p th:text="${page.error}">请稍后重试。</p>
+      <a href="#history-query" class="reader-empty-action">返回搜索框</a>
     </div>
-  </div>
 
-</div>
+    <th:block th:if="${page.error == null}">
+      <div th:if="${page.query.isEmpty()}" class="rd-empty search-welcome">
+        <span class="search-empty-symbol" aria-hidden="true">⌕</span>
+        <strong>记住一个关键词，就能重新找到</strong>
+        <p>中文短词也可以搜索。试试文章主题、工具名称，或记忆中的一句话。</p>
+        <span class="search-empty-note">搜索已保存的文章，不受速览时间范围限制。</span>
+      </div>
+
+      <th:block th:if="${!page.query.isEmpty()}">
+        <div class="rd-result-meta search-result-meta" role="status">
+          <span class="search-query">“<strong th:text="${page.query}">关键词</strong>”</span>
+          <span th:if="${page.items.isEmpty()}">暂无匹配内容</span>
+          <span th:if="${!page.items.isEmpty() and !page.hasMore}">找到 <strong th:text="${page.items.size()}">0</strong> 条结果</span>
+          <span th:if="${page.hasMore}">展示前 <strong th:text="${page.items.size()}">100</strong> 条结果</span>
+        </div>
+
+        <div th:if="${page.items.isEmpty()}" class="rd-empty">
+          <strong>还没有找到这条线索</strong>
+          <p>试试更短的词，或减少关键词；多个关键词需要同时出现在一篇文章中。</p>
+          <a href="#history-query" class="reader-empty-action">换个关键词</a>
+        </div>
+
+        <div th:if="${!page.items.isEmpty()}" class="search-results">
+          <article th:each="item : ${page.items}" class="rd-card search-result">
+            <h2 class="search-result-heading">
+              <a class="rd-card-title" th:href="${item.article.link()}" target="_blank" rel="noopener noreferrer"><th:block th:each="part : ${item.titleParts}"><mark th:if="${part.matched}" th:text="${part.text}"></mark><th:block th:unless="${part.matched}" th:text="${part.text}"></th:block></th:block></a>
+            </h2>
+            <div th:if="${!item.excerptParts.isEmpty()}" class="search-excerpt">
+              <span class="search-excerpt-label" th:text="${item.excerptLabel}">正文摘录</span>
+              <p class="search-excerpt-text"><th:block th:each="part : ${item.excerptParts}"><mark th:if="${part.matched}" th:text="${part.text}"></mark><th:block th:unless="${part.matched}" th:text="${part.text}"></th:block></th:block></p>
+            </div>
+            <div class="rd-card-meta">
+              <span class="rd-src" th:text="${item.article.sourceLabel()}">来源</span>
+              <span class="rd-age" th:text="'获取 ' + ${item.article.formattedFetchedAt()}">获取 —</span>
+              <span class="rd-age" th:text="'发布 ' + ${item.article.formattedPublishedAt()}">发布 —</span>
+              <a class="reader-article-link" th:href="${'/reader/article?link=' + #uris.escapeQueryParam(item.article.link())}" data-article-link>站内阅读</a>
+              <span class="search-original-hint" aria-hidden="true">打开原文 ↗</span>
+            </div>
+          </article>
+        </div>
+
+        <p th:if="${page.hasMore}" class="search-limit-note">还有更多匹配内容。增加关键词，可以进一步缩小范围。</p>
+      </th:block>
+    </th:block>
+  </section>
+</main>
 </body>
 </html>
