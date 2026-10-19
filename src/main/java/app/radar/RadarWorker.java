@@ -58,7 +58,7 @@ public class RadarWorker implements AutoCloseable {
             store.saveRadarCheckpoint(run.status().runId(),"attemptStartedAt",Long.toString(startedAt));
             RunSnapshot claimed=run;
             long previous=Long.parseLong(run.checkpoints().getOrDefault("elapsedMillis","0"));
-            try(var scope=client.withScope(run.request().ai(),()->guard(claimed,startedAt,previous,true))) {
+            try(var scope=client.withScope(run.request().ai(),()->guard(claimed,startedAt,previous,true), metrics -> store.recordRadarMetrics(claimed.status().runId(), metrics))) {
                 execute(run,startedAt,previous);
             }
         } catch(RadarControlException e) {

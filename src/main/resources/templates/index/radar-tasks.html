@@ -1,0 +1,24 @@
+<div data-ai-settings>
+  <h2>AI 任务 · 新闻雷达</h2>
+  <p>最近 50 个任务。恢复沿用原快照；重跑按当前配置创建新版本。Token 为平台实际返回值，缺失时显示“未知”。</p>
+  <button class="btn" hx-get="/index/radar/tasks" hx-target="#main-content">刷新任务</button>
+  <a class="btn" href="/reader/radar">生成与查看日报</a>
+  <p th:if="${#lists.isEmpty(runs)}">尚无任务。</p>
+  <div class="radar-table-wrap"><table class="radar-table" th:unless="${#lists.isEmpty(runs)}">
+    <thead><tr><th>日期 / 模型</th><th>状态 / 阶段</th><th>候选 / 调用</th><th>输入 / 输出 Token</th><th>模型耗时</th><th>操作</th></tr></thead>
+    <tbody><tr th:each="run : ${runs}">
+      <td><span th:text="${run.status.date + ' v' + run.status.version}"></span><br><small th:text="${run.request.ai.protocol + ' / ' + run.request.ai.model}"></small><br><small th:text="${run.request.zoneId}"></small></td>
+      <td><span th:text="${run.status.state + ' / ' + run.status.stage}"></span><p class="radar-note" th:if="${run.status.error}" th:text="${run.status.error}"></p></td>
+      <td th:text="${run.status.totalCandidates + ' / ' + run.status.calls}"></td>
+      <td><span th:if="${run.checkpoints['usage.known'] != null and run.checkpoints['usage.known'] == run.checkpoints['usage.calls']}" th:text="${run.checkpoints['usage.input'] + ' / ' + run.checkpoints['usage.output']}"></span><span th:unless="${run.checkpoints['usage.known'] != null and run.checkpoints['usage.known'] == run.checkpoints['usage.calls']}">未知（平台未完整返回）</span></td>
+      <td th:text="${run.checkpoints.getOrDefault('usage.millis', '0') + ' ms'}"></td>
+      <td>
+        <button class="btn" th:if="${run.status.state == 'paused'}" th:attr="hx-post=${'/index/radar/tasks/' + run.status.runId + '/resume'}" hx-target="#main-content">恢复</button>
+        <form th:if="${run.status.state == 'failed' or run.status.state == 'partial' or run.status.state == 'success'}" th:attr="hx-post=${'/index/radar/tasks/' + run.status.runId + '/retry'}" hx-target="#main-content">
+          <input type="hidden" name="requestKey" th:value="${requestKey + '-' + run.status.runId}"><button class="btn" type="submit">重跑新版本</button>
+        </form>
+        <a class="btn" th:href="${'/reader/radar?date=' + run.status.date + '&amp;zoneId=' + run.request.zoneId}">查看日报</a>
+      </td>
+    </tr></tbody>
+  </table></div>
+</div>

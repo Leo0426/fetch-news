@@ -41,7 +41,11 @@ class OllamaClientTest {
             org.junit.jupiter.api.Assertions.assertTrue(entered.await(5, TimeUnit.SECONDS));
             config.save(new AiConfig(host, "second", true));
             release.countDown();
-            assertEquals(new OllamaClient.Generation("摘要", "first"), result.get(5, TimeUnit.SECONDS));
+            var generated = result.get(5, TimeUnit.SECONDS);
+            assertEquals("摘要", generated.text());
+            assertEquals("first", generated.model());
+            assertEquals(null, generated.metrics().inputTokens());
+            org.junit.jupiter.api.Assertions.assertTrue(generated.metrics().elapsedMillis() >= 0);
             config.save(new AiConfig(host, "second", false));
             assertThrows(IllegalStateException.class, () -> client.generateWithMetadata("disabled"));
         } finally {

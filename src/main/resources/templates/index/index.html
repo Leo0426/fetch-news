@@ -80,6 +80,7 @@
           AI 设置
         </a>
       <a href="/index#radar" @click="navigate($event,'radar')" :class="{active:activePage==='radar'}">新闻雷达配置</a>
+      <a href="/index#radar-tasks" @click="navigate($event,'radar-tasks')" :class="{active:activePage==='radar-tasks'}">AI 任务</a>
         <a class="nav-item" :class="{ active: activePage === 'credentials' }"
            :aria-current="activePage === 'credentials' ? 'page' : null"
            @click="navigate($event, 'credentials')"

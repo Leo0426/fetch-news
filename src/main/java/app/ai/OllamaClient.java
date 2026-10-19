@@ -42,23 +42,31 @@ public class OllamaClient {
     }
 
     public Generation generateWithMetadata(String prompt) throws Exception {
-        return generateRequest(prompt, null, false);
+        return generateRequest(prompt, null, false, null);
     }
 
     public Generation generateJson(String prompt, AiConfig expected) throws Exception {
-        return generateRequest(prompt, expected, true);
+        return generateRequest(prompt, expected, true, null);
+    }
+
+    public Generation generatePinnedJson(String prompt, AiConfig config) throws Exception {
+        return generateRequest(prompt, null, true, config);
     }
 
     public Scope withScope(AiConfig expected, BeforeGeneration observer) {
+        return withScope(expected, observer, metrics -> {});
+    }
+
+    public Scope withScope(AiConfig expected, BeforeGeneration observer, AfterGeneration after) {
         if (scope.get() != null) throw new IllegalStateException("Generation scope already installed");
-        scope.set(new GenerationScope(expected, observer));
+        scope.set(new GenerationScope(expected, observer, after));
         return () -> scope.remove();
     }
 
-    private Generation generateRequest(String prompt, AiConfig expected, boolean json) throws Exception {
+    private Generation generateRequest(String prompt, AiConfig expected, boolean json, AiConfig pinned) throws Exception {
         try (var permit = gate.acquire()) {
-            AiConfig config = configStore.get();
-            if (!config.enabled()) throw new IllegalStateException("AI is disabled");
+            AiConfig config = pinned == null ? configStore.get() : pinned;
+            if (!configStore.get().enabled() || !config.enabled()) throw new IllegalStateException("AI is disabled");
             GenerationScope context = scope.get();
             AiConfig locked = context == null ? expected : context.expected();
             if (locked != null && !locked.sameModel(config))
@@ -72,6 +80,9 @@ public class OllamaClient {
             HttpRequest request;
             try { request=protocol.request(config,prompt,json,mapper); }
             catch(IllegalArgumentException e) { throw new IllegalStateException("Invalid AI endpoint or authentication header"); }
+            long started = System.nanoTime();
+            GenerationMetrics metrics = null;
+            try {
             HttpResponse<String> response=http.send(request,HttpResponse.BodyHandlers.ofString());
             if(response.statusCode()!=200) throw new IllegalStateException(config.protocol()+" returned HTTP "+response.statusCode());
             JsonNode node;
@@ -79,17 +90,25 @@ public class OllamaClient {
                 node=mapper.reader().with(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_TRAILING_TOKENS).readTree(response.body());
             } catch(java.io.IOException e) { throw new IllegalStateException("AI platform returned invalid JSON"); }
             if(node==null || node.has("error")) throw new IllegalStateException("AI platform returned an error response");
+            metrics = GenerationMetrics.from(config.protocol(), node, java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started));
             String text=protocol.text(node);
             if(text.isBlank()) throw new IllegalStateException("AI platform returned no text");
-            return new Generation(text,config.model());
+            return new Generation(text,config.model(),metrics);
+            } finally {
+                if (context != null) context.after().after(metrics == null
+                        ? new GenerationMetrics(null, null, java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started)) : metrics);
+            }
         }
     }
 
     @FunctionalInterface public interface BeforeGeneration { void before() throws Exception; }
     @FunctionalInterface public interface Scope extends AutoCloseable { @Override void close(); }
-    private record GenerationScope(AiConfig expected, BeforeGeneration observer) {}
+    @FunctionalInterface public interface AfterGeneration { void after(GenerationMetrics metrics) throws Exception; }
+    private record GenerationScope(AiConfig expected, BeforeGeneration observer, AfterGeneration after) {}
 
-    public record Generation(String text, String model) {}
+    public record Generation(String text, String model, GenerationMetrics metrics) {
+        public Generation(String text, String model) { this(text, model, new GenerationMetrics(null, null, 0)); }
+    }
 
     public ConnectionStatus checkConnection() {
         AiConfig config = configStore.get();

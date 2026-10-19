@@ -42,6 +42,13 @@ public class RadarService {
         if(run.status().state().equals("paused")) store.updateRadarState(id,"queued",run.status().stage(),null);
         return status(id);
     }
+    public RunStatus retry(String id, String requestKey) throws Exception {
+        var original = store.loadRadarRun(id);
+        if (original == null) throw new NoSuchElementException("Radar run not found");
+        if (!java.util.Set.of("failed", "partial", "success").contains(original.status().state()))
+            throw new IllegalStateException("Finish or resume the existing run first");
+        return submit(original.request().date(), original.request().zoneId(), requestKey);
+    }
     public String fingerprint() throws java.io.IOException {
         return RadarJson.hash(java.util.List.of(config.get(),profiles.loadAll(),ai.get().identity()));
     }

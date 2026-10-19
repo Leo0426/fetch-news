@@ -138,6 +138,32 @@ public class FeedStore implements Closeable {
         return result;
     }
 
+    public synchronized List<RadarTypes.RunSnapshot> listRadarRuns(int limit) throws SQLException {
+        List<RadarTypes.RunSnapshot> result = new ArrayList<>();
+        try (PreparedStatement statement = conn.prepareStatement("SELECT id FROM radar_runs ORDER BY rowid DESC LIMIT ?")) {
+            statement.setInt(1, Math.clamp(limit, 1, 100));
+            try (ResultSet rs = statement.executeQuery()) { while (rs.next()) result.add(loadRadarRun(rs.getString(1))); }
+        }
+        return List.copyOf(result);
+    }
+
+    public synchronized void recordRadarMetrics(String id, app.ai.GenerationMetrics metrics) throws SQLException {
+        var run = loadRadarRun(id);
+        long count = Long.parseLong(run.checkpoints().getOrDefault("usage.calls", "0"));
+        long known = Long.parseLong(run.checkpoints().getOrDefault("usage.known", "0"));
+        long input = Long.parseLong(run.checkpoints().getOrDefault("usage.input", "0"));
+        long output = Long.parseLong(run.checkpoints().getOrDefault("usage.output", "0"));
+        long millis = Long.parseLong(run.checkpoints().getOrDefault("usage.millis", "0"));
+        inTransaction(() -> {
+            saveRadarCheckpoint(id, "usage.calls", Long.toString(count + 1));
+            saveRadarCheckpoint(id, "usage.known", Long.toString(known + (metrics.inputTokens() != null && metrics.outputTokens() != null ? 1 : 0)));
+            saveRadarCheckpoint(id, "usage.input", Long.toString(input + (metrics.inputTokens() == null ? 0 : metrics.inputTokens())));
+            saveRadarCheckpoint(id, "usage.output", Long.toString(output + (metrics.outputTokens() == null ? 0 : metrics.outputTokens())));
+            saveRadarCheckpoint(id, "usage.millis", Long.toString(millis + metrics.elapsedMillis()));
+            return null;
+        });
+    }
+
     public synchronized RadarTypes.RunSnapshot loadRadarRun(String id) throws SQLException {
         try (PreparedStatement ps = conn.prepareStatement("SELECT * FROM radar_runs WHERE id=?")) {
             ps.setString(1,id);
