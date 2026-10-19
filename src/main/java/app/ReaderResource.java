@@ -473,18 +473,13 @@ public class ReaderResource {
                             s.pubDate(), s.firstSeenAt(), summary, summaryStatus));
         }
 
-        int cap = 15;
         List<BriefingSection> sections = byCategory.entrySet().stream()
-                .map(e -> {
-                    List<ReaderItem> all = e.getValue();
-                    return new BriefingSection(e.getKey(),
-                            all.size() > cap ? all.subList(0, cap) : all,
-                            all.size());
-                })
-                .sorted(java.util.Comparator.comparingInt(BriefingSection::totalCount).reversed())
+                .map(e -> BriefingSection.from(e.getKey(), e.getValue()))
+                .sorted(java.util.Comparator.comparingInt(BriefingSection::totalStoryCount).reversed())
                 .toList();
 
-        return templates.briefingPage(sections, targetDate, stored.size());
+        int articleCount = sections.stream().mapToInt(BriefingSection::totalCount).sum();
+        return templates.briefingPage(sections, targetDate, articleCount);
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────

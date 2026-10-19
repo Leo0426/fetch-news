@@ -81,6 +81,8 @@ All pages are publicly accessible — there is no authentication layer.
 
 **FeedItem** — one article, post, release, or notification. Fields: title, link, description, pubDate, author, categories.
 
+**Briefing story** — a presentation group of articles with matching, sufficiently specific headlines within one category of a daily briefing. It retains every article's original link and independent reading identity; headline agreement does not establish that the articles describe the same event.
+
 **Route** — a public HTTP path mapped to one RouteHandler. Examples: `/hn/:feed`, `/github/releases/:owner/:repo`, `/rss`.
 
 **RouteHandler** — single-method interface that produces a Feed. One class per source. No annotations or framework magic.

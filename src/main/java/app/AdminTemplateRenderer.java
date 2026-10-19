@@ -287,6 +287,7 @@ public class AdminTemplateRenderer {
         ctx.setVariable("nextDate", date.plusDays(1).format(BRIEFING_ISO_FMT));
         ctx.setVariable("isToday", date.equals(LocalDate.now()));
         ctx.setVariable("totalCount", totalCount);
+        ctx.setVariable("totalStoryCount", sections.stream().mapToInt(BriefingSection::totalStoryCount).sum());
         return engine.process("reader/briefing", ctx);
     }
 

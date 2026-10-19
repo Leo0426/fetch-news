@@ -55,11 +55,14 @@
     <div class="bf-header-right">
       <div class="bf-total-block">
         <span class="bf-total" th:text="${totalCount}">0</span>
-        <span class="bf-total-label">条内容</span>
+        <span class="bf-total-label">篇文章</span>
       </div>
     </div>
   </header>
   <section id="briefing-content" tabindex="-1" aria-label="当日内容">
+
+  <p th:if="${totalCount > totalStoryCount}" class="bf-folding-note"
+     th:text="${totalCount} + ' 篇文章折叠为 ' + ${totalStoryCount} + ' 组报道。同标题报道可展开查看全部原文。'"></p>
 
   <!-- ── Empty state ─────────────────────────────────────────── -->
   <div th:if="${sections.isEmpty()}" class="bf-empty">
@@ -75,13 +78,11 @@
       <div class="bf-section-head">
         <h2 class="bf-cat-name" th:text="${sec.category()}">分类</h2>
         <span class="bf-cat-count"
-              th:text="${sec.totalCount() > #lists.size(sec.items())} ?
-                        ${#lists.size(sec.items())} + ' / ' + ${sec.totalCount()} + ' 条' :
-                        ${sec.totalCount()} + ' 条'">0 条</span>
+              th:text="${sec.totalStoryCount()} + ' 组 · ' + ${sec.totalCount()} + ' 篇'">0 组 · 0 篇</span>
       </div>
 
       <div class="bf-items">
-        <div th:each="item, ii : ${sec.items()}" class="bf-item">
+        <div th:each="story, ii : ${sec.stories()}" class="bf-item" th:with="item=${story.primary()}">
           <span class="bf-item-num" th:text="${ii.index + 1}">1</span>
           <div class="bf-item-body">
             <a class="bf-item-title"
@@ -98,13 +99,28 @@
             <div th:if="${item.hasSummary()}"
                  class="bf-item-summary"
                  th:text="${item.summary()}"></div>
+            <details th:if="${!story.related().isEmpty()}" class="bf-related">
+              <summary th:text="'另有 ' + ${#lists.size(story.related())} + ' 篇同标题报道'">同标题报道</summary>
+              <div th:each="related : ${story.related()}" class="bf-related-item">
+                <a class="bf-item-title" th:href="${related.link()}" th:text="${related.title()}"
+                   target="_blank" rel="noopener noreferrer">标题</a>
+                <div class="bf-item-meta">
+                  <a class="reader-article-link" th:href="${'/reader/article?link=' + #uris.escapeQueryParam(related.link())}" data-article-link>站内阅读</a>
+                  <span class="bf-item-src" th:text="${related.sourceLabel()}">来源</span>
+                  <span class="bf-item-age" th:text="'获取 ' + ${related.formattedFetchedAt()}">获取 —</span>
+                  <span class="bf-item-age" th:text="'发布 ' + ${related.formattedPublishedAt()}">发布 —</span>
+                </div>
+                <div th:replace="~{reader/fragments :: summaryStatus(${related})}"></div>
+                <div th:if="${related.hasSummary()}" class="bf-item-summary" th:text="${related.summary()}"></div>
+              </div>
+            </details>
           </div>
         </div>
       </div>
 
-      <div th:if="${sec.totalCount() > #lists.size(sec.items())}"
+      <div th:if="${sec.totalStoryCount() > #lists.size(sec.stories())}"
            class="bf-more"
-           th:text="'还有 ' + (${sec.totalCount()} - ${#lists.size(sec.items())}) + ' 条未展示'">
+           th:text="'还有 ' + (${sec.totalStoryCount()} - ${#lists.size(sec.stories())}) + ' 组未展示'">
       </div>
     </div>
   </div>

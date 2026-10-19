@@ -1834,6 +1834,25 @@ label.field-label {
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+.bf-folding-note {
+  margin: 0 0 18px;
+  color: var(--ink-soft);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.bf-related { margin-top: 8px; }
+.bf-related summary {
+  cursor: pointer;
+  color: var(--accent);
+  font-size: 12px;
+  min-height: 44px;
+  align-content: center;
+}
+.bf-related-item {
+  margin: 0 0 10px;
+  padding: 8px 0 8px 12px;
+  border-left: 2px solid var(--border);
+}
 .bf-more {
   display: block;
   padding: 7px 14px;
