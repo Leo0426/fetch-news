@@ -135,4 +135,9 @@ public class AppConfig {
         return new RadarScheduler(config, service, java.time.Clock.systemUTC());
     }
 
+    @Bean(initMethod = "start", destroyMethod = "close")
+    public app.radar.eval.EvaluationService evaluationService(FeedStore store, AiConfigStore ai, OllamaClient client, ObjectMapper mapper) throws Exception {
+        return new app.radar.eval.EvaluationService(store, ai, client, mapper);
+    }
+
 }

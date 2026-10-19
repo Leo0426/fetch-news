@@ -1,0 +1,25 @@
+<div data-ai-settings>
+  <h2>模型评测</h2>
+  <p>固定 3 篇样本与 2 组事件判断，每次最多 5 次模型调用。使用所选平台，保持当前平台不变。点击后会真实调用模型并可能产生费用。</p>
+  <form class="radar-form" hx-post="/index/radar/evaluation" hx-target="#main-content">
+    <input type="hidden" name="requestKey" th:value="${requestKey}">
+    <label>评测平台<select name="platformId"><option th:each="platform:${platforms}" th:value="${platform.id}" th:text="${platform.name + ' / ' + platform.model}"></option></select></label>
+    <button class="btn primary" type="submit">开始评测（最多 5 次调用）</button>
+  </form>
+  <button class="btn" hx-get="/index/radar/evaluation" hx-target="#main-content">刷新结果</button>
+  <details><summary>查看固定样本及参考</summary><article th:each="sample:${samples}"><h3 th:text="${sample.title}"></h3><p th:text="${sample.body}"></p><p th:text="${'参考评分 ' + sample.minimum + '–' + sample.maximum + '；事实核对：' + sample.reference}"></p></article></details>
+  <p>评分区间与事件标签用于回归检查；摘要质量请结合事实参考人工核对。完成状态仅表示评测已运行结束。</p>
+  <article class="radar-form" th:each="entry:${jobs}">
+    <h3 th:text="${entry.data.path('platformId').asText() + ' · ' + entry.job.state}"></h3>
+    <small th:text="${entry.job.id}"></small>
+    <p th:if="${entry.data.has('error')}" th:text="${entry.data.path('error').asText()}"></p>
+    <div th:each="result:${entry.data.path('results')}">
+      <h4 th:text="${result.path('sample').asText()}"></h4>
+      <p class="radar-note" th:text="${result.path('verdict').toPrettyString()}"></p>
+      <p th:if="${result.has('reference')}" th:text="${'事实参考：' + result.path('reference').asText()}"></p>
+      <p th:text="${'参考匹配：' + (result.has('scoreMatchesReference') ? result.path('scoreMatchesReference').asText() : result.path('matchesReference').asText())}"></p>
+      <small th:text="${'耗时 ' + result.path('metrics').path('elapsedMillis').asText() + ' ms；输入/输出 Token ' + result.path('metrics').path('inputTokens').asText('未知') + ' / ' + result.path('metrics').path('outputTokens').asText('未知')}"></small>
+    </div>
+    <p th:if="${entry.job.state == 'paused'}">上次执行被中断，保留已有结果。重新开始评测可创建新记录。</p>
+  </article>
+</div>

@@ -71,6 +71,7 @@ public class FeedStore implements Closeable {
             s.execute("CREATE TABLE IF NOT EXISTS radar_candidates(run_id TEXT NOT NULL,item_link TEXT NOT NULL,payload TEXT NOT NULL,PRIMARY KEY(run_id,item_link))");
             s.execute("CREATE TABLE IF NOT EXISTS radar_analyses(cache_key TEXT PRIMARY KEY,payload TEXT NOT NULL)");
             s.execute("CREATE TABLE IF NOT EXISTS radar_decisions(run_id TEXT NOT NULL,item_link TEXT NOT NULL,payload TEXT NOT NULL,PRIMARY KEY(run_id,item_link))");
+            s.execute("CREATE TABLE IF NOT EXISTS radar_jobs(id TEXT PRIMARY KEY,kind TEXT NOT NULL,request_key TEXT NOT NULL,payload TEXT NOT NULL,state TEXT NOT NULL,created_at INTEGER NOT NULL,UNIQUE(kind,request_key))");
             s.execute("CREATE TABLE IF NOT EXISTS radar_reports(run_id TEXT PRIMARY KEY,payload TEXT NOT NULL,markdown TEXT NOT NULL)");
         }
     }
@@ -136,6 +137,56 @@ public class FeedStore implements Closeable {
             try (ResultSet rs = ps.executeQuery()) { while (rs.next()) result.add(rs.getString(1)); }
         }
         return result;
+    }
+
+    public record RadarJob(String id, String kind, String requestKey, String state, String payload, long createdAt) {}
+
+    public synchronized RadarJob createRadarJob(String kind, String requestKey, String payload) throws SQLException {
+        if (requestKey == null || requestKey.isBlank() || requestKey.length() > 200) throw new IllegalArgumentException("Invalid request key");
+        try (PreparedStatement ps = conn.prepareStatement("INSERT OR IGNORE INTO radar_jobs VALUES(?,?,?,?,'queued',?)")) {
+            ps.setString(1, java.util.UUID.randomUUID().toString()); ps.setString(2, kind); ps.setString(3, requestKey);
+            ps.setString(4, payload); ps.setLong(5, System.currentTimeMillis()); ps.executeUpdate();
+        }
+        try (PreparedStatement ps = conn.prepareStatement("SELECT * FROM radar_jobs WHERE kind=? AND request_key=?")) {
+            ps.setString(1, kind); ps.setString(2, requestKey);
+            try (ResultSet rs = ps.executeQuery()) { return rs.next() ? radarJob(rs) : null; }
+        }
+    }
+    public synchronized RadarJob loadRadarJob(String id) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement("SELECT * FROM radar_jobs WHERE id=?")) {
+            ps.setString(1, id); try (ResultSet rs = ps.executeQuery()) { return rs.next() ? radarJob(rs) : null; }
+        }
+    }
+    public synchronized List<RadarJob> listRadarJobs(String kind, int limit) throws SQLException {
+        List<RadarJob> result = new ArrayList<>();
+        try (PreparedStatement ps = conn.prepareStatement("SELECT * FROM radar_jobs WHERE kind=? ORDER BY created_at DESC,rowid DESC LIMIT ?")) {
+            ps.setString(1, kind); ps.setInt(2, Math.clamp(limit, 1, 100));
+            try (ResultSet rs = ps.executeQuery()) { while (rs.next()) result.add(radarJob(rs)); }
+        }
+        return List.copyOf(result);
+    }
+    public synchronized RadarJob claimRadarJob(String kind) throws SQLException {
+        return inTransaction(() -> {
+            try (PreparedStatement ps = conn.prepareStatement("SELECT id FROM radar_jobs WHERE kind=? AND state='queued' ORDER BY rowid LIMIT 1")) {
+                ps.setString(1, kind);
+                String id;
+                try (ResultSet rs = ps.executeQuery()) { if (!rs.next()) return null; id = rs.getString(1); }
+                var job = loadRadarJob(id); updateRadarJob(id, "running", job.payload()); return loadRadarJob(id);
+            }
+        });
+    }
+    public synchronized void updateRadarJob(String id, String state, String payload) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement("UPDATE radar_jobs SET state=?,payload=? WHERE id=?")) {
+            ps.setString(1, state); ps.setString(2, payload); ps.setString(3, id); ps.executeUpdate();
+        }
+    }
+    public synchronized void recoverRadarJobs(String kind) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement("UPDATE radar_jobs SET state='paused' WHERE kind=? AND state='running'")) {
+            ps.setString(1, kind); ps.executeUpdate();
+        }
+    }
+    private RadarJob radarJob(ResultSet rs) throws SQLException {
+        return new RadarJob(rs.getString("id"), rs.getString("kind"), rs.getString("request_key"), rs.getString("state"), rs.getString("payload"), rs.getLong("created_at"));
     }
 
     public synchronized List<RadarTypes.RunSnapshot> listRadarRuns(int limit) throws SQLException {
