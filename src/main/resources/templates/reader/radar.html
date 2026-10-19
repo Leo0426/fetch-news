@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title th:text="'精选日报 · ' + ${page.date()}">精选日报</title>
+  <link rel="icon" href="/favicon.svg"><link rel="stylesheet" href="/admin.css"><link rel="stylesheet" href="/radar.css">
+  <script defer src="/radar.js"></script>
+</head>
+<body class="reader-page">
+<a class="skip-link" href="#radar-content">跳到精选日报</a>
+<main class="radar-wrap" id="radar-content">
+  <nav class="reader-nav" aria-label="阅读导航"><a href="/reader">速览</a><a href="/reader/unread">待读</a><a href="/reader/briefing">原始日报</a><a href="/reader/radar" aria-current="page">精选日报</a><a href="/reader/bookmarks">收藏</a></nav>
+  <header><p class="page-eyebrow">按你的规则，留下值得读的内容</p><h1>精选日报</h1></header>
+  <form action="/reader/radar" method="get" class="radar-controls">
+    <label>日期 <input type="date" name="date" th:value="${page.date()}" required></label>
+    <label>时区 <input name="zoneId" th:value="${page.zoneId()}" required maxlength="80"></label><button type="submit">查看</button>
+  </form>
+  <p th:if="${!page.enabled()}" class="radar-notice">精选日报尚未启用。可继续阅读历史日报；启用方式见项目文档。</p>
+  <form th:if="${page.enabled()}" id="radar-generate" action="/reader/radar/runs" method="post" class="radar-controls">
+    <input type="hidden" name="date" th:value="${page.date()}"><input type="hidden" name="zoneId" th:value="${page.zoneId()}">
+    <input type="hidden" name="requestKey" th:value="${page.requestKey()}"><button type="submit">生成新版本</button>
+    <span>后台处理，刷新页面不会重新生成。</span>
+  </form>
+  <noscript><p>生成与恢复需要 JavaScript；已保存日报可直接阅读。</p></noscript>
+  <p id="radar-feedback" role="status" aria-live="polite"></p>
+  <section th:if="${page.latest()!=null}" class="radar-status" th:attr="data-run-id=${page.latest().runId()},data-state=${page.latest().state()}">
+    <strong th:text="${page.stateLabel(page.latest().state())}"></strong>
+    <span th:text="'版本 ' + ${page.latest().version()} + ' · 阶段 ' + ${page.latest().stage()} + ' · 模型调用 ' + ${page.latest().calls()}"></span>
+    <p th:if="${page.latest().error()!=null}" th:text="${page.latest().error()}"></p>
+    <button th:if="${page.latest().state()=='paused' && page.enabled()}" type="button" id="radar-resume" th:attr="data-run-id=${page.latest().runId()}">恢复任务</button>
+  </section>
+  <section th:if="${page.report()==null}" class="radar-empty"><h2>尚未生成精选日报</h2><p>选定日期后生成。原始日报和全部文章仍可随时阅读。</p><a th:href="${'/reader/briefing?date=' + page.date()}">查看原始日报</a></section>
+  <section th:if="${page.report()!=null}">
+    <div class="radar-report-meta"><h2 th:text="'已保存版本 ' + ${page.saved().version()}"></h2><a th:href="${'/reader/radar/runs/' + page.report().runId() + '/markdown'}">下载 Markdown</a></div>
+    <p class="radar-notice" th:text="'AI 生成 · 候选 ' + ${page.report().totalCandidates()} + ' · 未覆盖 ' + ${page.report().omitted()} + ' · 失败/降级 ' + ${page.report().failures()}"></p>
+    <p th:if="${page.report().stories().isEmpty()}">没有符合筛选标准的内容。</p>
+    <section th:each="profile : ${page.profiles()}">
+      <h2 th:text="${profile}"></h2>
+      <article class="radar-story" th:each="story : ${page.report().stories()}" th:if="${story.event().primary().profile()==profile}">
+        <div class="radar-score" th:text="${story.event().primary().score()} + ' / 10'"></div>
+        <h3><a th:href="${page.safeUrl(story.event().primary().link())}" th:text="${page.title(story.event().primary().link())}" target="_blank" rel="noopener noreferrer"></a></h3>
+        <a th:href="${'/reader/article?link=' + #uris.escapeQueryParam(story.event().primary().link())}">站内阅读</a>
+        <p th:text="${story.event().primary().reason()}"></p>
+        <p th:if="${story.event().primary().limitedInput()}" class="radar-notice">评分时正文不足，结论主要来自标题和简介。</p>
+        <section th:each="block : ${story.blocks()}"><h4 th:text="${block.key}"></h4><p th:each="paragraph : ${block.value}" th:text="${paragraph}"></p><p th:if="${block.value.isEmpty()}">原文信息不足，未生成此区块。</p></section>
+        <p th:if="${story.error()!=null}" class="radar-notice" th:text="'区块缺失：' + ${story.error()}"></p>
+        <details th:if="${!story.event().related().isEmpty()}"><summary th:text="'关联原文 · ' + ${story.event().related().size()}"></summary>
+          <p th:each="related : ${story.event().related()}"><a th:href="${page.safeUrl(related.link())}" th:text="${page.title(related.link())}" target="_blank" rel="noopener noreferrer"></a> · <a th:href="${'/reader/article?link=' + #uris.escapeQueryParam(related.link())}">站内阅读</a></p>
+        </details>
+      </article>
+    </section>
+    <details class="radar-decisions"><summary>查看筛选结果与原因</summary><ul><li th:each="decision : ${page.report().decisions()}"><span th:text="${page.title(decision.link())}"></span> · <span th:text="${decision.reason()}"></span></li></ul></details>
+  </section>
+</main>
+</body></html>
