@@ -82,3 +82,7 @@ docker compose up -d
 ## 技术栈
 
 Spring Boot · Thymeleaf + HTMX + Alpine.js · JSoup · SQLite · Caffeine · Ollama · Java 25
+
+### 精选日报
+
+新增 Profile 评分、事件去重、配额与持久化精选日报，入口 `/reader/radar`。默认关闭，启用与恢复方式见 [使用文档](docs/radar.md)。

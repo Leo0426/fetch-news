@@ -1,0 +1,6 @@
+[
+  {"name":"above-threshold","response":{"score":8,"reason":"Evidence backed","summary":"Facts","tags":[]},"stories":1,"state":"success"},
+  {"name":"at-threshold","response":{"score":7,"reason":"Useful","summary":"Facts","tags":[]},"stories":1,"state":"success"},
+  {"name":"below-threshold","response":{"score":6.99,"reason":"Low relevance","summary":"Facts","tags":[]},"stories":0,"state":"success"},
+  {"name":"invalid-analysis","response":{"score":11,"reason":"Invalid","summary":"Facts","tags":[]},"stories":0,"state":"partial"}
+]

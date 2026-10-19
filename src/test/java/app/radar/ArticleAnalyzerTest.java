@@ -1,6 +1,8 @@
 package app.radar;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import app.store.FeedStore;
 import java.nio.file.Path;
 import java.util.List;
@@ -26,7 +28,7 @@ class ArticleAnalyzerTest {
     @Test void rejectsMissingFieldsAndNonNumericScore() {
         var candidate=RadarFixtures.candidate("https://a");
         var run=RadarFixtures.run(RadarConfig.defaults(),List.of(candidate));
-        for (String json:List.of("{}","{\"score\":\"NaN\"}","{\"score\":-1}")) {
+        for (String json:List.of("{}","{\"score\":\"NaN\"}","{\"score\":-1}","{\"score\":10,\"reason\":\"x\",\"summary\":\"x\",\"tags\":[]} trailing garbage")) {
             var analyzer=new ArticleAnalyzer(RadarFixtures.model(directory,json),null,RadarFixtures.MAPPER);
             assertThrows(Exception.class, () -> analyzer.analyze(candidate,run.profiles().get("tech-news"),run));
         }

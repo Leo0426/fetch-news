@@ -10,13 +10,14 @@ import java.util.List;
 import java.util.Map;
 
 public class DigestSelector {
+    private enum DefaultBucket { INSTANCE }
     public Selection select(List<Event> events,RadarConfig config) {
         List<Event> selected=new ArrayList<>();
         List<Decision> decisions=new ArrayList<>();
-        Map<String,Integer> counts=new HashMap<>();
+        Map<Object,Integer> counts=new HashMap<>();
         for(Event event:events.stream().sorted(Comparator.comparing((Event e)->e.primary().score(),Comparator.nullsLast(Comparator.reverseOrder()))).toList()) {
             var item=event.primary();
-            String group="other";
+            Object group=DefaultBucket.INSTANCE;
             int limit=config.defaultGroupLimit();
             for(var entry:config.categoryGroups().entrySet()) {
                 if(entry.getValue().categories().contains(item.category())) { group=entry.getKey(); limit=entry.getValue().limit(); break; }

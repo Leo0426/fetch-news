@@ -253,3 +253,7 @@ If a route fetches detail pages per item, use `CacheService` for the detail-page
 - Dynamic plugin loading or classpath scanning
 - Full RSSHub common-parameter compatibility (Radar rules, OpenCC, custom filters)
 - Pagination in route handlers
+
+## Radar reports
+
+The optional `app.radar` pipeline snapshots saved articles, source provenance, Profiles, configuration and model identity, then routes, scores, deduplicates, selects and enriches articles into immutable reports. `/reader/radar` and Markdown exports only read saved output. A durable single-instance worker shares Ollama generation admission with existing summaries. See [radar operations](docs/radar.md) for configuration, budgets, recovery and quality limits.

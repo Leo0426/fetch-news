@@ -1,6 +1,8 @@
 package app.store;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import app.ai.AiConfig;
 import app.core.FeedItem;
@@ -29,6 +31,7 @@ class RadarStoreTest {
             id = first.runId();
             assertEquals(id, store.createRadarRun(request, RadarConfig.defaults(), profiles).runId());
             assertEquals(1, first.version());
+            assertThrows(IllegalArgumentException.class, () -> store.createRadarRun(new RunRequest("2026-01-01",request.zoneId(),"one",request.ai(),Map.of()),RadarConfig.defaults(),profiles));
             assertEquals(List.of("/first", "/second"), store.loadRadarRun(id).candidates().getFirst().sources());
             store.saveItems("/first", List.of(new FeedItem("Changed", "https://a.test/1", "New", null, null, List.of())));
             assertEquals("Original", store.loadRadarRun(id).candidates().getFirst().title());

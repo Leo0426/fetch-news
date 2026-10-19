@@ -24,7 +24,11 @@ public final class RadarTestEnvironment implements AutoCloseable {
     public final RadarWorker worker;
     public final HttpServer server;
     public final AtomicInteger requests=new AtomicInteger();
+    public volatile String blocksResponse="{\"blocks\":{\"summary\":[\"摘要\"],\"importance\":[\"价值\"]}}";
+    public volatile Runnable onBlocks=()->{};
     public volatile String scoreResponse="{\"score\":8,\"reason\":\"Useful\",\"summary\":\"Evidence\",\"tags\":[]}";
+
+    public volatile java.util.function.Function<String,String> scoring=p->scoreResponse;
 
     public RadarTestEnvironment(Path directory,String configJson) throws Exception {
         store=new FeedStore(directory.resolve("feed.db"),mapper);
@@ -37,7 +41,8 @@ public final class RadarTestEnvironment implements AutoCloseable {
             requests.incrementAndGet();
             var input=mapper.readTree(e.getRequestBody());
             String prompt=input.path("prompt").asText();
-            String output=prompt.startsWith("TASK: score") ? scoreResponse : prompt.startsWith("TASK: dedup") ? "{\"match\":\"distinct\"}" : prompt.startsWith("TASK: route") ? "{\"profile\":\"tech-news\"}" : "{\"blocks\":{\"summary\":[\"摘要\"],\"importance\":[\"价值\"]}}";
+            String output=prompt.startsWith("TASK: score") ? scoring.apply(prompt) : prompt.startsWith("TASK: dedup") ? "{\"match\":\"distinct\"}" : prompt.startsWith("TASK: route") ? "{\"profile\":\"tech-news\"}" : blocksResponse;
+            if(prompt.startsWith("TASK: blocks")) onBlocks.run();
             byte[] body=mapper.writeValueAsBytes(Map.of("response",output));
             e.sendResponseHeaders(200,body.length);try(var out=e.getResponseBody()){out.write(body);}
         }); server.start();

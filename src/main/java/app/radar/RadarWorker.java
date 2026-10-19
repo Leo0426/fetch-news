@@ -55,6 +55,7 @@ public class RadarWorker implements AutoCloseable {
         try {
             run=store.claimNextRadarRun();
             if(run==null) return;
+            store.saveRadarCheckpoint(run.status().runId(),"attemptStartedAt",Long.toString(startedAt));
             RunSnapshot claimed=run;
             long previous=Long.parseLong(run.checkpoints().getOrDefault("elapsedMillis","0"));
             try(var scope=client.withScope(run.request().ai(),()->guard(claimed,startedAt,previous,true))) {
@@ -73,6 +74,7 @@ public class RadarWorker implements AutoCloseable {
                 try {
                     long prior=Long.parseLong(run.checkpoints().getOrDefault("elapsedMillis","0"));
                     store.saveRadarCheckpoint(run.status().runId(),"elapsedMillis",Long.toString(prior+Math.max(0,clock.millis()-startedAt)));
+                    store.saveRadarCheckpoint(run.status().runId(),"attemptStartedAt","0");
                 } catch(Exception e) { log.warn("Cannot save radar runtime: {}",e.getClass().getSimpleName()); }
             }
             processing.set(false);
@@ -113,6 +115,7 @@ public class RadarWorker implements AutoCloseable {
                     analysis=analyzer.analyze(candidate,run.profiles().get(profile),run);
                     store.saveRadarAnalysis(id,analysis);
                 } catch(RadarControlException e) { throw e; }
+                catch(java.sql.SQLException e) { throw e; }
                 catch(Exception e) {
                     guard(run,start,prior,false);
                     analysis=new Analysis(candidate.link(),profile==null ? run.config().defaultProfile() : profile,router.category(candidate,run),null,
@@ -151,6 +154,8 @@ public class RadarWorker implements AutoCloseable {
             else {
                 try { story=new ReportStory(event,generator.generate(event,run.profiles().get(event.primary().profile()),run),null); }
                 catch(RadarControlException e) { throw e; }
+                catch(java.sql.SQLException e) { throw e; }
+                catch(BlockGenerator.PartialBlocksException e) { guard(run,start,prior,false); story=new ReportStory(event,e.blocks(),message(e)); }
                 catch(Exception e) { guard(run,start,prior,false); story=new ReportStory(event,Map.of(),message(e)); }
                 save(id,checkpoints,key,mapper.writeValueAsString(story));
             }
@@ -158,6 +163,7 @@ public class RadarWorker implements AutoCloseable {
         }
         int failures=(int)analyses.stream().filter(a->a.error()!=null).count()+(int)stories.stream().filter(s->s.error()!=null).count();
         if(checkpoints.containsKey("warnings")) failures++;
+        guard(run,start,prior,false);
         publish(run,stories,decisions,failures,checkpoints.containsKey("warnings") ? Map.of("dedup",checkpoints.get("warnings")) : Map.of());
     }
     private void publishPartial(RunSnapshot original,String reason) throws Exception {
@@ -173,14 +179,19 @@ public class RadarWorker implements AutoCloseable {
         if(run.checkpoints().containsKey("events")) events=mapper.readValue(run.checkpoints().get("events"),new TypeReference<List<Event>>(){});
         else events=analyses.stream().filter(a->a.score()!=null && a.error()==null).map(a->new Event(RadarJson.hash(a.link()),a,List.of())).toList();
         Selection selection=new DigestSelector().select(events,run.config()); decisions.addAll(selection.decisions());
-        for(var analysis:analyses) if(analysis.error()!=null) decisions.add(new Decision(analysis.link(),"analysis_failed",null));
+        java.util.Set<String> decided=decisions.stream().map(Decision::link).collect(java.util.stream.Collectors.toSet());
+        for(var analysis:analyses) {
+            if(!decided.contains(analysis.link())) decisions.add(new Decision(analysis.link(),analysis.error()!=null ? "analysis_failed" : "below_threshold",null));
+        }
         List<ReportStory> stories=new ArrayList<>();
         for(var event:selection.selected()) {
             String saved=run.checkpoints().get("story:"+event.id());
             stories.add(saved==null ? new ReportStory(event,Map.of(),"Generation budget exhausted") : mapper.readValue(saved,ReportStory.class));
         }
         store.saveRadarDecisions(run.status().runId(),decisions);
-        publish(run,stories,decisions,Math.max(1,decisions.size()-stories.size()),Map.of("budget",reason));
+        int failures=(int)decisions.stream().filter(d->d.reason().equals("analysis_failed") || d.reason().equals("budget_exhausted")).count()
+                +(int)stories.stream().filter(story->story.error()!=null).count();
+        publish(run,stories,decisions,Math.max(1,failures),Map.of("budget",reason));
     }
     private void publish(RunSnapshot run,List<ReportStory> stories,List<Decision> decisions,int failures,Map<String,String> diagnostics) throws Exception {
         String id=run.status().runId();
@@ -188,7 +199,9 @@ public class RadarWorker implements AutoCloseable {
         Map<String,String> metadata=new LinkedHashMap<>(diagnostics);
         metadata.put("model",run.request().ai().model()); metadata.put("configHash",RadarJson.hash(run.config()));
         metadata.put("profileHash",RadarJson.hash(run.profiles()));
-        var report=new Report(id,run.request().date(),run.request().zoneId(),stories,decisions,run.status().totalCandidates(),run.status().omitted(),failures,metadata);
+        Map<String,String> titles=new LinkedHashMap<>();
+        for(var candidate:run.candidates()) titles.put(candidate.link(),candidate.title());
+        var report=new Report(id,run.request().date(),run.request().zoneId(),stories,decisions,run.status().totalCandidates(),run.status().omitted(),failures,metadata,titles);
         store.saveRadarReport(id,report,new RadarRenderer().markdown(report));
     }
     private void stage(String id,String stage) throws Exception { store.updateRadarState(id,"running",stage,null); }

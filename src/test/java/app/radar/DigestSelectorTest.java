@@ -1,6 +1,7 @@
 package app.radar;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -22,4 +23,11 @@ class DigestSelectorTest {
         assertEquals(20,new DigestSelector().select(events,RadarConfig.defaults()).selected().size());
         assertTrue(new DigestSelector().select(List.of(),RadarConfig.defaults()).selected().isEmpty());
     }
+    @Test void explicitOtherGroupCannotCollideWithUnmappedCategoryCount() throws Exception {
+        var config=RadarFixtures.MAPPER.readValue("{\"categoryGroups\":{\"other\":{\"limit\":1,\"categories\":[\"AI\"]}}}",RadarConfig.class);
+        var news=new RadarTypes.Analysis("https://news","tech-news","News",9.0,"r","s",List.of(),false,"news",null);
+        var ai=EventDeduplicatorTest.analysis("https://ai","tech-news",8);
+        assertEquals(2,new DigestSelector().select(List.of(new RadarTypes.Event("news",news,List.of()),new RadarTypes.Event("ai",ai,List.of())),config).selected().size());
+    }
+
 }

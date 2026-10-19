@@ -35,11 +35,15 @@ public final class RadarTypes {
         public Selection { selected = List.copyOf(selected); decisions = List.copyOf(decisions); }
     }
     public record ReportStory(Event event, Map<String,List<String>> blocks, String error) {
-        public ReportStory { blocks = Map.copyOf(blocks); }
+        public ReportStory { blocks = java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(blocks)); }
     }
     public record Report(String runId, String date, String zoneId, List<ReportStory> stories, List<Decision> decisions,
-                         int totalCandidates, int omitted, int failures, Map<String,String> diagnostics) {
-        public Report { stories = List.copyOf(stories); decisions = List.copyOf(decisions); diagnostics = Map.copyOf(diagnostics); }
+                         int totalCandidates, int omitted, int failures, Map<String,String> diagnostics, Map<String,String> titles) {
+        public Report(String runId,String date,String zoneId,List<ReportStory> stories,List<Decision> decisions,
+                      int totalCandidates,int omitted,int failures,Map<String,String> diagnostics) {
+            this(runId,date,zoneId,stories,decisions,totalCandidates,omitted,failures,diagnostics,Map.of());
+        }
+        public Report { titles = titles == null ? Map.of() : Map.copyOf(titles); stories = List.copyOf(stories); decisions = List.copyOf(decisions); diagnostics = Map.copyOf(diagnostics); }
     }
     public record RunStatus(String runId, String date, int version, String state, String stage,
                             int totalCandidates, int omitted, int calls, String error) {}

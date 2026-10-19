@@ -82,7 +82,12 @@ public class FeedStore implements Closeable {
             try (PreparedStatement ps = conn.prepareStatement("SELECT id FROM radar_runs WHERE request_key=?")) {
                 ps.setString(1, request.idempotencyKey());
                 try (ResultSet rs = ps.executeQuery()) {
-                    if (rs.next()) return loadRadarRun(rs.getString(1)).status();
+                    if (rs.next()) {
+                        var existing=loadRadarRun(rs.getString(1));
+                        if(!existing.request().date().equals(request.date()) || !existing.request().zoneId().equals(request.zoneId()))
+                            throw new IllegalArgumentException("Request key already used for a different date or time zone");
+                        return existing.status();
+                    }
                 }
             }
             LocalDate date = LocalDate.parse(request.date());
@@ -202,9 +207,23 @@ public class FeedStore implements Closeable {
     }
 
     public synchronized void recoverRadarRuns() throws SQLException {
-        try (Statement statement=conn.createStatement()) {
-            statement.executeUpdate("UPDATE radar_runs SET state='paused',error='Application stopped; resume explicitly' WHERE state='running'");
-        }
+        inTransaction(() -> {
+            List<String> ids=new ArrayList<>();
+            try (Statement statement=conn.createStatement(); ResultSet rs=statement.executeQuery("SELECT id FROM radar_runs WHERE state IN ('running','paused')")) {
+                while(rs.next()) ids.add(rs.getString(1));
+            }
+            for(String id:ids) {
+                var run=loadRadarRun(id);
+                long start=Long.parseLong(run.checkpoints().getOrDefault("attemptStartedAt","0"));
+                if(start>0) {
+                    long elapsed=Long.parseLong(run.checkpoints().getOrDefault("elapsedMillis","0"));
+                    saveRadarCheckpoint(id,"elapsedMillis",Long.toString(elapsed+Math.max(0,System.currentTimeMillis()-start)));
+                    saveRadarCheckpoint(id,"attemptStartedAt","0");
+                }
+                if(run.status().state().equals("running")) updateRadarState(id,"paused",run.status().stage(),"Application stopped; resume explicitly");
+            }
+            return null;
+        });
     }
 
     public synchronized void saveRadarCheckpoint(String id,String key,String value) throws SQLException {

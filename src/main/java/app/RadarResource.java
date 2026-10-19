@@ -13,7 +13,6 @@ import java.time.DateTimeException;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.NoSuchElementException;
-import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -31,7 +30,7 @@ public class RadarResource {
     public RadarResource(RadarService service,FeedStore store,RadarConfigStore config,RadarTemplateRenderer renderer) {
         this.service=service;this.store=store;this.config=config;this.renderer=renderer;
     }
-    @GetMapping(value="/reader/radar",produces=MediaType.TEXT_HTML_VALUE)
+    @GetMapping(value="/reader/radar",produces="text/html;charset=UTF-8")
     public String page(@RequestParam(required=false) String date,@RequestParam(required=false) String zoneId) throws SQLException {
         available();
         String zone=zoneId==null ? config.get().zoneId() : ZoneId.of(zoneId).getId();

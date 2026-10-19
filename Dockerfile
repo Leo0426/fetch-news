@@ -24,4 +24,6 @@ ENTRYPOINT ["sh", "-c", \
    -Dfetch-news.db=/data/feed-store.db \
    -Dfetch-news.route-config=/data/route-config.json \
    -Dfetch-news.ai-config=/data/ai-config.json \
+   -Dfetch-news.radar-config=/data/radar-config.json \
+   -Dfetch-news.radar-profiles=/data/radar-profiles \
    -jar app.jar"]

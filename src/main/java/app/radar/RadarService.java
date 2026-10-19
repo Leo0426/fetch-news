@@ -42,6 +42,9 @@ public class RadarService {
         if(run.status().state().equals("paused")) store.updateRadarState(id,"queued",run.status().stage(),null);
         return status(id);
     }
+    public String fingerprint() throws java.io.IOException {
+        return RadarJson.hash(java.util.List.of(config.get(),profiles.loadAll(),ai.get().host(),ai.get().model()));
+    }
     private void checkAvailable() {
         if(store==null) throw new IllegalStateException("Article storage unavailable");
         if(!config.get().enabled() || !ai.get().enabled()) throw new IllegalStateException("Radar and AI must be enabled");

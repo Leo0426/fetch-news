@@ -10,6 +10,7 @@ import app.store.FeedStore;
 import app.radar.ProfileStore;
 import app.radar.RadarConfigStore;
 import app.radar.RadarService;
+import app.radar.RadarScheduler;
 import app.radar.RadarWorker;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -127,6 +128,11 @@ public class AppConfig {
     public RadarWorker radarWorker(FeedStore store, RadarConfigStore config, AiConfigStore ai,
                                    OllamaClient client, ArticleExtractor extractor, ObjectMapper mapper) throws SQLException {
         return new RadarWorker(store, config, ai, client, extractor, mapper, java.time.Clock.systemUTC());
+    }
+
+    @Bean
+    public RadarScheduler radarScheduler(RadarConfigStore config, RadarService service) {
+        return new RadarScheduler(config, service, java.time.Clock.systemUTC());
     }
 
 }
