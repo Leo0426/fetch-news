@@ -2,6 +2,9 @@ package app.store;
 
 import app.core.Feed;
 import app.core.FeedItem;
+import app.radar.Profile;
+import app.radar.RadarConfig;
+import app.radar.RadarTypes;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.Closeable;
@@ -59,6 +62,143 @@ public class FeedStore implements Closeable {
         }
     }
 
+    private void initializeRadarSchema() throws SQLException {
+        try (Statement s = conn.createStatement()) {
+            s.execute("CREATE TABLE IF NOT EXISTS feed_item_sources(item_link TEXT NOT NULL, route_path TEXT NOT NULL, first_seen_at TEXT NOT NULL, last_seen_at TEXT NOT NULL, PRIMARY KEY(item_link,route_path))");
+            s.execute("INSERT OR IGNORE INTO feed_item_sources SELECT item_link,route_path,first_seen_at,last_seen_at FROM feed_items");
+            s.execute("CREATE TABLE IF NOT EXISTS radar_runs(id TEXT PRIMARY KEY, request_key TEXT NOT NULL UNIQUE, date TEXT NOT NULL, zone_id TEXT NOT NULL, version INTEGER NOT NULL, state TEXT NOT NULL, stage TEXT NOT NULL, calls INTEGER NOT NULL DEFAULT 0, error TEXT, snapshot TEXT NOT NULL, checkpoints TEXT NOT NULL DEFAULT '{}')");
+            s.execute("CREATE INDEX IF NOT EXISTS idx_radar_queue ON radar_runs(state)");
+            s.execute("CREATE TABLE IF NOT EXISTS radar_candidates(run_id TEXT NOT NULL,item_link TEXT NOT NULL,payload TEXT NOT NULL,PRIMARY KEY(run_id,item_link))");
+            s.execute("CREATE TABLE IF NOT EXISTS radar_analyses(cache_key TEXT PRIMARY KEY,payload TEXT NOT NULL)");
+            s.execute("CREATE TABLE IF NOT EXISTS radar_decisions(run_id TEXT NOT NULL,item_link TEXT NOT NULL,payload TEXT NOT NULL,PRIMARY KEY(run_id,item_link))");
+            s.execute("CREATE TABLE IF NOT EXISTS radar_reports(run_id TEXT PRIMARY KEY,payload TEXT NOT NULL,markdown TEXT NOT NULL)");
+        }
+    }
+
+    public synchronized RadarTypes.RunStatus createRadarRun(RadarTypes.RunRequest request, RadarConfig config,
+                                                             Map<String,Profile> profiles) throws SQLException {
+        config.validateProfiles(profiles.keySet());
+        return inTransaction(() -> {
+            try (PreparedStatement ps = conn.prepareStatement("SELECT id FROM radar_runs WHERE request_key=?")) {
+                ps.setString(1, request.idempotencyKey());
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (rs.next()) return loadRadarRun(rs.getString(1)).status();
+                }
+            }
+            LocalDate date = LocalDate.parse(request.date());
+            ZoneId zone = ZoneId.of(request.zoneId());
+            Instant from = date.atStartOfDay(zone).toInstant(), to = date.plusDays(1).atStartOfDay(zone).toInstant();
+            List<RadarTypes.Candidate> candidates = new ArrayList<>();
+            try (PreparedStatement ps = conn.prepareStatement("SELECT * FROM feed_items WHERE substr(first_seen_at,1,19)>=? AND substr(first_seen_at,1,19)<=?")) {
+                ps.setString(1, from.toString().substring(0,19)); ps.setString(2, to.toString().substring(0,19));
+                try (ResultSet rs = ps.executeQuery()) {
+                    while (rs.next()) {
+                        Instant seen = Instant.parse(rs.getString("first_seen_at"));
+                        if (seen.isBefore(from) || !seen.isBefore(to) || rs.getString("title") == null || rs.getString("title").isBlank()) continue;
+                        candidates.add(new RadarTypes.Candidate(rs.getString("item_link"), rs.getString("title"), rs.getString("description"),
+                                rs.getString("author"), rs.getString("pub_date"), seen.toEpochMilli(), loadRadarSources(rs.getString("item_link"))));
+                    }
+                }
+            }
+            candidates.sort(Comparator.comparingLong(RadarTypes.Candidate::firstSeenAt).reversed().thenComparing(RadarTypes.Candidate::link));
+            int total = candidates.size(), version;
+            candidates = List.copyOf(candidates.subList(0, Math.min(total, config.candidateLimit())));
+            try (PreparedStatement ps = conn.prepareStatement("SELECT COALESCE(MAX(version),0)+1 FROM radar_runs WHERE date=? AND zone_id=?")) {
+                ps.setString(1, request.date()); ps.setString(2, request.zoneId());
+                try (ResultSet rs = ps.executeQuery()) { rs.next(); version = rs.getInt(1); }
+            }
+            String id = java.util.UUID.randomUUID().toString();
+            var status = new RadarTypes.RunStatus(id, request.date(), version, "queued", "routing", total, total-candidates.size(), 0, null);
+            var snapshot = new RadarTypes.RunSnapshot(status, request, config, profiles, candidates, System.currentTimeMillis(), Map.of());
+            try (PreparedStatement ps = conn.prepareStatement("INSERT INTO radar_runs(id,request_key,date,zone_id,version,state,stage,snapshot) VALUES(?,?,?,?,?,'queued','routing',?)")) {
+                ps.setString(1,id); ps.setString(2,request.idempotencyKey()); ps.setString(3,request.date());
+                ps.setString(4,request.zoneId()); ps.setInt(5,version); ps.setString(6,radarJson(snapshot)); ps.executeUpdate();
+            }
+            try (PreparedStatement ps = conn.prepareStatement("INSERT INTO radar_candidates VALUES(?,?,?)")) {
+                for (var candidate : candidates) {
+                    ps.setString(1,id); ps.setString(2,candidate.link()); ps.setString(3,radarJson(candidate)); ps.addBatch();
+                }
+                ps.executeBatch();
+            }
+            return status;
+        });
+    }
+
+    private List<String> loadRadarSources(String link) throws SQLException {
+        List<String> result = new ArrayList<>();
+        try (PreparedStatement ps = conn.prepareStatement("SELECT route_path FROM feed_item_sources WHERE item_link=? ORDER BY route_path")) {
+            ps.setString(1,link);
+            try (ResultSet rs = ps.executeQuery()) { while (rs.next()) result.add(rs.getString(1)); }
+        }
+        return result;
+    }
+
+    public synchronized RadarTypes.RunSnapshot loadRadarRun(String id) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement("SELECT * FROM radar_runs WHERE id=?")) {
+            ps.setString(1,id);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) return null;
+                var saved = radarRead(rs.getString("snapshot"), RadarTypes.RunSnapshot.class);
+                var old = saved.status();
+                var status = new RadarTypes.RunStatus(id, old.date(), old.version(), rs.getString("state"), rs.getString("stage"),
+                        old.totalCandidates(), old.omitted(), rs.getInt("calls"), rs.getString("error"));
+                Map<String,String> checkpoints;
+                try { checkpoints = mapper.readValue(rs.getString("checkpoints"), new TypeReference<Map<String,String>>() {}); }
+                catch (IOException e) { throw new SQLException("Invalid radar checkpoint",e); }
+                return new RadarTypes.RunSnapshot(status, saved.request(), saved.config(), saved.profiles(), saved.candidates(), saved.createdAt(), checkpoints);
+            }
+        }
+    }
+
+    public synchronized RadarTypes.Analysis loadRadarAnalysis(String cacheKey) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement("SELECT payload FROM radar_analyses WHERE cache_key=?")) {
+            ps.setString(1,cacheKey);
+            try (ResultSet rs = ps.executeQuery()) { return rs.next() ? radarRead(rs.getString(1),RadarTypes.Analysis.class) : null; }
+        }
+    }
+
+    public synchronized void saveRadarAnalysis(String runId, RadarTypes.Analysis analysis) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement("INSERT OR REPLACE INTO radar_analyses VALUES(?,?)")) {
+            ps.setString(1,analysis.cacheKey()); ps.setString(2,radarJson(analysis)); ps.executeUpdate();
+        }
+    }
+
+    public synchronized void saveRadarDecisions(String runId, List<RadarTypes.Decision> decisions) throws SQLException {
+        inTransaction(() -> {
+            try (PreparedStatement ps = conn.prepareStatement("INSERT OR REPLACE INTO radar_decisions VALUES(?,?,?)")) {
+                for (var decision : decisions) { ps.setString(1,runId); ps.setString(2,decision.link()); ps.setString(3,radarJson(decision)); ps.addBatch(); }
+                ps.executeBatch();
+            }
+            return null;
+        });
+    }
+
+    public synchronized void saveRadarReport(String runId, RadarTypes.Report report, String markdown) throws SQLException {
+        inTransaction(() -> {
+            try (PreparedStatement ps = conn.prepareStatement("INSERT INTO radar_reports VALUES(?,?,?)")) {
+                ps.setString(1,runId); ps.setString(2,radarJson(report)); ps.setString(3,markdown); ps.executeUpdate();
+            }
+            updateRadarState(runId, report.failures() > 0 || report.omitted() > 0 ? "partial" : "success", "render", null);
+            return null;
+        });
+    }
+
+    public synchronized void updateRadarState(String id, String state, String stage, String error) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement("UPDATE radar_runs SET state=?,stage=?,error=? WHERE id=?")) {
+            ps.setString(1,state); ps.setString(2,stage); ps.setString(3,error); ps.setString(4,id); ps.executeUpdate();
+        }
+    }
+
+    private String radarJson(Object value) throws SQLException {
+        try { return mapper.writeValueAsString(value); }
+        catch (IOException e) { throw new SQLException("Cannot serialize radar data", e); }
+    }
+
+    private <T> T radarRead(String json, Class<T> type) throws SQLException {
+        try { return mapper.readValue(json,type); }
+        catch (IOException e) { throw new SQLException("Cannot load radar data", e); }
+    }
+
     // ── lifecycle ────────────────────────────────────────────────────────────
 
     private void init() throws SQLException {
@@ -77,6 +217,7 @@ public class FeedStore implements Closeable {
         }
         inTransaction(() -> {
             initializeSchema();
+            initializeRadarSchema();
             return null;
         });
     }
@@ -462,6 +603,16 @@ public class FeedStore implements Closeable {
                 ps.setString(8, now);
                 ps.setString(9, now);
                 ps.addBatch();
+            }
+            ps.executeBatch();
+        }
+        try (PreparedStatement ps = conn.prepareStatement("""
+                INSERT INTO feed_item_sources(item_link,route_path,first_seen_at,last_seen_at) VALUES(?,?,?,?)
+                ON CONFLICT(item_link,route_path) DO UPDATE SET last_seen_at=excluded.last_seen_at
+                """)) {
+            for (FeedItem item : valid) {
+                ps.setString(1, item.link()); ps.setString(2, routePath);
+                ps.setString(3, now); ps.setString(4, now); ps.addBatch();
             }
             ps.executeBatch();
         }
