@@ -16,6 +16,7 @@ public final class RadarTypes {
             if (idempotencyKey == null || idempotencyKey.isBlank() || idempotencyKey.length() > 200)
                 throw new IllegalArgumentException("A request key of 1–200 characters is required");
             if (ai == null) throw new IllegalArgumentException("Model identity is required");
+            ai = ai.withoutCredentials();
             categories = Map.copyOf(categories);
         }
     }

@@ -4,7 +4,7 @@
 
 ## 启用
 
-1. 在 `/index` 配好现有来源及 Ollama，并启用 AI。雷达和短摘要共用一个生成许可，最多一个请求进行模型推理。
+1. 在 `/index` 配好现有来源及 AI 平台，并启用 AI。支持 Ollama、OpenAI Chat Completions 和 Anthropic Messages，配置方式见 [AI 平台设置](ai-platforms.md)。雷达和短摘要共用一个生成许可，最多一个请求进行模型推理。
 2. 在应用工作目录创建 `radar-config.json`，例如：
 
 ```json

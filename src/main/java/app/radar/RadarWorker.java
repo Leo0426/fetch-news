@@ -83,7 +83,7 @@ public class RadarWorker implements AutoCloseable {
     private void guard(RunSnapshot run,long start,long prior,boolean modelCall) throws Exception {
         if(closed || Thread.currentThread().isInterrupted()) throw new RadarControlException("paused","Worker stopped; resume explicitly");
         if(!config.get().enabled() || !ai.get().enabled()) throw new RadarControlException("paused","Radar or AI disabled");
-        if(!run.request().ai().host().equals(ai.get().host()) || !run.request().ai().model().equals(ai.get().model()))
+        if(!run.request().ai().sameModel(ai.get()))
             throw new RadarControlException("paused","Model configuration changed");
         if(prior+clock.millis()-start>=TimeUnit.MINUTES.toMillis(run.config().runTimeoutMinutes()))
             throw new RadarControlException("partial","Run time budget exhausted");

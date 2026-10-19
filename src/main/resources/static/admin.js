@@ -147,6 +147,10 @@
     if (xhr && failedRequests.has(xhr)) return;
     if (xhr) failedRequests.add(xhr);
     if (recoverSummaryRequest(event)) return;
+    if (event.detail.elt?.closest('[data-ai-settings]') && xhr?.responseText) {
+      const error = new DOMParser().parseFromString(xhr.responseText, 'text/html').querySelector('.form-msg.err');
+      if (error?.textContent) { window.FetchNewsUI.notify(error.textContent, 'error'); return; }
+    }
     const message = xhr?.status
       ? `操作未完成（${xhr.status}），请重试。`
       : '连接中断，请检查网络后重试。';

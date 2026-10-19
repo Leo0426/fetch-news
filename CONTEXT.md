@@ -4,7 +4,7 @@
 
 fetch-news is a self-hosted news aggregator and RSS proxy.
 
-It receives HTTP requests for route paths, fetches content from source websites or APIs, normalises it into a common feed model, and returns RSS 2.0 or JSON. It also stores fetched items in a local SQLite database, serves a reader UI, and optionally generates AI summaries via a local Ollama instance.
+It receives HTTP requests for route paths, fetches content from source websites or APIs, normalises it into a common feed model, and returns RSS 2.0 or JSON. It also stores fetched items in a local SQLite database, serves a reader UI, and optionally generates AI summaries through Ollama or compatible OpenAI Chat Completions / Anthropic Messages platforms.
 
 The project is intentionally smaller than RSSHub. Core mechanics:
 
@@ -34,7 +34,7 @@ The project is intentionally smaller than RSSHub. Core mechanics:
 | Parsing | JSoup (HTML/XML) · Jackson (JSON) |
 | Cache | Caffeine — in-memory, per-route TTL |
 | Persistence | SQLite via `sqlite-jdbc` |
-| AI | Ollama (local) — full-text extraction + Chinese summarisation |
+| AI | Ollama / OpenAI Chat Completions / Anthropic Messages — full-text extraction + Chinese summarisation |
 | Build | Gradle |
 
 ---
@@ -107,7 +107,7 @@ All pages are publicly accessible — there is no authentication layer.
 
 **FeishuPusher** — optionally sends items immediately per route or as scheduled category digests. Progress advances only after every page is confirmed by HTTP and business status. Partial failure can repeat already delivered pages on retry; cursors are in memory and restart uses a 24-hour lookback.
 
-**OllamaClient** — thin wrapper around the Ollama local REST API. Host and model are read from `ai-config.json` on every call.
+**OllamaClient** — shared generation facade for explicit Ollama, OpenAI Chat Completions and Anthropic Messages adapters. The active platform is read from `AiConfigStore` on every call; all generation shares one interruptible permit. `ai-config.json` stores multiple named platforms and one global AI switch. Old host/model/enabled files migrate in memory and are written in the new format at the next save. Model identity includes protocol, endpoint and generation options, while credentials remain out of radar snapshots and cache keys. See [AI platform configuration](docs/ai-platforms.md).
 
 **ArticleExtractor** — called only inside the summary worker when the saved description is short or absent. Reuses cached extracts; otherwise fetches HTML through the shared `FetchClient`, cleans it with JSoup, and uses Ollama to extract the article body once. Results are cached in SQLite.
 

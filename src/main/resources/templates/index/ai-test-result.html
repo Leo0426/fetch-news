@@ -10,7 +10,7 @@
     <span th:if="${status.serverReachable()}">
       服务器可达
       <code style="background:var(--border);padding:1px 5px;border-radius:3px;font-size:11px;"
-            th:text="'v' + ${status.serverVersion()}">v?</code>
+            th:text="${status.serverVersion()}">v?</code>
     </span>
     <span th:unless="${status.serverReachable()}"
           style="color:var(--warn);"
@@ -18,7 +18,7 @@
   </div>
 
   <!-- model row (only when server is up) -->
-  <div th:if="${status.serverReachable()}"
+  <div th:if="${status.serverReachable() && status.modelListSupported()}"
        style="display:flex;align-items:flex-start;gap:8px;font-size:13px;">
     <span th:if="${status.modelAvailable()}"
           style="color:var(--green);font-weight:700;">✓</span>
@@ -26,7 +26,7 @@
           style="color:var(--warn);font-weight:700;">✗</span>
     <div style="display:grid;gap:6px;">
       <span th:if="${status.modelAvailable()}"
-            th:text="'模型 ' + ${configuredModel} + ' 已就绪'">—</span>
+            th:text="'模型 ' + ${configuredModel} + ' 已列出'">—</span>
       <span th:unless="${status.modelAvailable()}"
             style="color:var(--warn);"
             th:text="'模型 ' + ${configuredModel} + ' 未找到'">—</span>
@@ -42,7 +42,7 @@
                            : 'background:var(--border);padding:1px 6px;border-radius:3px;font-size:11px;'">model</code>
         </th:block>
       </div>
-      <div th:if="${status.availableModels().isEmpty()}"
+      <div th:if="${status.availableModels().isEmpty() && status.serverVersion()!='openai' && status.serverVersion()!='anthropic'}"
            style="font-size:11px;color:var(--subtle);">
         服务器上暂无已下载模型，请先运行
         <code style="background:var(--border);padding:1px 5px;border-radius:3px;"
@@ -51,4 +51,5 @@
     </div>
   </div>
 
+  <p th:if="${status.serverReachable() && status.error()!=null}" th:text="${status.error()}" style="font-size:13px;"></p>
 </div>

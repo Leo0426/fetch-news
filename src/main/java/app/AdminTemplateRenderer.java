@@ -1,6 +1,6 @@
 package app;
 
-import app.ai.AiConfig;
+import app.ai.AiSettingsPage;
 import app.CredentialConfig;
 import app.ai.OllamaClient;
 import app.feishu.FeishuConfig;
@@ -223,9 +223,11 @@ public class AdminTemplateRenderer {
         return engine.process("index/feishu-settings", ctx);
     }
 
-    public String aiSettings(AiConfig config, int extractCount, int summaryCount, String message) {
+    public String aiSettings(AiSettingsPage page, int extractCount, int summaryCount, String message) {
         Context ctx = new Context();
-        ctx.setVariable("config", config);
+        ctx.setVariable("page", page);
+        ctx.setVariable("config", page.active());
+        ctx.setVariable("editing", page.editing());
         ctx.setVariable("extractCount", extractCount);
         ctx.setVariable("summaryCount", summaryCount);
         ctx.setVariable("message", message);

@@ -14,8 +14,10 @@ public final class RadarJson {
     private RadarJson() {}
 
     public static JsonNode parse(ObjectMapper mapper, String text) throws java.io.IOException {
-        return mapper.reader().with(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
-                .with(com.fasterxml.jackson.core.JsonParser.Feature.STRICT_DUPLICATE_DETECTION).readTree(text);
+        try {
+            return mapper.reader().with(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
+                    .with(com.fasterxml.jackson.core.JsonParser.Feature.STRICT_DUPLICATE_DETECTION).readTree(text);
+        } catch (java.io.IOException e) { throw new IllegalArgumentException("Model returned invalid structured JSON"); }
     }
     public static String hash(Object value) {
         try { return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(CANONICAL.writeValueAsBytes(value))); }

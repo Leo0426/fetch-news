@@ -9,10 +9,9 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 
 /**
- * Thin wrapper around the Ollama local REST API.
+ * Shared generation client for Ollama and compatible hosted AI protocols.
  * Host and model are read from {@link AiConfigStore} on every call
  * so admin-page changes take effect immediately without a restart.
  */
@@ -62,20 +61,27 @@ public class OllamaClient {
             if (!config.enabled()) throw new IllegalStateException("AI is disabled");
             GenerationScope context = scope.get();
             AiConfig locked = context == null ? expected : context.expected();
-            if (locked != null && (!locked.host().equals(config.host()) || !locked.model().equals(config.model())))
+            if (locked != null && !locked.sameModel(config))
                 throw new IllegalStateException("AI configuration changed; resume with the original model or start a new run");
             if (context != null) context.observer().before();
-            Map<String,Object> payload = new java.util.LinkedHashMap<>();
-            payload.put("model", config.model()); payload.put("prompt", prompt); payload.put("stream", false);
-            if (json) payload.put("format", "json");
-            String body = mapper.writeValueAsString(payload);
-            HttpRequest request = HttpRequest.newBuilder(URI.create(config.host() + "/api/generate"))
-                    .timeout(Duration.ofSeconds(120)).header("Content-Type", "application/json")
-                    .POST(HttpRequest.BodyPublishers.ofString(body)).build();
-            HttpResponse<String> response = http.send(request, HttpResponse.BodyHandlers.ofString());
-            if (response.statusCode() != 200) throw new IllegalStateException("Ollama returned HTTP " + response.statusCode());
-            JsonNode node = mapper.readTree(response.body());
-            return new Generation(node.path("response").asText(), config.model());
+            AiProtocol protocol=switch(config.protocol()) {
+                case "openai" -> new OpenAiChatProtocol();
+                case "anthropic" -> new AnthropicMessagesProtocol();
+                default -> new OllamaProtocol();
+            };
+            HttpRequest request;
+            try { request=protocol.request(config,prompt,json,mapper); }
+            catch(IllegalArgumentException e) { throw new IllegalStateException("Invalid AI endpoint or authentication header"); }
+            HttpResponse<String> response=http.send(request,HttpResponse.BodyHandlers.ofString());
+            if(response.statusCode()!=200) throw new IllegalStateException(config.protocol()+" returned HTTP "+response.statusCode());
+            JsonNode node;
+            try {
+                node=mapper.reader().with(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_TRAILING_TOKENS).readTree(response.body());
+            } catch(java.io.IOException e) { throw new IllegalStateException("AI platform returned invalid JSON"); }
+            if(node==null || node.has("error")) throw new IllegalStateException("AI platform returned an error response");
+            String text=protocol.text(node);
+            if(text.isBlank()) throw new IllegalStateException("AI platform returned no text");
+            return new Generation(text,config.model());
         }
     }
 
@@ -85,15 +91,9 @@ public class OllamaClient {
 
     public record Generation(String text, String model) {}
 
-    /**
-     * Probes the Ollama server without triggering inference.
-     * Calls {@code /api/version} and {@code /api/tags} — both return quickly
-     * regardless of model state.
-     *
-     * @return connection status with server version, model availability and model list
-     */
     public ConnectionStatus checkConnection() {
         AiConfig config = configStore.get();
+        if (!config.protocol().equals("ollama")) return checkRemoteConnection(config);
         String host = config.host();
         String model = config.model();
         try {
@@ -105,9 +105,27 @@ public class OllamaClient {
                     .anyMatch(m -> m.equals(model) || m.startsWith(model + ":"));
             return new ConnectionStatus(true, version, modelFound, models, null);
         } catch (Exception e) {
-            String msg = e.getMessage();
-            if (msg == null || msg.isBlank()) msg = e.getClass().getSimpleName();
-            return new ConnectionStatus(false, null, false, List.of(), msg);
+            if (e instanceof InterruptedException) Thread.currentThread().interrupt();
+            return new ConnectionStatus(false, null, false, List.of(), "连接失败，请检查 Ollama 地址和网络");
+        }
+    }
+
+    private ConnectionStatus checkRemoteConnection(AiConfig config) {
+        try {
+            var request=AiHttp.builder(config,"models").timeout(Duration.ofSeconds(5)).GET().build();
+            var response=http.send(request,HttpResponse.BodyHandlers.ofString());
+            if(response.statusCode()==404 || response.statusCode()==405)
+                return new ConnectionStatus(true,config.protocol(),false,List.of(),"平台未提供模型列表；请手动填写模型 ID，实际生成时再验证",false);
+            if(response.statusCode()!=200)
+                return new ConnectionStatus(false,config.protocol(),false,List.of(),"HTTP "+response.statusCode()+"；请检查 API 地址、密钥及权限",false);
+            JsonNode node=mapper.readTree(response.body());
+            if(!node.path("data").isArray()) return new ConnectionStatus(true,config.protocol(),false,List.of(),"平台未返回标准模型列表",false);
+            List<String> models=new ArrayList<>();
+            for(var item:node.path("data")) if(item.path("id").isTextual()) models.add(item.path("id").asText());
+            return new ConnectionStatus(true,config.protocol(),models.contains(config.model()),List.copyOf(models),null,true);
+        } catch(Exception e) {
+            if(e instanceof InterruptedException) Thread.currentThread().interrupt();
+            return new ConnectionStatus(false,config.protocol(),false,List.of(),"连接失败，请检查平台地址和网络",false);
         }
     }
 
@@ -158,5 +176,9 @@ public class OllamaClient {
             String serverVersion,
             boolean modelAvailable,
             List<String> availableModels,
-            String error) {}
+            String error, boolean modelListSupported) {
+        public ConnectionStatus(boolean serverReachable,String serverVersion,boolean modelAvailable,List<String> availableModels,String error) {
+            this(serverReachable,serverVersion,modelAvailable,availableModels,error,true);
+        }
+    }
 }

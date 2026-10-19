@@ -25,7 +25,7 @@ public class ArticleAnalyzer {
         content=RadarJson.truncate(content,4000);
         boolean limited=content.codePointCount(0,content.length())<200;
         String key=RadarJson.hash(List.of("analysis-v1",candidate.link(),candidate.title(),content,profile,
-                run.request().ai().host(),run.request().ai().model()));
+                run.request().ai().identity()));
         String category=new ProfileRouter(client,mapper).category(candidate,run);
         Analysis cached=store==null ? null : store.loadRadarAnalysis(key);
         if (cached!=null && cached.error()==null) return new Analysis(candidate.link(),profile.id(),category,cached.score(),cached.reason(),cached.summary(),cached.tags(),limited,key,null);

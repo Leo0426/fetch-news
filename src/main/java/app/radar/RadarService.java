@@ -37,13 +37,13 @@ public class RadarService {
         checkAvailable();
         var run=store.loadRadarRun(id);
         if(run==null) throw new NoSuchElementException("Radar run not found");
-        if(!run.request().ai().host().equals(ai.get().host()) || !run.request().ai().model().equals(ai.get().model()))
+        if(!run.request().ai().sameModel(ai.get()))
             throw new IllegalStateException("Restore the original model to resume, or create a new run");
         if(run.status().state().equals("paused")) store.updateRadarState(id,"queued",run.status().stage(),null);
         return status(id);
     }
     public String fingerprint() throws java.io.IOException {
-        return RadarJson.hash(java.util.List.of(config.get(),profiles.loadAll(),ai.get().host(),ai.get().model()));
+        return RadarJson.hash(java.util.List.of(config.get(),profiles.loadAll(),ai.get().identity()));
     }
     private void checkAvailable() {
         if(store==null) throw new IllegalStateException("Article storage unavailable");

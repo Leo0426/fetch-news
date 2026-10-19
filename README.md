@@ -48,7 +48,7 @@
 
 ## AI 摘要
 
-通过本地 Ollama 接入，在管理后台配置 host 和模型即可。抓取完成后自动对文章做摘要，英文内容可配合模型做翻译。默认模型 `llama3.2`，无需外部 API，数据不出本机。
+支持 Ollama、OpenAI Chat Completions 和 Anthropic Messages。在管理后台「AI 设置」中可保存多个平台的 API 地址、密钥和模型，并切换当前平台供摘要、全文提取和精选日报使用。默认仍为本地 Ollama；第三方兼容选项和迁移方式见 [AI 平台配置](docs/ai-platforms.md)。
 
 ## 飞书推送
 

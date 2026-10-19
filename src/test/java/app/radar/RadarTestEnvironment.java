@@ -37,13 +37,17 @@ public final class RadarTestEnvironment implements AutoCloseable {
         config.save(mapper.readValue(configJson,RadarConfig.class));
         profiles=new ProfileStore(directory.resolve("profiles"),mapper);
         server=HttpServer.create(new InetSocketAddress("127.0.0.1",0),0);
-        server.createContext("/api/generate",e->{
+        server.createContext("/",e->{
             requests.incrementAndGet();
             var input=mapper.readTree(e.getRequestBody());
-            String prompt=input.path("prompt").asText();
+            String prompt=input.has("messages") ? input.path("messages").path(0).path("content").asText() : input.path("prompt").asText();
             String output=prompt.startsWith("TASK: score") ? scoring.apply(prompt) : prompt.startsWith("TASK: dedup") ? "{\"match\":\"distinct\"}" : prompt.startsWith("TASK: route") ? "{\"profile\":\"tech-news\"}" : blocksResponse;
             if(prompt.startsWith("TASK: blocks")) onBlocks.run();
-            byte[] body=mapper.writeValueAsBytes(Map.of("response",output));
+            Object envelope=input.has("messages") ? e.getRequestURI().getPath().endsWith("messages")
+                    ? Map.of("content",java.util.List.of(Map.of("type","text","text",output)),"stop_reason","end_turn")
+                    : Map.of("choices",java.util.List.of(Map.of("message",Map.of("content",output),"finish_reason","stop")))
+                    : Map.of("response",output);
+            byte[] body=mapper.writeValueAsBytes(envelope);
             e.sendResponseHeaders(200,body.length);try(var out=e.getResponseBody()){out.write(body);}
         }); server.start();
         ai.save(new AiConfig("http://127.0.0.1:"+server.getAddress().getPort(),"fake",true));
