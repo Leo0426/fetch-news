@@ -39,5 +39,6 @@ class RadarAdminTest {
         assertEquals("custom",config.get().sources().get("/hn").profiles().getFirst());
         mvc.perform(post("/index/radar/config").param("defaultProfile","missing")).andExpect(status().isBadRequest());
         assertEquals("custom",config.get().defaultProfile());
+        mvc.perform(post("/index/radar/config").param("zoneId","not/a/timezone").param("defaultProfile","custom")).andExpect(status().isBadRequest());
     }
 }

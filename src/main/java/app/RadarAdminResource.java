@@ -70,7 +70,7 @@ public class RadarAdminResource {
     }
     private static int number(Map<String, String> form, String key) { return Integer.parseInt(form.getOrDefault(key, "0")); }
     private static List<String> csv(String value) { return value == null ? List.of() : Arrays.stream(value.split(",")).map(String::strip).filter(s -> !s.isBlank()).toList(); }
-    @ExceptionHandler(IllegalArgumentException.class)
+    @ExceptionHandler({IllegalArgumentException.class, java.time.DateTimeException.class})
     public ResponseEntity<String> invalid() { return ResponseEntity.badRequest().body("<p class=\"form-msg err\" role=\"alert\">配置无效，请检查 Profile、数值、时区、Cron 和分类配额。</p>"); }
     @ExceptionHandler(IOException.class)
     public ResponseEntity<String> unavailable() { return ResponseEntity.status(503).body("<p class=\"form-msg err\" role=\"alert\">配置读取或保存失败，原配置仍保留。</p>"); }

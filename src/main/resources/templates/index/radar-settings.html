@@ -1,7 +1,7 @@
 <div class="radar-settings" data-ai-settings>
   <h2>新闻雷达 · Profile</h2>
   <p>修改会用于新任务，已创建任务保留原配置。提示词预览即下方编辑内容。</p>
-  <nav><a th:each="entry : ${profiles}" th:text="${entry.key}" th:attr="hx-get=${'/index/radar?profileId=' + entry.key}" hx-target="#main-content" class="btn"></a></nav>
+  <nav><a href="/index#radar" th:each="entry : ${profiles}" th:text="${entry.key}" th:attr="hx-get=${'/index/radar?profileId=' + entry.key}" hx-target="#main-content" class="btn"></a></nav>
   <form hx-post="/index/radar/profiles" hx-target="#main-content" class="radar-form">
     <h3>兴趣与输出</h3>
     <label>Profile ID（修改 ID 可复制为新 Profile）<input name="id" th:value="${selected.id}" required pattern="[a-z0-9][a-z0-9-]{0,63}"></label>

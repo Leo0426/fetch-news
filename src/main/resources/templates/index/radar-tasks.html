@@ -10,7 +10,7 @@
       <td><span th:text="${run.status.date + ' v' + run.status.version}"></span><br><small th:text="${run.request.ai.protocol + ' / ' + run.request.ai.model}"></small><br><small th:text="${run.request.zoneId}"></small></td>
       <td><span th:text="${run.status.state + ' / ' + run.status.stage}"></span><p class="radar-note" th:if="${run.status.error}" th:text="${run.status.error}"></p></td>
       <td th:text="${run.status.totalCandidates + ' / ' + run.status.calls}"></td>
-      <td><span th:if="${run.checkpoints['usage.known'] != null and run.checkpoints['usage.known'] == run.checkpoints['usage.calls']}" th:text="${run.checkpoints['usage.input'] + ' / ' + run.checkpoints['usage.output']}"></span><span th:unless="${run.checkpoints['usage.known'] != null and run.checkpoints['usage.known'] == run.checkpoints['usage.calls']}">未知（平台未完整返回）</span></td>
+      <td><span th:if="${run.checkpoints['usage.known'] != null and run.checkpoints['usage.known'] == run.checkpoints['usage.calls'] and run.checkpoints['usage.calls'] == #strings.toString(run.status.calls)}" th:text="${run.checkpoints['usage.input'] + ' / ' + run.checkpoints['usage.output']}"></span><span th:unless="${run.checkpoints['usage.known'] != null and run.checkpoints['usage.known'] == run.checkpoints['usage.calls'] and run.checkpoints['usage.calls'] == #strings.toString(run.status.calls)}">未知（平台未完整返回）</span></td>
       <td th:text="${run.checkpoints.getOrDefault('usage.millis', '0') + ' ms'}"></td>
       <td>
         <button class="btn" th:if="${run.status.state == 'paused'}" th:attr="hx-post=${'/index/radar/tasks/' + run.status.runId + '/resume'}" hx-target="#main-content">恢复</button>

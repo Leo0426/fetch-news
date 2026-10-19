@@ -34,4 +34,24 @@ class RadarEvaluationTest {
             }
         }
     }
+    @Test void evaluatesSnapshotInputsWithoutShowingReferenceAnswersAndRejectsUnknownSuites() throws Exception {
+        try(var env=new RadarTestEnvironment(directory,"{\"enabled\":true}")) {
+            var prompts=new java.util.ArrayList<String>();
+            env.scoring=prompt->{prompts.add(prompt);return env.scoreResponse;};
+            try(var service=new EvaluationService(env.store,env.ai,new OllamaClient(env.ai,env.mapper),env.mapper)) {
+                var job=service.submit("default","snapshot");
+                var payload=(com.fasterxml.jackson.databind.node.ObjectNode)env.mapper.readTree(job.payload());
+                ((com.fasterxml.jackson.databind.node.ObjectNode)payload.path("samples").path(0)).put("title","Persisted fixture title");
+                env.store.updateRadarJob(job.id(),"queued",env.mapper.writeValueAsString(payload));
+                service.processNext();
+                assertTrue(prompts.getFirst().contains("Persisted fixture title"));
+                assertFalse(prompts.getFirst().contains("minimum"));assertFalse(prompts.getFirst().contains("reference"));
+                var unsupported=service.submit("default","unsupported");
+                payload=(com.fasterxml.jackson.databind.node.ObjectNode)env.mapper.readTree(unsupported.payload());payload.put("suite","unknown-version");
+                env.store.updateRadarJob(unsupported.id(),"queued",env.mapper.writeValueAsString(payload));
+                service.processNext();assertEquals(5,env.requests.get());
+                assertEquals("failed",env.store.loadRadarJob(unsupported.id()).state());
+            }
+        }
+    }
 }

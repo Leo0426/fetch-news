@@ -65,8 +65,8 @@ public class ProfileStore {
         Files.writeString(revision.resolve("scoring.md"), profile.scoring());
         String prefix = revision.getFileName() + "/";
         for (var block : profile.blocks().entrySet()) {
-            Files.writeString(revision.resolve(block.getKey() + ".md"), block.getValue());
-            blocks.put(block.getKey(), prefix + block.getKey() + ".md");
+            Files.writeString(revision.resolve("block-" + block.getKey() + ".md"), block.getValue());
+            blocks.put(block.getKey(), prefix + "block-" + block.getKey() + ".md");
         }
         Path manifest = Files.createTempFile(root, ".manifest-", ".json");
         try {

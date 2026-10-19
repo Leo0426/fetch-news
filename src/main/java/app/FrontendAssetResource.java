@@ -28,7 +28,7 @@ public class FrontendAssetResource {
 
     @GetMapping({"/{file:admin\\.css}", "/{file:htmx\\.min\\.js}", "/{file:alpine\\.min\\.js}",
             "/{file:ui\\.js}", "/{file:reader\\.js}", "/{file:admin\\.js}", "/{file:unread\\.css}",
-            "/{file:search\\.css}", "/{file:article\\.css}", "/{file:article\\.js}", "/{file:radar\\.css}", "/{file:radar\\.js}"})
+            "/{file:search\\.css}", "/{file:article\\.css}", "/{file:article\\.js}", "/{file:radar\\.css}", "/{file:radar\\.js}", "/{file:radar-admin\\.css}", "/{file:radar-community\\.js}"})
     public ResponseEntity<String> asset(@PathVariable String file) {
         String content = readAsset(file);
         MediaType mediaType = file.endsWith(".css")

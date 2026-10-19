@@ -36,4 +36,10 @@ class ProfileStoreTest {
         store.save(new Profile("my-profile","1","match","score",java.util.Map.of("summary","prompt")));
         assertEquals(3,store.loadAll().size());
     }
+    @Test void outputBlocksCannotOverwriteCorePrompts() throws Exception {
+        var store=new ProfileStore(directory,new ObjectMapper());
+        var profile=new Profile("collision","1","Core match","Core scoring",java.util.Map.of("match","Block match","scoring","Block scoring"));
+        store.save(profile);
+        assertEquals(profile,store.loadAll().get("collision"));
+    }
 }

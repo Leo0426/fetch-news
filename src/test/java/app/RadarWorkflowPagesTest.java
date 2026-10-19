@@ -34,6 +34,13 @@ class RadarWorkflowPagesTest {
                 evaluation.submit("default","ui-eval");evaluation.processNext();delivery.submit(run.runId());delivery.processNext();
                 var mvc=MockMvcBuilders.standaloneSetup(new RadarTasksResource(env.store,env.service,renderer),
                         new RadarEvaluationResource(evaluation,env.store,env.ai,env.mapper,renderer),new RadarDeliveryResource(delivery,env.store,env.mapper,renderer)).build();
+                env.store.incrementRadarCalls(run.runId());
+                env.store.saveRadarCheckpoint(run.runId(),"usage.calls","1");
+                env.store.saveRadarCheckpoint(run.runId(),"usage.known","1");
+                env.store.saveRadarCheckpoint(run.runId(),"usage.input","999");
+                env.store.saveRadarCheckpoint(run.runId(),"usage.output","888");
+                String tasks=mvc.perform(get("/index/radar/tasks")).andExpect(status().isOk()).andReturn().getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
+                org.junit.jupiter.api.Assertions.assertFalse(tasks.contains("999 / 888"));
                 for(String path:java.util.List.of("tasks","evaluation","delivery")) {
                     String html=mvc.perform(get("/index/radar/"+path)).andExpect(status().isOk()).andReturn().getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
                     assertTrue(html.length()>300,path);
@@ -41,5 +48,10 @@ class RadarWorkflowPagesTest {
                 }
             }
         }
+    }
+    @Test void servesNewAssetsAheadOfFeedCatchAll() throws Exception {
+        var mvc=MockMvcBuilders.standaloneSetup(new FrontendAssetResource()).build();
+        mvc.perform(get("/radar-admin.css")).andExpect(status().isOk());
+        mvc.perform(get("/radar-community.js")).andExpect(status().isOk());
     }
 }
