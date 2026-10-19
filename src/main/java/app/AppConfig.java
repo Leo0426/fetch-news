@@ -140,4 +140,9 @@ public class AppConfig {
         return new app.radar.eval.EvaluationService(store, ai, client, mapper);
     }
 
+    @Bean(initMethod = "start", destroyMethod = "close")
+    public app.feishu.RadarDeliveryService radarDeliveryService(FeedStore store, FeishuConfigStore config, ObjectMapper mapper) throws Exception {
+        return new app.feishu.RadarDeliveryService(store, config, mapper);
+    }
+
 }

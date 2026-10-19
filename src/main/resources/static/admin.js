@@ -7,6 +7,7 @@
     radar: ['/index/radar', '新闻雷达配置'],
     'radar-tasks': ['/index/radar/tasks', 'AI 任务'],
     'radar-evaluation': ['/index/radar/evaluation', '模型评测'],
+    'radar-delivery': ['/index/radar/delivery', '日报投递'],
     credentials: ['/index/credentials', '凭据配置'],
     feishu: ['/index/feishu', '飞书推送'],
     health: ['/index/health', 'Feed 健康'],

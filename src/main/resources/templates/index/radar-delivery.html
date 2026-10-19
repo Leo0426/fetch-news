@@ -1,0 +1,23 @@
+<div data-ai-settings>
+  <h2>精选日报 · 飞书投递</h2>
+  <p>使用<a href="/index#feishu">飞书设置</a>的默认 Webhook 与总开关。仅投递已保存的日报，每页成功后保存回执；同一日报与目标重复提交会返回原记录。</p>
+  <form class="radar-form" hx-post="/index/radar/delivery/policy" hx-target="#main-content">
+    <label><input type="checkbox" name="enabled" value="true" th:checked="${enabled}">自动投递启用后新创建且完整成功的日报</label>
+    <p>默认关闭。不会补发启用前的历史日报；部分结果需手动投递。关闭后已排队的投递仍受飞书总开关控制。</p>
+    <button class="btn" type="submit">保存自动投递设置</button>
+  </form>
+  <form class="radar-form" hx-post="/index/radar/delivery" hx-target="#main-content">
+    <label>已保存日报<select name="runId" required><option th:each="run:${reports}" th:value="${run.status.runId}" th:text="${run.status.date + ' v' + run.status.version + ' / ' + run.request.zoneId + ' / ' + run.status.state}"></option></select></label>
+    <button class="btn primary" type="submit" th:disabled="${#lists.isEmpty(reports)}">投递到飞书</button>
+  </form>
+  <button class="btn" hx-get="/index/radar/delivery" hx-target="#main-content">刷新投递记录</button>
+  <article class="radar-form" th:each="entry:${jobs}">
+    <h3 th:text="${entry.job.state}"></h3><p th:text="${'日报 ' + entry.data.path('runId').asText()}"></p>
+    <p th:text="${'已确认 ' + entry.data.path('nextPage').asInt() + ' / ' + entry.data.path('pages').size() + ' 页'}"></p>
+    <p th:if="${entry.data.has('error')}" th:text="${entry.data.path('error').asText()}"></p>
+    <form th:if="${entry.job.state == 'failed' or entry.job.state == 'paused'}" th:attr="hx-post=${'/index/radar/delivery/' + entry.job.id + '/retry'}" hx-target="#main-content">
+      <label th:if="${entry.data.has('awaitingPage')}"><input type="checkbox" name="confirmUncertain" value="true" required>上次页面的回执未知，我确认重试可能重复该页。</label>
+      <button class="btn" type="submit">重试未确认页面</button>
+    </form>
+  </article>
+</div>
