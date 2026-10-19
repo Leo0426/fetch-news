@@ -71,6 +71,7 @@ public class FeedStore implements Closeable {
             s.execute("CREATE TABLE IF NOT EXISTS radar_candidates(run_id TEXT NOT NULL,item_link TEXT NOT NULL,payload TEXT NOT NULL,PRIMARY KEY(run_id,item_link))");
             s.execute("CREATE TABLE IF NOT EXISTS radar_analyses(cache_key TEXT PRIMARY KEY,payload TEXT NOT NULL)");
             s.execute("CREATE TABLE IF NOT EXISTS radar_decisions(run_id TEXT NOT NULL,item_link TEXT NOT NULL,payload TEXT NOT NULL,PRIMARY KEY(run_id,item_link))");
+            s.execute("CREATE TABLE IF NOT EXISTS community_context(item_link TEXT PRIMARY KEY,payload TEXT NOT NULL)");
             s.execute("CREATE TABLE IF NOT EXISTS radar_jobs(id TEXT PRIMARY KEY,kind TEXT NOT NULL,request_key TEXT NOT NULL,payload TEXT NOT NULL,state TEXT NOT NULL,created_at INTEGER NOT NULL,UNIQUE(kind,request_key))");
             s.execute("CREATE TABLE IF NOT EXISTS radar_reports(run_id TEXT PRIMARY KEY,payload TEXT NOT NULL,markdown TEXT NOT NULL)");
         }
@@ -137,6 +138,22 @@ public class FeedStore implements Closeable {
             try (ResultSet rs = ps.executeQuery()) { while (rs.next()) result.add(rs.getString(1)); }
         }
         return result;
+    }
+
+    public synchronized app.radar.CommunityContext loadCommunityContext(String link) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement("SELECT payload FROM community_context WHERE item_link=?")) {
+            ps.setString(1, link);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) return null;
+                try { return mapper.readValue(rs.getString(1), app.radar.CommunityContext.class); }
+                catch (IOException e) { throw new SQLException("Invalid community cache", e); }
+            }
+        }
+    }
+    public synchronized void saveCommunityContext(app.radar.CommunityContext context) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement("INSERT OR REPLACE INTO community_context VALUES(?,?)")) {
+            ps.setString(1, context.link()); ps.setString(2, mapper.writeValueAsString(context)); ps.executeUpdate();
+        } catch (IOException e) { throw new SQLException("Cannot save community cache", e); }
     }
 
     public record RadarJob(String id, String kind, String requestKey, String state, String payload, long createdAt) {}

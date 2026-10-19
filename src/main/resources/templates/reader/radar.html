@@ -4,7 +4,7 @@
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
   <title th:text="'精选日报 · ' + ${page.date()}">精选日报</title>
   <link rel="icon" href="/favicon.svg"><link rel="stylesheet" href="/admin.css"><link rel="stylesheet" href="/radar.css">
-  <script defer src="/radar.js"></script>
+  <script defer src="/radar.js"></script><script defer src="/radar-community.js"></script>
 </head>
 <body class="reader-page">
 <a class="skip-link" href="#radar-content">跳到精选日报</a>
@@ -44,6 +44,17 @@
         <p th:if="${story.event().primary().limitedInput()}" class="radar-notice">评分时正文不足，结论主要来自标题和简介。</p>
         <section th:each="block : ${story.blocks()}"><h4 th:text="${block.key}"></h4><p th:each="paragraph : ${block.value}" th:text="${paragraph}"></p><p th:if="${block.value.isEmpty()}">原文信息不足，未生成此区块。</p></section>
         <p th:if="${story.error()!=null}" class="radar-notice" th:text="'区块缺失：' + ${story.error()}"></p>
+        <details data-community>
+          <summary>社区讨论与背景 · Hacker News</summary>
+          <p>按需获取前 10 条顶层评论和讨论中的参考链接，结果独立缓存，不会改写已保存日报。</p>
+          <form class="radar-controls">
+            <input type="hidden" name="runId" th:value="${page.report().runId()}">
+            <input type="hidden" name="link" th:value="${story.event().primary().link()}">
+            <label>讨论链接（来源包含时可留空）<input name="discussionUrl" type="url" placeholder="https://news.ycombinator.com/item?id=..."></label>
+            <button type="submit">获取讨论与背景</button>
+          </form>
+          <p role="status" aria-live="polite"></p><div data-context-output></div>
+        </details>
         <details th:if="${!story.event().related().isEmpty()}"><summary th:text="'关联原文 · ' + ${story.event().related().size()}"></summary>
           <p th:each="related : ${story.event().related()}"><a th:href="${page.safeUrl(related.link())}" th:text="${page.title(related.link())}" target="_blank" rel="noopener noreferrer"></a> · <a th:href="${'/reader/article?link=' + #uris.escapeQueryParam(related.link())}">站内阅读</a></p>
         </details>

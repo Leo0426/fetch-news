@@ -145,4 +145,9 @@ public class AppConfig {
         return new app.feishu.RadarDeliveryService(store, config, mapper);
     }
 
+    @Bean(initMethod = "start", destroyMethod = "close")
+    public app.radar.CommunityContextService communityContextService(FeedStore store, AppRuntime runtime, ObjectMapper mapper) throws Exception {
+        return new app.radar.CommunityContextService(store, runtime.fetchClient(), mapper);
+    }
+
 }
