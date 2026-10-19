@@ -1,0 +1,10 @@
+{
+  "id": "tech-news",
+  "version": "1",
+  "match": "match.md",
+  "scoring": "scoring.md",
+  "blocks": {
+    "summary": "summary.md",
+    "importance": "importance.md"
+  }
+}

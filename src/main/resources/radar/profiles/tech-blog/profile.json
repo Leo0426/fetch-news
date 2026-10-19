@@ -1,0 +1,11 @@
+{
+  "id": "tech-blog",
+  "version": "1",
+  "match": "match.md",
+  "scoring": "scoring.md",
+  "blocks": {
+    "background": "background.md",
+    "approach": "approach.md",
+    "insights": "insights.md"
+  }
+}
