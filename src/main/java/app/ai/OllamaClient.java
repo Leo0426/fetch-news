@@ -17,6 +17,8 @@ import java.util.Map;
  * so admin-page changes take effect immediately without a restart.
  */
 public class OllamaClient {
+    private final AiGenerationGate gate = new AiGenerationGate();
+    private final ThreadLocal<GenerationScope> scope = new ThreadLocal<>();
     private final HttpClient http;
     private final ObjectMapper mapper;
     private final AiConfigStore configStore;
@@ -41,24 +43,45 @@ public class OllamaClient {
     }
 
     public Generation generateWithMetadata(String prompt) throws Exception {
-        AiConfig config = configStore.get();
-        if (!config.enabled()) throw new IllegalStateException("AI is disabled");
-        String body = mapper.writeValueAsString(Map.of(
-                "model", config.model(),
-                "prompt", prompt,
-                "stream", false));
-        HttpRequest request = HttpRequest.newBuilder(URI.create(config.host() + "/api/generate"))
-                .timeout(Duration.ofSeconds(120))
-                .header("Content-Type", "application/json")
-                .POST(HttpRequest.BodyPublishers.ofString(body))
-                .build();
-        HttpResponse<String> response = http.send(request, HttpResponse.BodyHandlers.ofString());
-        if (response.statusCode() != 200) {
-            throw new RuntimeException("Ollama returned HTTP " + response.statusCode() + ": " + response.body());
-        }
-        JsonNode node = mapper.readTree(response.body());
-        return new Generation(node.path("response").asText(), config.model());
+        return generateRequest(prompt, null, false);
     }
+
+    public Generation generateJson(String prompt, AiConfig expected) throws Exception {
+        return generateRequest(prompt, expected, true);
+    }
+
+    public Scope withScope(AiConfig expected, BeforeGeneration observer) {
+        if (scope.get() != null) throw new IllegalStateException("Generation scope already installed");
+        scope.set(new GenerationScope(expected, observer));
+        return () -> scope.remove();
+    }
+
+    private Generation generateRequest(String prompt, AiConfig expected, boolean json) throws Exception {
+        try (var permit = gate.acquire()) {
+            AiConfig config = configStore.get();
+            if (!config.enabled()) throw new IllegalStateException("AI is disabled");
+            GenerationScope context = scope.get();
+            AiConfig locked = context == null ? expected : context.expected();
+            if (locked != null && (!locked.host().equals(config.host()) || !locked.model().equals(config.model())))
+                throw new IllegalStateException("AI configuration changed; resume with the original model or start a new run");
+            if (context != null) context.observer().before();
+            Map<String,Object> payload = new java.util.LinkedHashMap<>();
+            payload.put("model", config.model()); payload.put("prompt", prompt); payload.put("stream", false);
+            if (json) payload.put("format", "json");
+            String body = mapper.writeValueAsString(payload);
+            HttpRequest request = HttpRequest.newBuilder(URI.create(config.host() + "/api/generate"))
+                    .timeout(Duration.ofSeconds(120)).header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(body)).build();
+            HttpResponse<String> response = http.send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() != 200) throw new IllegalStateException("Ollama returned HTTP " + response.statusCode());
+            JsonNode node = mapper.readTree(response.body());
+            return new Generation(node.path("response").asText(), config.model());
+        }
+    }
+
+    @FunctionalInterface public interface BeforeGeneration { void before() throws Exception; }
+    @FunctionalInterface public interface Scope extends AutoCloseable { @Override void close(); }
+    private record GenerationScope(AiConfig expected, BeforeGeneration observer) {}
 
     public record Generation(String text, String model) {}
 
