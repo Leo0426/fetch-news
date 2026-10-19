@@ -189,6 +189,61 @@ public class FeedStore implements Closeable {
         }
     }
 
+    public synchronized RadarTypes.RunSnapshot claimNextRadarRun() throws SQLException {
+        return inTransaction(() -> {
+            String id;
+            try (Statement statement=conn.createStatement(); ResultSet rs=statement.executeQuery("SELECT id FROM radar_runs WHERE state='queued' ORDER BY rowid LIMIT 1")) {
+                if (!rs.next()) return null;
+                id=rs.getString(1);
+            }
+            updateRadarState(id,"running","routing",null);
+            return loadRadarRun(id);
+        });
+    }
+
+    public synchronized void recoverRadarRuns() throws SQLException {
+        try (Statement statement=conn.createStatement()) {
+            statement.executeUpdate("UPDATE radar_runs SET state='paused',error='Application stopped; resume explicitly' WHERE state='running'");
+        }
+    }
+
+    public synchronized void saveRadarCheckpoint(String id,String key,String value) throws SQLException {
+        var run=loadRadarRun(id);
+        if (run==null) throw new SQLException("Radar run missing");
+        Map<String,String> checkpoints=new LinkedHashMap<>(run.checkpoints()); checkpoints.put(key,value);
+        try (PreparedStatement ps=conn.prepareStatement("UPDATE radar_runs SET checkpoints=? WHERE id=?")) {
+            ps.setString(1,radarJson(checkpoints)); ps.setString(2,id); ps.executeUpdate();
+        }
+    }
+
+    public synchronized void incrementRadarCalls(String id) throws SQLException {
+        try (PreparedStatement ps=conn.prepareStatement("UPDATE radar_runs SET calls=calls+1 WHERE id=?")) {
+            ps.setString(1,id); ps.executeUpdate();
+        }
+    }
+
+    public synchronized RadarTypes.Report loadRadarReport(String id) throws SQLException {
+        try (PreparedStatement ps=conn.prepareStatement("SELECT payload FROM radar_reports WHERE run_id=?")) {
+            ps.setString(1,id);
+            try (ResultSet rs=ps.executeQuery()) { return rs.next() ? radarRead(rs.getString(1),RadarTypes.Report.class) : null; }
+        }
+    }
+
+    public synchronized String loadRadarMarkdown(String id) throws SQLException {
+        try (PreparedStatement ps=conn.prepareStatement("SELECT markdown FROM radar_reports WHERE run_id=?")) {
+            ps.setString(1,id);
+            try (ResultSet rs=ps.executeQuery()) { return rs.next() ? rs.getString(1) : null; }
+        }
+    }
+
+    public synchronized RadarTypes.RunSnapshot latestRadarRun(String date,String zone,boolean publishedOnly) throws SQLException {
+        String condition=publishedOnly ? " AND state IN ('success','partial') ORDER BY CASE state WHEN 'success' THEN 0 ELSE 1 END,version DESC" : " ORDER BY version DESC";
+        try (PreparedStatement ps=conn.prepareStatement("SELECT id FROM radar_runs WHERE date=? AND zone_id=?"+condition+" LIMIT 1")) {
+            ps.setString(1,date); ps.setString(2,zone);
+            try (ResultSet rs=ps.executeQuery()) { return rs.next() ? loadRadarRun(rs.getString(1)) : null; }
+        }
+    }
+
     private String radarJson(Object value) throws SQLException {
         try { return mapper.writeValueAsString(value); }
         catch (IOException e) { throw new SQLException("Cannot serialize radar data", e); }

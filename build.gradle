@@ -40,6 +40,8 @@ tasks.withType(Test).configureEach {
     systemProperty 'fetch-news.db', new File(testRuntimeDir, 'feed-store.db').absolutePath
     systemProperty 'fetch-news.ai-config', new File(testRuntimeDir, 'ai-config.json').absolutePath
     systemProperty 'fetch-news.feishu-config', new File(testRuntimeDir, 'feishu-config.json').absolutePath
+    systemProperty 'fetch-news.radar-config', new File(testRuntimeDir, 'radar-config.json').absolutePath
+    systemProperty 'fetch-news.radar-profiles', new File(testRuntimeDir, 'radar-profiles').absolutePath
     environment = environment.findAll { key, value ->
         key != 'OLLAMA_HOST' && key != 'TWITTER_COOKIE' &&
                 key != 'BILIBILI_COOKIE' && !key.startsWith('BILIBILI_COOKIE_')

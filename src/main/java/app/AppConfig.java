@@ -7,6 +7,10 @@ import app.ai.OllamaClient;
 import app.feishu.FeishuConfigStore;
 import app.feishu.FeishuPusher;
 import app.store.FeedStore;
+import app.radar.ProfileStore;
+import app.radar.RadarConfigStore;
+import app.radar.RadarService;
+import app.radar.RadarWorker;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.nio.file.Path;
@@ -92,4 +96,37 @@ public class AppConfig {
     public FeishuPusher feishuPusher(FeishuConfigStore feishuConfigStore, ObjectMapper objectMapper) {
         return new FeishuPusher(feishuConfigStore, objectMapper);
     }
+    @Bean
+    public RadarConfigStore radarConfigStore(ObjectMapper mapper) throws java.io.IOException {
+        return new RadarConfigStore(Path.of(System.getProperty("fetch-news.radar-config", "radar-config.json")), mapper);
+    }
+
+    @Bean
+    public ProfileStore profileStore(ObjectMapper mapper) throws java.io.IOException {
+        return new ProfileStore(Path.of(System.getProperty("fetch-news.radar-profiles", "radar-profiles")), mapper);
+    }
+
+    @Bean
+    public RadarService radarService(FeedStore store, RadarConfigStore config, ProfileStore profiles,
+                                     AiConfigStore ai, AppRuntime runtime) {
+        return new RadarService(store, config, profiles, ai, () -> {
+            java.util.Map<String,String> categories = new java.util.HashMap<>();
+            var registered = runtime.routeRegistry().categories();
+            for (var route : runtime.routeConfigStore().list(runtime.routeRegistry().paths())) {
+                String source = route.sourcePath() == null ? route.path() : route.sourcePath();
+                for (var entry : registered.entrySet()) {
+                    String pattern = entry.getKey().replaceAll(":[^/]+", "[^/]+");
+                    if (source.matches(pattern)) { categories.put(route.path(), entry.getValue()); break; }
+                }
+            }
+            return categories;
+        });
+    }
+
+    @Bean(initMethod = "start", destroyMethod = "close")
+    public RadarWorker radarWorker(FeedStore store, RadarConfigStore config, AiConfigStore ai,
+                                   OllamaClient client, ArticleExtractor extractor, ObjectMapper mapper) throws SQLException {
+        return new RadarWorker(store, config, ai, client, extractor, mapper, java.time.Clock.systemUTC());
+    }
+
 }
