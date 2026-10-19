@@ -25,4 +25,15 @@ class ProfileStoreTest {
                 """);
         assertThrows(Exception.class, store::loadAll);
     }
+    @Test void savesVersionedPromptsAndRejectsInvalidBlocksWithoutReplacingManifest() throws Exception {
+        var store=new ProfileStore(directory,new ObjectMapper());
+        var original=store.loadAll().get("tech-news");
+        var edited=new Profile(original.id(),"custom-2","Interest <test>","Score rules",java.util.Map.of("summary","Summarize"));
+        store.save(edited);
+        assertEquals(edited,new ProfileStore(directory,new ObjectMapper()).loadAll().get("tech-news"));
+        assertThrows(IllegalArgumentException.class,()->store.save(new Profile("tech-news","3","match","score",java.util.Map.of("../bad","prompt"))));
+        assertEquals(edited,store.loadAll().get("tech-news"));
+        store.save(new Profile("my-profile","1","match","score",java.util.Map.of("summary","prompt")));
+        assertEquals(3,store.loadAll().size());
+    }
 }

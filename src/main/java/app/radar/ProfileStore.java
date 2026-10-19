@@ -31,10 +31,10 @@ public class ProfileStore {
         }
     }
 
-    public Map<String, Profile> loadAll() throws IOException {
+    public synchronized Map<String, Profile> loadAll() throws IOException {
         Map<String, Profile> result = new LinkedHashMap<>();
         try (var paths = Files.list(directory)) {
-            for (Path path : paths.filter(Files::isDirectory).sorted().toList()) {
+            for (Path path : paths.filter(Files::isDirectory).filter(p -> !p.getFileName().toString().startsWith(".")).sorted().toList()) {
                 Definition definition = mapper.readValue(path.resolve("profile.json").toFile(), Definition.class);
                 if (!path.getFileName().toString().equals(definition.id())) throw new IOException("Profile directory must match ID");
                 Map<String, String> blocks = new LinkedHashMap<>();
@@ -48,6 +48,36 @@ public class ProfileStore {
             }
         }
         return java.util.Collections.unmodifiableMap(result);
+    }
+
+    public synchronized void save(Profile profile) throws IOException {
+        for (var block : profile.blocks().entrySet()) {
+            if (!block.getKey().matches("[a-z][a-z0-9_-]{0,63}") || block.getValue() == null || block.getValue().isBlank())
+                throw new IllegalArgumentException("Invalid block ID or empty prompt");
+        }
+        Path target = directory.resolve(profile.id());
+        if (Files.isSymbolicLink(target)) throw new IOException("Profile directory cannot be a symbolic link");
+        boolean creating = !Files.exists(target);
+        Path root = creating ? Files.createTempDirectory(directory, ".profile-") : target;
+        Path revision = Files.createTempDirectory(root, ".revision-");
+        Map<String, String> blocks = new LinkedHashMap<>();
+        Files.writeString(revision.resolve("match.md"), profile.match());
+        Files.writeString(revision.resolve("scoring.md"), profile.scoring());
+        String prefix = revision.getFileName() + "/";
+        for (var block : profile.blocks().entrySet()) {
+            Files.writeString(revision.resolve(block.getKey() + ".md"), block.getValue());
+            blocks.put(block.getKey(), prefix + block.getKey() + ".md");
+        }
+        Path manifest = Files.createTempFile(root, ".manifest-", ".json");
+        try {
+            mapper.writerWithDefaultPrettyPrinter().writeValue(manifest.toFile(), new Definition(profile.id(), profile.version(),
+                    prefix + "match.md", prefix + "scoring.md", blocks));
+            Files.move(manifest, root.resolve("profile.json"), java.nio.file.StandardCopyOption.ATOMIC_MOVE,
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            if (creating) Files.move(root, target, java.nio.file.StandardCopyOption.ATOMIC_MOVE);
+        } finally {
+            Files.deleteIfExists(manifest);
+        }
     }
 
     private String readPrompt(Path profile, String name) throws IOException {

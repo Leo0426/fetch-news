@@ -1,0 +1,47 @@
+<div class="radar-settings" data-ai-settings>
+  <h2>新闻雷达 · Profile</h2>
+  <p>修改会用于新任务，已创建任务保留原配置。提示词预览即下方编辑内容。</p>
+  <nav><a th:each="entry : ${profiles}" th:text="${entry.key}" th:attr="hx-get=${'/index/radar?profileId=' + entry.key}" hx-target="#main-content" class="btn"></a></nav>
+  <form hx-post="/index/radar/profiles" hx-target="#main-content" class="radar-form">
+    <h3>兴趣与输出</h3>
+    <label>Profile ID（修改 ID 可复制为新 Profile）<input name="id" th:value="${selected.id}" required pattern="[a-z0-9][a-z0-9-]{0,63}"></label>
+    <label>版本<input name="version" th:value="${selected.version}" required></label>
+    <label>兴趣匹配提示词<textarea name="match" rows="6" th:text="${selected.match}" required></textarea></label>
+    <label>评分规则<textarea name="scoring" rows="8" th:text="${selected.scoring}" required></textarea></label>
+    <label th:each="block : ${selected.blocks}"><span th:text="${block.key}"></span><textarea th:name="${'block.' + block.key}" rows="5" th:text="${block.value}"></textarea><small>清空可移除此输出块。</small></label>
+    <label>新增输出块 ID<input name="newBlockId" placeholder="summary"></label>
+    <label>新增块提示词<textarea name="newBlockPrompt" rows="3"></textarea></label>
+    <button class="btn primary" type="submit">保存 Profile</button>
+  </form>
+  <form hx-post="/index/radar/config" hx-target="#main-content" class="radar-form">
+    <h3>运行与筛选</h3>
+    <label><input type="checkbox" name="enabled" th:checked="${config.enabled}">启用新闻雷达</label>
+    <label>时区<input name="zoneId" th:value="${config.zoneId}" required></label>
+    <label>定时任务（六字段 Cron；留空关闭）<input name="scheduleCron" th:value="${config.scheduleCron}" placeholder="0 0 8 * * *"></label>
+    <label>默认 Profile<select name="defaultProfile"><option th:each="entry : ${profiles}" th:value="${entry.key}" th:text="${entry.key}" th:selected="${entry.key == config.defaultProfile}"></option></select></label>
+    <div class="radar-grid">
+      <label>候选上限<input type="number" name="candidateLimit" min="1" max="10000" th:value="${config.candidateLimit}" required></label>
+      <label>日报条数<input type="number" name="maxItems" min="1" th:value="${config.maxItems}" required></label>
+      <label>调用预算<input type="number" name="maxModelCalls" min="1" th:value="${config.maxModelCalls}" required></label>
+      <label>分钟预算<input type="number" name="runTimeoutMinutes" min="1" th:value="${config.runTimeoutMinutes}" required></label>
+      <label>其他分类配额（0 不限）<input type="number" name="defaultGroupLimit" min="0" th:value="${config.defaultGroupLimit}" required></label>
+    </div>
+    <fieldset th:each="entry : ${profiles}"><legend th:text="${entry.key}"></legend>
+      <label>最低评分<input type="number" min="0" max="10" step="0.1" th:name="${'threshold.' + entry.key}" th:value="${config.settings(entry.key).threshold}" required></label>
+      <label><input type="checkbox" th:name="${'dedup.' + entry.key}" th:checked="${config.settings(entry.key).topicDedup}">事件去重</label>
+    </fieldset>
+    <h3>来源绑定</h3><p>填写一个 Profile ID 固定绑定，多个用逗号分隔进行候选匹配，auto 表示自动匹配。清空可移除绑定。</p>
+    <fieldset th:each="entry : ${config.sources}"><legend th:text="${entry.key}"></legend>
+      <label>Profile<input th:name="${'source.' + entry.key}" th:value="${#strings.listJoin(entry.value.profiles, ',')}"></label>
+      <label>分类<input th:name="${'category.' + entry.key}" th:value="${entry.value.category}"></label>
+    </fieldset>
+    <fieldset><legend>新增来源</legend><label>挂载路径<input name="newSource" placeholder="/hackernews"></label><label>Profile<input name="newProfiles" placeholder="tech-news"></label><label>分类<input name="newCategory"></label></fieldset>
+    <h3>分类配额</h3><p>同一分类只能属于一个配额组。分类用逗号分隔，清空可移除组。</p>
+    <fieldset th:each="entry : ${config.categoryGroups}"><legend th:text="${entry.key}"></legend>
+      <label>分类<input th:name="${'group.' + entry.key}" th:value="${#strings.listJoin(entry.value.categories, ',')}"></label>
+      <label>条数<input type="number" min="1" th:name="${'limit.' + entry.key}" th:value="${entry.value.limit}" required></label>
+    </fieldset>
+    <fieldset><legend>新增配额</legend><label>组名<input name="newGroup"></label><label>分类<input name="newCategories"></label><label>条数<input name="newLimit" type="number" min="1" value="5"></label></fieldset>
+    <button class="btn primary" type="submit">保存运行配置</button>
+  </form>
+</div>

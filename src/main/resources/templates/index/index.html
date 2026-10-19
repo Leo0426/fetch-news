@@ -10,6 +10,7 @@
   <script defer src="/ui.js"></script>
   <script defer src="/admin.js"></script>
   <script defer src="/alpine.min.js"></script>
+  <link rel="stylesheet" href="/radar-admin.css">
 </head>
 <body x-data="appShell()">
   <a class="skip-link" href="#main-content">跳至主要内容</a>
@@ -78,6 +79,7 @@
           </svg>
           AI 设置
         </a>
+      <a href="/index#radar" @click="navigate($event,'radar')" :class="{active:activePage==='radar'}">新闻雷达配置</a>
         <a class="nav-item" :class="{ active: activePage === 'credentials' }"
            :aria-current="activePage === 'credentials' ? 'page' : null"
            @click="navigate($event, 'credentials')"
