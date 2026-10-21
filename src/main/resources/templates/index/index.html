@@ -11,6 +11,7 @@
   <script defer src="/admin.js"></script>
   <script defer src="/alpine.min.js"></script>
   <link rel="stylesheet" href="/radar-admin.css">
+  <link rel="stylesheet" href="/ui-controls.css">
 </head>
 <body x-data="appShell()">
   <a class="skip-link" href="#main-content">跳至主要内容</a>
@@ -29,34 +30,24 @@
         </div>
       </div>
 
-      <button class="sidebar-close" type="button" @click="sbOpen = false" aria-label="关闭导航">✕</button>
+      <button class="sidebar-close" type="button" @click="sbOpen = false" aria-label="关闭导航"><svg th:replace="~{shared/icons :: icon('close')}"></svg></button>
       <div class="sb-nav">
         <div class="nav-label">概览</div>
         <a class="nav-item" :class="{ active: activePage === 'stats' }"
            :aria-current="activePage === 'stats' ? 'page' : null"
            @click="navigate($event, 'stats')"
            href="/index#stats">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="3" y="12" width="4" height="9"/><rect x="10" y="7" width="4" height="14"/>
-            <rect x="17" y="3" width="4" height="18"/>
-          </svg>
+          <svg th:replace="~{shared/icons :: icon('chart')}"></svg>
           数据统计
         </a>
 
         <div class="nav-label" style="margin-top:10px;">阅读</div>
         <a class="nav-item" href="/reader">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
-            <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
-          </svg>
+          <svg th:replace="~{shared/icons :: icon('book')}"></svg>
           今日速览
         </a>
         <a class="nav-item" href="/reader/briefing">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="3" y="3" width="18" height="18" rx="2"/>
-            <line x1="3" y1="9" x2="21" y2="9"/>
-            <line x1="9" y1="21" x2="9" y2="9"/>
-          </svg>
+          <svg th:replace="~{shared/icons :: icon('news')}"></svg>
           每日简报
         </a>
 
@@ -65,54 +56,39 @@
            :aria-current="activePage === 'ai' ? 'page' : null"
            @click="navigate($event, 'ai')"
            href="/index#ai">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"/>
-          </svg>
+          <svg th:replace="~{shared/icons :: icon('ai')}"></svg>
           AI 设置
         </a>
-      <a class="nav-item" href="/index#radar" @click="navigate($event,'radar')" :class="{active:activePage==='radar'}">新闻雷达配置</a>
-      <a class="nav-item" href="/index#radar-tasks" @click="navigate($event,'radar-tasks')" :class="{active:activePage==='radar-tasks'}">AI 任务</a>
-      <a class="nav-item" href="/index#radar-evaluation" @click="navigate($event,'radar-evaluation')" :class="{active:activePage==='radar-evaluation'}">模型评测</a>
-      <a class="nav-item" href="/index#radar-delivery" @click="navigate($event,'radar-delivery')" :class="{active:activePage==='radar-delivery'}">日报投递</a>
+      <a class="nav-item" href="/index#radar" @click="navigate($event,'radar')" :class="{active:activePage==='radar'}" :aria-current="activePage === 'radar' ? 'page' : null"><svg th:replace="~{shared/icons :: icon('radar')}"></svg>新闻雷达配置</a>
+      <a class="nav-item" href="/index#radar-tasks" @click="navigate($event,'radar-tasks')" :class="{active:activePage==='radar-tasks'}" :aria-current="activePage === 'radar-tasks' ? 'page' : null"><svg th:replace="~{shared/icons :: icon('tasks')}"></svg>AI 任务</a>
+      <a class="nav-item" href="/index#radar-evaluation" @click="navigate($event,'radar-evaluation')" :class="{active:activePage==='radar-evaluation'}" :aria-current="activePage === 'radar-evaluation' ? 'page' : null"><svg th:replace="~{shared/icons :: icon('chart')}"></svg>模型评测</a>
+      <a class="nav-item" href="/index#radar-delivery" @click="navigate($event,'radar-delivery')" :class="{active:activePage==='radar-delivery'}" :aria-current="activePage === 'radar-delivery' ? 'page' : null"><svg th:replace="~{shared/icons :: icon('send')}"></svg>日报投递</a>
         <a class="nav-item" :class="{ active: activePage === 'credentials' }"
            :aria-current="activePage === 'credentials' ? 'page' : null"
            @click="navigate($event, 'credentials')"
            href="/index#credentials">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-            <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-          </svg>
+          <svg th:replace="~{shared/icons :: icon('key')}"></svg>
           凭据配置
         </a>
         <a class="nav-item" :class="{ active: activePage === 'feishu' }"
            :aria-current="activePage === 'feishu' ? 'page' : null"
            @click="navigate($event, 'feishu')"
            href="/index#feishu">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M22 2L11 13"/><path d="M22 2L15 22 11 13 2 9l20-7z"/>
-          </svg>
+          <svg th:replace="~{shared/icons :: icon('send')}"></svg>
           飞书推送
         </a>
         <a class="nav-item" :class="{ active: activePage === 'health' }"
            :aria-current="activePage === 'health' ? 'page' : null"
            @click="navigate($event, 'health')"
            href="/index#health">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
-          </svg>
+          <svg th:replace="~{shared/icons :: icon('health')}"></svg>
           Feed 健康
         </a>
         <a class="nav-item" :class="{ active: activePage === 'logs' }"
            :aria-current="activePage === 'logs' ? 'page' : null"
            @click="navigate($event, 'logs')"
            href="/index#logs">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-            <polyline points="14 2 14 8 20 8"/>
-            <line x1="16" y1="13" x2="8" y2="13"/>
-            <line x1="16" y1="17" x2="8" y2="17"/>
-            <polyline points="10 9 9 9 8 9"/>
-          </svg>
+          <svg th:replace="~{shared/icons :: icon('list')}"></svg>
           抓取日志
         </a>
 
@@ -124,7 +100,7 @@
              :aria-current="activePage === 'cat:' + $el.dataset.cat ? 'page' : null"
              th:href="'/index#cat=' + ${#uris.escapeQueryParam(cat.name)}"
              @click="navigate($event, 'cat=' + encodeURIComponent($el.dataset.cat))">
-            <span th:text="${cat.name}">分类</span>
+            <svg th:replace="~{shared/icons :: icon('folder')}"></svg><span th:text="${cat.name}">分类</span>
             <span class="nav-badge" th:text="${cat.count}">0</span>
             <span th:if="${failingCategories != null and failingCategories.contains(cat.name)}"
                   class="health-dot health-dot--err"
@@ -161,7 +137,7 @@
     <div class="app-main" id="console-main">
       <header class="topbar">
         <button class="hamburger" type="button" @click="sbOpen = !sbOpen"
-                aria-label="打开导航" aria-controls="console-sidebar" :aria-expanded="sbOpen">☰</button>
+                aria-label="打开导航" aria-controls="console-sidebar" :aria-expanded="sbOpen"><svg th:replace="~{shared/icons :: icon('list')}"></svg></button>
         <div class="topbar-heading">
           <span class="console-eyebrow">我的信息工作台</span>
           <h1 class="topbar-title" x-text="pageTitle">数据统计</h1>

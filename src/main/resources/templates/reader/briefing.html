@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="/article.css">
   <script defer src="/ui.js"></script>
   <script defer src="/article.js"></script>
+  <link rel="stylesheet" href="/ui-controls.css">
 </head>
 <body class="reader-page">
 <a class="skip-link" href="#briefing-content">跳到每日简报</a>
@@ -17,13 +18,13 @@
 
 <main class="bf-wrap">
   <nav class="reader-nav" aria-label="阅读导航">
-    <a href="/reader">速览</a>
-    <a href="/reader/unread">待读</a>
-    <a href="/reader/briefing" aria-current="page">每日简报</a>
-    <a href="/reader/radar">精选日报</a>
-    <a href="/reader/bookmarks">收藏</a>
-    <a href="/reader/search">搜索</a>
-    <a href="/index" class="reader-nav-admin">管理 ↗</a>
+    <a href="/reader"><svg th:replace="~{shared/icons :: icon('book')}"></svg><span>速览</span></a>
+    <a href="/reader/unread"><svg th:replace="~{shared/icons :: icon('inbox')}"></svg><span>待读</span></a>
+    <a href="/reader/briefing" aria-current="page"><svg th:replace="~{shared/icons :: icon('news')}"></svg><span>每日简报</span></a>
+    <a href="/reader/radar"><svg th:replace="~{shared/icons :: icon('radar')}"></svg><span>精选日报</span></a>
+    <a href="/reader/bookmarks"><svg th:replace="~{shared/icons :: icon('bookmark')}"></svg><span>收藏</span></a>
+    <a href="/reader/search"><svg th:replace="~{shared/icons :: icon('search')}"></svg><span>搜索</span></a>
+    <a href="/index" class="reader-nav-admin"><svg th:replace="~{shared/icons :: icon('settings')}"></svg><span>管理</span></a>
   </nav>
 
 
@@ -37,7 +38,7 @@
 
     <!-- Date navigation -->
     <div class="bf-date-nav" aria-label="简报日期">
-      <a th:href="'/reader/briefing?date=' + ${prevDate}" class="bf-nav-btn" aria-label="前一天" title="前一天">‹</a>
+      <a th:href="'/reader/briefing?date=' + ${prevDate}" class="bf-nav-btn" aria-label="前一天" title="前一天"><svg th:replace="~{shared/icons :: icon('left')}"></svg></a>
       <label class="bf-date-label">
         <input type="date" class="bf-date-picker"
                th:value="${dateIso}" th:max="${todayIso}" aria-label="选择简报日期"
@@ -48,7 +49,7 @@
          class="bf-nav-btn"
          th:classappend="${dateIso >= todayIso} ? ' bf-nav-btn--disabled'"
          th:attr="aria-disabled=${dateIso >= todayIso},tabindex=${dateIso >= todayIso ? '-1' : null}"
-         aria-label="后一天" title="后一天">›</a>
+         aria-label="后一天" title="后一天"><svg th:replace="~{shared/icons :: icon('right')}"></svg></a>
       <a th:if="${!isToday}" href="/reader/briefing" class="bf-nav-today">今天</a>
     </div>
 

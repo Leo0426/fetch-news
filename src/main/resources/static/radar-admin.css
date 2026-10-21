@@ -1,6 +1,7 @@
-.radar-form { max-width: 900px; margin: 24px 0; padding: 20px; border: 1px solid var(--border, #ddd); border-radius: 12px; }
-.radar-form label { display: block; margin: 12px 0; }
-.radar-form input:not([type=checkbox]), .radar-form select, .radar-form textarea { display: block; width: 100%; box-sizing: border-box; padding: 10px; margin: 5px 0; border: 1px solid var(--border, #ccc); border-radius: 6px; background: var(--bg, white); color: inherit; font: inherit; }
+.radar-form { display: grid; gap: 16px; max-width: 100%; margin: 20px 0; padding: 20px; border: 1px solid var(--line); border-radius: var(--r); background: var(--paper-soft); box-shadow: var(--sh); }
+.radar-form label { display: grid; gap: 6px; min-width: 0; color: var(--ink-soft); font-size: 12px; line-height: 18px; }
+.radar-form label:has(> input[type=checkbox]) { display: flex; align-items: center; gap: 8px; }
+.radar-form > .btn { justify-self: start; }
 .radar-form textarea { resize: vertical; }
 .radar-form fieldset { min-width: 0; margin: 14px 0; border: 1px solid var(--border, #ddd); }
 .radar-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
@@ -9,3 +10,57 @@
 .radar-table td,.radar-table th { padding: 12px; border-bottom: 1px solid var(--border, #ddd); text-align: left; }
 .radar-note { white-space: pre-wrap; overflow-wrap: anywhere; }
 @media(max-width:600px) { .radar-form { padding: 12px; } }
+
+.radar-settings { max-width: 1440px; margin: 0 auto; }
+.radar-settings-header, .radar-header-actions { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.radar-settings-header h2 { margin: 4px 0 10px; font-family: var(--font-display); font-size: 28px; color: var(--ink); }
+.radar-eyebrow { margin: 0; color: var(--accent); font-size: 11px; font-weight: 700; letter-spacing: .14em; }
+.radar-help { margin: 0; color: var(--ink-soft); font-size: 12px; line-height: 1.8; }
+.radar-settings-notice { margin: 20px 0; padding: 12px 16px; border: 1px solid var(--line); border-radius: var(--r); background: var(--paper-deep); color: var(--ink-soft); font-size: 12px; line-height: 1.8; }
+.radar-settings-columns { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+.radar-settings-columns > form { min-width: 0; display: grid; gap: 18px; margin: 0; }
+.radar-settings .card-title { margin: 0; }
+.radar-section-meta { font-size: 11px; color: var(--ink-faint); }
+.radar-card-body { padding: 20px; display: grid; gap: 16px; }
+.radar-settings label { min-width: 0; display: grid; gap: 7px; color: var(--ink-soft); font-size: 12px; line-height: 1.6; }
+.radar-settings textarea { resize: vertical; line-height: 1.75; }
+.radar-settings input:focus-visible, .radar-settings select:focus-visible, .radar-settings textarea:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-bg); }
+.radar-settings label:has(> input[type=checkbox]) { display: flex; align-items: center; gap: 8px; color: var(--ink); }
+.radar-settings input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--accent); flex-shrink: 0; }
+.radar-settings .radar-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.radar-settings fieldset { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; min-width: 0; margin: 0; padding: 14px; border: 1px solid var(--line); border-radius: 8px; }
+.radar-settings fieldset legend { max-width: 100%; padding: 0 6px; color: var(--ink); font-family: var(--font-mono); font-size: 11px; overflow-wrap: anywhere; }
+.radar-settings .radar-grid fieldset { grid-template-columns: minmax(0, 1fr); }
+.radar-subheading { font-size: 12px; font-weight: 700; padding-top: 4px; color: var(--ink); }
+.radar-settings .radar-new-entry { background: var(--paper); border-style: dashed; }
+.radar-settings .radar-new-entry label:first-of-type { grid-column: 1 / -1; }
+.radar-profile-tabs { display: flex; gap: 8px; flex-wrap: wrap; }
+.radar-profile-tabs .btn { max-width: 100%; height: auto; min-height: 34px; overflow-wrap: anywhere; white-space: normal; }
+.radar-profile-tabs .btn.active { border-color: var(--accent); background: var(--accent-bg); color: var(--accent); }
+.radar-settings small { color: var(--ink-faint); font-size: 11px; }
+.radar-add-panel { padding: 14px; border: 1px dashed var(--line-strong); border-radius: 8px; background: var(--paper); }
+.radar-add-panel summary { cursor: pointer; color: var(--ink); font-size: 12px; font-weight: 600; }
+.radar-add-fields { display: grid; gap: 14px; padding-top: 14px; }
+.radar-save-row { border-top: 1px solid var(--line); padding-top: 16px; }
+.radar-save-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding: 16px 20px; border: 1px solid var(--line); border-radius: var(--r); background: var(--paper-soft); }
+@media (max-width: 1100px) { .radar-settings-columns { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 600px) {
+  .radar-settings-header h2 { font-size: 24px; }
+  .radar-card-body { padding: 16px; }
+  .radar-settings .radar-grid, .radar-settings fieldset { grid-template-columns: minmax(0, 1fr); }
+  .radar-header-actions { width: 100%; justify-content: flex-start; }
+}
+
+.radar-settings .radar-grid > label { display: grid; grid-template-rows: subgrid; grid-row: span 2; }
+.radar-workflow > h2 { margin: 0 0 10px; font-family: var(--font-display); font-size: 26px; }
+.radar-workflow > p { margin: 12px 0; color: var(--ink-soft); font-size: 13px; line-height: 1.8; }
+.radar-workflow > details { margin: 16px 0; padding: 16px 20px; background: var(--paper-soft); border: 1px solid var(--line); border-radius: var(--r); }
+.radar-workflow > details summary { cursor: pointer; font-size: 13px; }
+.radar-workflow > details article { padding-top: 18px; line-height: 1.8; }
+.radar-workflow .radar-table-wrap { margin-top: 18px; border: 1px solid var(--line); border-radius: var(--r); background: var(--paper-soft); }
+.radar-workflow .radar-table { min-width: 900px; font-size: 12px; }
+.radar-workflow .radar-table th { color: var(--ink-soft); font-size: 11px; white-space: nowrap; background: var(--paper-deep); }
+.radar-workflow .radar-table td { vertical-align: top; line-height: 1.7; }
+.radar-workflow .radar-table td:last-child { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.radar-workflow .radar-table td:last-child form { margin: 0; }
+.radar-workflow .radar-form h3, .radar-workflow .radar-form p { margin: 0; }

@@ -1,8 +1,8 @@
-<div data-ai-settings>
+<div class="radar-workflow" data-ai-settings>
   <h2>AI 任务 · 新闻雷达</h2>
   <p>最近 50 个任务。恢复沿用原快照；重跑按当前配置创建新版本。Token 为平台实际返回值，缺失时显示“未知”。</p>
-  <button class="btn" hx-get="/index/radar/tasks" hx-target="#main-content">刷新任务</button>
-  <a class="btn" href="/reader/radar">生成与查看日报</a>
+  <button class="btn" hx-get="/index/radar/tasks" hx-target="#main-content"><svg th:replace="~{shared/icons :: icon('refresh')}"></svg>刷新任务</button>
+  <a class="btn" href="/reader/radar"><svg th:replace="~{shared/icons :: icon('news')}"></svg>生成与查看日报</a>
   <p th:if="${#lists.isEmpty(runs)}">尚无任务。</p>
   <div class="radar-table-wrap"><table class="radar-table" th:unless="${#lists.isEmpty(runs)}">
     <thead><tr><th>日期 / 模型</th><th>状态 / 阶段</th><th>候选 / 调用</th><th>输入 / 输出 Token</th><th>模型耗时</th><th>操作</th></tr></thead>
@@ -17,7 +17,7 @@
         <form th:if="${run.status.state == 'failed' or run.status.state == 'partial' or run.status.state == 'success'}" th:attr="hx-post=${'/index/radar/tasks/' + run.status.runId + '/retry'}" hx-target="#main-content">
           <input type="hidden" name="requestKey" th:value="${requestKey + '-' + run.status.runId}"><button class="btn" type="submit">重跑新版本</button>
         </form>
-        <a class="btn" th:href="${'/reader/radar?date=' + run.status.date + '&amp;zoneId=' + run.request.zoneId}">查看日报</a>
+        <a class="btn" th:href="${'/reader/radar?date=' + run.status.date + '&amp;zoneId=' + run.request.zoneId}"><svg th:replace="~{shared/icons :: icon('news')}"></svg>查看日报</a>
       </td>
     </tr></tbody>
   </table></div>

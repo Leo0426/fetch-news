@@ -1,7 +1,7 @@
 <div class="modal-head">
   <h2 class="modal-ttl" id="modal-title"
         th:text="${isFeedUrl} ? '添加 RSS 订阅' : '添加实例'">添加实例</h2>
-  <button class="modal-x" type="button" aria-label="关闭设置" @click="modal = false">✕</button>
+  <button class="modal-x" type="button" aria-label="关闭设置" @click="modal = false"><svg th:replace="~{shared/icons :: icon('close')}"></svg></button>
 </div>
 
 <!-- ── feedUrl mode (generic /rss route) ──────────────────────────────── -->
@@ -13,14 +13,14 @@
 
       <div class="field">
         <label class="field-label" for="modal-path">挂载路径</label>
-        <input id="modal-path" name="path" type="text" autocomplete="off"
+        <input class="ui-control" id="modal-path" name="path" type="text" autocomplete="off"
                placeholder="/my-blog" spellcheck="false">
         <span class="field-hint">自定义访问路径，例如 /v2ex 或 /blog/sspai</span>
       </div>
 
       <div class="field">
         <label class="field-label" for="modal-feedUrl">Feed URL</label>
-        <input id="modal-feedUrl" name="feedUrl" type="url" autocomplete="off"
+        <input class="ui-control" id="modal-feedUrl" name="feedUrl" type="url" autocomplete="off"
                placeholder="https://example.com/feed.xml" spellcheck="false">
         <span class="field-hint">RSS 2.0 或 Atom 格式的订阅地址</span>
       </div>
@@ -28,25 +28,25 @@
       <div class="field-row">
         <div class="field">
           <label class="field-label" for="modal-routeCacheTtlSeconds">路由缓存（秒）</label>
-          <input id="modal-routeCacheTtlSeconds" name="routeCacheTtlSeconds" type="number" min="1" step="1"
+          <input class="ui-control" id="modal-routeCacheTtlSeconds" name="routeCacheTtlSeconds" type="number" min="1" step="1"
                  th:value="${defaultRouteTtl}">
         </div>
         <div class="field">
           <label class="field-label" for="modal-detailCacheTtlSeconds">详情缓存（秒）</label>
-          <input id="modal-detailCacheTtlSeconds" name="detailCacheTtlSeconds" type="number" min="1" step="1"
+          <input class="ui-control" id="modal-detailCacheTtlSeconds" name="detailCacheTtlSeconds" type="number" min="1" step="1"
                  th:value="${defaultDetailTtl}">
         </div>
       </div>
 
       <div class="field">
         <label class="field-label" for="modal-scheduleMinutes">定时抓取（分钟）</label>
-        <input id="modal-scheduleMinutes" name="scheduleMinutes" type="number" min="0" step="1" value="0">
+        <input class="ui-control" id="modal-scheduleMinutes" name="scheduleMinutes" type="number" min="0" step="1" value="0">
         <span class="field-hint">0 = 不启用</span>
       </div>
 
       <div class="field">
         <label class="field-label" for="modal-alias">别名 <span class="field-hint" style="display:inline;">(可选，显示在 UI 中替代路径)</span></label>
-        <input id="modal-alias" name="alias" type="text" autocomplete="off"
+        <input class="ui-control" id="modal-alias" name="alias" type="text" autocomplete="off"
                placeholder="如：我的订阅">
       </div>
 
@@ -77,8 +77,8 @@
 
     <div class="field">
       <label class="field-label" for="instance-source-preview">路由模板</label>
-      <input id="instance-source-preview" type="text" readonly
-             style="font-family:monospace;font-size:12.5px;"
+      <input class="ui-control" id="instance-source-preview" type="text" readonly
+
              th:value="${sourcePath}">
     </div>
 
@@ -86,7 +86,7 @@
     <template x-for="p in paramNames" :key="p">
       <div class="field">
         <label class="field-label" :for="'instance-param-' + p" x-text="':' + p"></label>
-        <input type="text" :id="'instance-param-' + p"
+        <input class="ui-control" type="text" :id="'instance-param-' + p"
                :placeholder="p"
                x-model.trim="vals[p]"
                autocomplete="off"
@@ -96,8 +96,8 @@
 
     <div class="field">
       <label class="field-label" for="instance-path-preview">生成路径</label>
-      <input id="instance-path-preview" type="text" readonly
-             style="font-family:monospace;font-size:12.5px;"
+      <input class="ui-control" id="instance-path-preview" type="text" readonly
+
              :value="generatedPath">
       <span class="field-hint"
             :class="isComplete ? 'ok' : ''"
@@ -113,25 +113,25 @@
       <div class="field-row">
         <div class="field">
           <label class="field-label" for="modal-routeCacheTtlSeconds">路由缓存（秒）</label>
-          <input id="modal-routeCacheTtlSeconds" name="routeCacheTtlSeconds" type="number" min="1" step="1"
+          <input class="ui-control" id="modal-routeCacheTtlSeconds" name="routeCacheTtlSeconds" type="number" min="1" step="1"
                  th:value="${defaultRouteTtl}">
         </div>
         <div class="field">
           <label class="field-label" for="modal-detailCacheTtlSeconds">详情缓存（秒）</label>
-          <input id="modal-detailCacheTtlSeconds" name="detailCacheTtlSeconds" type="number" min="1" step="1"
+          <input class="ui-control" id="modal-detailCacheTtlSeconds" name="detailCacheTtlSeconds" type="number" min="1" step="1"
                  th:value="${defaultDetailTtl}">
         </div>
       </div>
 
       <div class="field">
         <label class="field-label" for="modal-scheduleMinutes">定时抓取（分钟）</label>
-        <input id="modal-scheduleMinutes" name="scheduleMinutes" type="number" min="0" step="1" value="0">
+        <input class="ui-control" id="modal-scheduleMinutes" name="scheduleMinutes" type="number" min="0" step="1" value="0">
         <span class="field-hint">0 = 不启用</span>
       </div>
 
       <div class="field">
         <label class="field-label" for="modal-alias">别名 <span class="field-hint" style="display:inline;">(可选，显示在 UI 中替代路径)</span></label>
-        <input id="modal-alias" name="alias" type="text" autocomplete="off"
+        <input class="ui-control" id="modal-alias" name="alias" type="text" autocomplete="off"
                placeholder="如：我的哔哩哔哩动态">
       </div>
 

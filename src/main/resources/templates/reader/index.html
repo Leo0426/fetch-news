@@ -15,19 +15,20 @@
   <script defer src="/article.js"></script>
   <script defer src="/reader.js"></script>
   <script defer src="/alpine.min.js"></script>
+  <link rel="stylesheet" href="/ui-controls.css">
 </head>
 <body class="reader-page" x-data="readerState()" data-reader>
 <a class="skip-link" href="#rd-main">跳到文章</a>
 <div class="rd-progress-bar" id="rd-progress-bar" aria-hidden="true"></div>
 <main class="rd-wrap">
   <nav class="reader-nav" aria-label="阅读导航">
-    <a href="/reader" aria-current="page">速览</a>
-    <a href="/reader/unread">待读</a>
-    <a href="/reader/briefing">每日简报</a>
-    <a href="/reader/radar">精选日报</a>
-    <a href="/reader/bookmarks">收藏</a>
-    <a href="/reader/search">搜索</a>
-    <a href="/index" class="reader-nav-admin">管理 ↗</a>
+    <a href="/reader" aria-current="page"><svg th:replace="~{shared/icons :: icon('book')}"></svg><span>速览</span></a>
+    <a href="/reader/unread"><svg th:replace="~{shared/icons :: icon('inbox')}"></svg><span>待读</span></a>
+    <a href="/reader/briefing"><svg th:replace="~{shared/icons :: icon('news')}"></svg><span>每日简报</span></a>
+    <a href="/reader/radar"><svg th:replace="~{shared/icons :: icon('radar')}"></svg><span>精选日报</span></a>
+    <a href="/reader/bookmarks"><svg th:replace="~{shared/icons :: icon('bookmark')}"></svg><span>收藏</span></a>
+    <a href="/reader/search"><svg th:replace="~{shared/icons :: icon('search')}"></svg><span>搜索</span></a>
+    <a href="/index" class="reader-nav-admin"><svg th:replace="~{shared/icons :: icon('settings')}"></svg><span>管理</span></a>
   </nav>
   <header class="rd-head reader-digest-head">
     <div class="reader-heading-copy">
@@ -39,8 +40,8 @@
       <span class="rd-count" th:text="${totalCount} + ' 条内容'">0 条内容</span>
       <button type="button" class="rd-mark-all" @click="toggleListView()" :aria-pressed="listView"
               :title="listView ? '切换为卡片视图' : '切换为列表视图'">
-        <span x-show="!listView">☰ 列表</span>
-        <span x-show="listView" x-cloak>⊞ 卡片</span>
+        <span x-show="!listView"><svg th:replace="~{shared/icons :: icon('list')}"></svg>列表</span>
+        <span x-show="listView" x-cloak><svg th:replace="~{shared/icons :: icon('grid')}"></svg>卡片</span>
       </button>
     </div>
   </header>
@@ -48,7 +49,7 @@
   <section class="reader-toolbar" aria-label="筛选文章">
     <form action="/reader/search" method="get" class="rd-search-form" role="search">
       <label class="sr-only" for="reader-search">筛选当前文章标题</label>
-      <input id="reader-search" class="rd-search-input" type="search" name="q"
+      <input id="reader-search" class="ui-control rd-search-input" type="search" name="q"
              x-model.debounce.200ms="searchQuery" @search="searchQuery = $event.target.value"
              placeholder="筛选当前文章标题…" autocomplete="off" aria-describedby="reader-search-hint">
       <button type="submit" class="rd-search-submit" title="搜索全部已保存的标题与摘要">搜索历史</button>

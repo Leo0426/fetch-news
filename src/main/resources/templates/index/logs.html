@@ -1,7 +1,7 @@
 <div class="logs-view" id="logs-view">
 
   <!-- summary cards -->
-  <div class="stats-row" style="grid-template-columns:repeat(4,1fr);margin-bottom:20px;">
+  <div class="stats-row" style="margin-bottom:20px;">
     <div class="stat-card">
       <div class="stat-label">总记录数</div>
       <div class="stat-value" th:text="${total}">0</div>
@@ -27,15 +27,15 @@
     <form hx-get="/index/logs"
           hx-target="#main-content"
           hx-swap="innerHTML"
-          style="display:flex;gap:10px;align-items:center;">
-      <input class="rt-search"
+          class="ui-toolbar">
+      <input class="ui-control rt-search"
              type="text"
              name="q"
              placeholder="按路由路径过滤…"
              th:value="${filter}"
-             style="flex:1;max-width:360px;">
+             style="flex:1;max-width:360px">
       <input type="hidden" name="page" value="0">
-      <button type="submit" class="btn-small">过滤</button>
+      <button type="submit" class="btn-small"><svg th:replace="~{shared/icons :: icon('filter')}"></svg>过滤</button>
       <a th:if="${filter != null and !#strings.isEmpty(filter)}"
          hx-get="/index/logs"
          hx-target="#main-content"

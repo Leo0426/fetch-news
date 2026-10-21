@@ -16,6 +16,7 @@
   <script defer src="/article.js"></script>
   <script defer src="/reader.js"></script>
   <script defer src="/alpine.min.js"></script>
+  <link rel="stylesheet" href="/ui-controls.css">
 </head>
 <body class="reader-page unread-page" x-data="readerState()" data-reader data-reader-mode="unread"
       @click.capture="guardQueueNavigation($event)"
@@ -24,12 +25,13 @@
 <div class="rd-progress-bar" id="rd-progress-bar" aria-hidden="true"></div>
 <main class="rd-wrap" th:with="hasFilters=${!#strings.isEmpty(page.source) or !#strings.isEmpty(page.query) or page.bookmarkedOnly}">
   <nav class="reader-nav" aria-label="阅读导航">
-    <a href="/reader">速览</a>
-    <a href="/reader/unread" aria-current="page">待读</a>
-    <a href="/reader/briefing">每日简报</a>
-    <a href="/reader/bookmarks">收藏</a>
-    <a href="/reader/search">搜索</a>
-    <a href="/index" class="reader-nav-admin">管理 ↗</a>
+    <a href="/reader"><svg th:replace="~{shared/icons :: icon('book')}"></svg><span>速览</span></a>
+    <a href="/reader/unread" aria-current="page"><svg th:replace="~{shared/icons :: icon('inbox')}"></svg><span>待读</span></a>
+    <a href="/reader/briefing"><svg th:replace="~{shared/icons :: icon('news')}"></svg><span>每日简报</span></a>
+    <a href="/reader/radar"><svg th:replace="~{shared/icons :: icon('radar')}"></svg><span>精选日报</span></a>
+    <a href="/reader/bookmarks"><svg th:replace="~{shared/icons :: icon('bookmark')}"></svg><span>收藏</span></a>
+    <a href="/reader/search"><svg th:replace="~{shared/icons :: icon('search')}"></svg><span>搜索</span></a>
+    <a href="/index" class="reader-nav-admin"><svg th:replace="~{shared/icons :: icon('settings')}"></svg><span>管理</span></a>
   </nav>
 
   <header class="rd-head unread-head">
@@ -45,8 +47,8 @@
       </span>
       <button th:if="${!page.items.isEmpty()}" type="button" class="rd-mark-all" @click="toggleListView()"
               :aria-pressed="listView" :title="listView ? '切换为卡片视图' : '切换为列表视图'">
-        <span x-show="!listView">☰ 列表</span>
-        <span x-show="listView" x-cloak>⊞ 卡片</span>
+        <span x-show="!listView"><svg th:replace="~{shared/icons :: icon('list')}"></svg>列表</span>
+        <span x-show="listView" x-cloak><svg th:replace="~{shared/icons :: icon('grid')}"></svg>卡片</span>
       </button>
     </div>
   </header>
@@ -56,12 +58,12 @@
           @submit="if (queueBusy()) $event.preventDefault()">
       <div class="unread-search-field">
         <label for="unread-query">关键词</label>
-        <input id="unread-query" class="rd-search-input" type="search" name="q" th:value="${page.query}"
+        <input id="unread-query" class="ui-control rd-search-input" type="search" name="q" th:value="${page.query}"
                placeholder="搜索标题、内容与摘要…" maxlength="200" autocomplete="off">
       </div>
       <div class="unread-source-field">
         <label for="unread-source">来源</label>
-        <select id="unread-source" name="source">
+        <select class="ui-control" id="unread-source" name="source">
           <option value="">全部来源</option>
           <option th:if="${!#strings.isEmpty(page.source) and !page.sources.contains(page.source)}"
                   th:value="${page.source}" th:text="${page.source}" selected>当前来源</option>
@@ -69,7 +71,7 @@
                   th:selected="${source == page.source}">来源</option>
         </select>
       </div>
-      <button type="submit" class="rd-search-submit" :disabled="queueBusy()">应用筛选</button>
+      <button type="submit" class="rd-search-submit" :disabled="queueBusy()"><svg th:replace="~{shared/icons :: icon('filter')}"></svg>应用筛选</button>
       <div class="unread-filter-options">
         <label class="unread-bookmarked" for="unread-bookmarked">
           <input id="unread-bookmarked" type="checkbox" name="bookmarked" value="true" th:checked="${page.bookmarkedOnly}">

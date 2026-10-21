@@ -26,15 +26,15 @@
       <div class="field-row" style="grid-template-columns:1fr 120px;margin-bottom:14px;">
         <div class="field">
           <span>全局 Webhook URL</span>
-          <input name="webhookUrl" type="url" autocomplete="off"
+          <input class="ui-control" name="webhookUrl" type="url" autocomplete="off"
                  placeholder="https://open.feishu.cn/open-apis/bot/v2/hook/…"
                  th:value="${config.webhookUrl()}"
-                 style="font-family:monospace;font-size:12px;">
+                 >
           <span class="field-hint">未配置分类专属 Webhook 时使用此地址</span>
         </div>
         <div class="field">
           <span>默认最多条数</span>
-          <input name="maxItemsPerPush" type="number" min="1" max="50"
+          <input class="ui-control" name="maxItemsPerPush" type="number" min="1" max="50"
                  th:value="${config.maxItemsPerPush()}">
           <span class="field-hint">分类可单独覆盖</span>
         </div>
@@ -44,12 +44,12 @@
            th:text="${message}"></div>
 
       <div class="form-acts">
-        <button class="btn primary" type="submit">保存全局配置</button>
+        <button class="btn primary" type="submit"><svg th:replace="~{shared/icons :: icon('save')}"></svg>保存全局配置</button>
         <button class="btn" type="button"
                 hx-post="/index/feishu/test"
                 hx-target="#feishu-test-result"
                 hx-swap="innerHTML"
-                hx-include="closest form">测试连接</button>
+                hx-include="closest form"><svg th:replace="~{shared/icons :: icon('health')}"></svg>测试连接</button>
         <span id="feishu-test-result" class="form-msg"></span>
       </div>
     </form>
@@ -70,7 +70,7 @@
     暂无已注册分类
   </div>
 
-  <table th:if="${!#lists.isEmpty(allCategories)}" class="rtable">
+  <div class="ui-table-wrap"><table th:if="${!#lists.isEmpty(allCategories)}" class="rtable">
     <thead>
       <tr>
         <th>分类</th>
@@ -98,11 +98,9 @@
         </td>
 
         <td>
-          <select x-model="mode"
+          <select class="ui-control" x-model="mode"
                   th:name="'mode_' + ${cat}"
-                  style="width:100%;font-size:12px;height:30px;padding:0 6px;
-                         border:1px solid var(--border);border-radius:5px;
-                         background:var(--surface);color:var(--text);font:inherit;">
+                  style="width:100%">
             <option value="immediate"
                     th:selected="${'immediate'.equals(config.getCategory(cat).mode())}">实时推送</option>
             <option value="digest"
@@ -111,47 +109,43 @@
         </td>
 
         <td>
-          <input type="text" autocomplete="off"
+          <input class="ui-control" type="text" autocomplete="off"
                  th:name="'wh_' + ${cat}"
                  placeholder="留空使用全局"
                  th:value="${config.getCategory(cat).webhookUrl()}"
-                 style="width:100%;font-size:12px;height:30px;padding:0 8px;
-                        font-family:monospace;border:1px solid var(--border);
-                        border-radius:5px;background:var(--surface);">
+                 style="width:100%">
         </td>
 
         <td>
-          <input type="number" min="0" max="50"
+          <input class="ui-control" type="number" min="0" max="50"
                  th:name="'max_' + ${cat}"
                  placeholder="0=全局"
                  th:value="${config.getCategory(cat).maxItemsPerPush() > 0 ? config.getCategory(cat).maxItemsPerPush() : ''}"
-                 style="width:100%;font-size:12px;height:30px;padding:0 8px;
-                        border:1px solid var(--border);border-radius:5px;background:var(--surface);">
+                 style="width:100%">
         </td>
 
         <td>
-          <input type="text"
+          <input class="ui-control" type="text"
                  th:name="'cron_' + ${cat}"
                  placeholder="0 0 8 * * *"
                  th:value="${config.getCategory(cat).digestCron()}"
                  :disabled="mode !== 'digest'"
-                 :style="mode !== 'digest' ? 'opacity:0.35;' : ''"
-                 style="width:100%;font-size:11px;font-family:monospace;height:30px;padding:0 6px;
-                        border:1px solid var(--border);border-radius:5px;background:var(--surface);">
+                 :
+                 style="width:100%">
         </td>
 
         <td>
           <div style="display:flex;align-items:center;gap:8px;">
             <button class="btn" type="button"
-                    style="height:28px;padding:0 12px;font-size:12px;"
-                    th:attr="'@click'='saveCategory(\'' + ${cat} + '\')'">保存</button>
+
+                    th:attr="'@click'='saveCategory(\'' + ${cat} + '\')'"><svg th:replace="~{shared/icons :: icon('save')}"></svg>保存</button>
             <span th:id="'cat-result-' + ${cat}" class="form-msg"
                   style="font-size:12px;white-space:nowrap;"></span>
           </div>
         </td>
       </tr>
     </tbody>
-  </table>
+  </table></div>
 </div>
 
 <!-- Alpine saveCategory helper -->

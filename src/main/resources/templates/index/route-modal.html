@@ -2,7 +2,7 @@
   <div class="modal-head">
     <h2 class="modal-ttl" id="modal-title"
           th:text="${isNew} ? '新建挂载' : (${selected.alias()} != null ? ${selected.alias()} : ${selected.path})">路由设置</h2>
-    <button class="modal-x" type="button" aria-label="关闭设置" @click="modal = false">✕</button>
+    <button class="modal-x" type="button" aria-label="关闭设置" @click="modal = false"><svg th:replace="~{shared/icons :: icon('close')}"></svg></button>
   </div>
 
   <div class="modal-body">
@@ -22,7 +22,7 @@
       <div class="field-row">
         <div class="field">
           <label class="field-label" for="modal-path">挂载路径</label>
-          <input id="modal-path" name="path" type="text"
+          <input class="ui-control" id="modal-path" name="path" type="text"
                  autocomplete="off"
                  th:readonly="${!isNew}"
                  th:value="${isNew} ? '' : ${selected.path}"
@@ -30,7 +30,7 @@
         </div>
         <div class="field">
           <label class="field-label" for="modal-sourcePath">来源路由</label>
-          <select id="modal-sourcePath" name="sourcePath"
+          <select class="ui-control" id="modal-sourcePath" name="sourcePath"
                   th:disabled="${!isNew and selected.path == selected.sourcePath}"
                   x-model="srcPath">
             <option th:if="${!isNew}"
@@ -50,7 +50,7 @@
       <!-- feedUrl: shown when source is /rss -->
       <div class="field" x-show="srcPath === '/rss'" x-cloak>
         <label class="field-label" for="modal-feedUrl">Feed URL</label>
-        <input id="modal-feedUrl" name="feedUrl" type="url" autocomplete="off"
+        <input class="ui-control" id="modal-feedUrl" name="feedUrl" type="url" autocomplete="off"
                placeholder="https://example.com/feed.xml"
                th:value="${!isNew and selected.feedUrl() != null} ? ${selected.feedUrl()} : ''">
         <span class="field-hint">RSS 2.0 或 Atom 订阅地址</span>
@@ -59,12 +59,12 @@
       <div class="field-row">
         <div class="field">
           <label class="field-label" for="modal-routeCacheTtlSeconds">路由缓存（秒）</label>
-          <input id="modal-routeCacheTtlSeconds" name="routeCacheTtlSeconds" type="number" min="1" step="1"
+          <input class="ui-control" id="modal-routeCacheTtlSeconds" name="routeCacheTtlSeconds" type="number" min="1" step="1"
                  th:value="${isNew} ? 300 : ${selected.routeCacheTtlSeconds}">
         </div>
         <div class="field">
           <label class="field-label" for="modal-detailCacheTtlSeconds">详情缓存（秒）</label>
-          <input id="modal-detailCacheTtlSeconds" name="detailCacheTtlSeconds" type="number" min="1" step="1"
+          <input class="ui-control" id="modal-detailCacheTtlSeconds" name="detailCacheTtlSeconds" type="number" min="1" step="1"
                  th:value="${isNew} ? 1800 : ${selected.detailCacheTtlSeconds}">
         </div>
       </div>
@@ -72,7 +72,7 @@
       <div class="field-row">
         <div class="field">
           <label class="field-label" for="modal-scheduleMinutes">定时间隔（分钟）</label>
-          <input id="modal-scheduleMinutes" name="scheduleMinutes" type="number" min="0" step="1"
+          <input class="ui-control" id="modal-scheduleMinutes" name="scheduleMinutes" type="number" min="0" step="1"
                  placeholder="0"
                  th:value="${isNew} ? 0 : ${selected.scheduleMinutes}"
                  th:readonly="${!isNew and !selected.isSchedulable()}">
@@ -85,7 +85,7 @@
         </div>
         <div class="field">
           <label class="field-label" for="modal-scheduleCron">Cron 表达式（优先）</label>
-          <input id="modal-scheduleCron" name="scheduleCron" type="text"
+          <input class="ui-control" id="modal-scheduleCron" name="scheduleCron" type="text"
                  autocomplete="off"
                  placeholder="0 0 8 * * *"
                  th:value="${isNew or selected.scheduleCron == null} ? '' : ${selected.scheduleCron}"
@@ -100,7 +100,7 @@
 
       <div class="field">
         <label class="field-label" for="modal-alias">别名 <span class="field-hint" style="display:inline;">(可选，显示在 UI 中替代路径)</span></label>
-        <input id="modal-alias" name="alias" type="text" autocomplete="off"
+        <input class="ui-control" id="modal-alias" name="alias" type="text" autocomplete="off"
                placeholder="如：我的哔哩哔哩动态"
                th:value="${isNew or selected.alias() == null} ? '' : ${selected.alias()}">
       </div>
@@ -138,8 +138,8 @@
         <input type="hidden" name="uid" th:value="${cookieUid}">
 
         <div class="field" style="margin-bottom:10px;">
-          <textarea name="cookie" aria-label="Bilibili Cookie" rows="3" autocomplete="off"
-                    style="font-family:monospace;font-size:11px;resize:vertical;"
+          <textarea class="ui-control" name="cookie" aria-label="Bilibili Cookie" rows="3" autocomplete="off"
+
                     placeholder="完整 Cookie 字符串（动态路由）或 SESSDATA=xxx（视频/专栏路由）"
                     th:text="${cookieStored}"></textarea>
           <span class="field-hint">

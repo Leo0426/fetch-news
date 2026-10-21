@@ -6,7 +6,7 @@
      th:attr="hx-swap-oob=${outOfBand} ? 'outerHTML:#routes-table'">
 
   <div class="toolbar">
-    <input class="search-box" type="search" placeholder="搜索路由路径…"
+    <input class="ui-control search-box" type="search" placeholder="搜索路由路径…"
            name="q" id="route-q"
            hx-get="/index/routes/table"
            hx-trigger="input changed delay:300ms, search"
@@ -113,44 +113,34 @@
             <div class="acts">
               <!-- Add Instance: parameterized routes and generic RSS route -->
               <button th:if="${#strings.contains(route.path, ':') or strategies[route.path] == '通用 RSS'}"
-                      type="button" class="act" title="添加实例"
+                      type="button" class="act" title="添加实例" aria-label="添加实例"
                       hx-get="/index/routes/instance"
                       hx-target="#modal-inner"
                       hx-swap="innerHTML"
-                      th:hx-vals="${'{&quot;source&quot;:&quot;' + route.path + '&quot;}'}">
-                ＋
-              </button>
+                      th:hx-vals="${'{&quot;source&quot;:&quot;' + route.path + '&quot;}'}"><svg th:replace="~{shared/icons :: icon('plus')}"></svg></button>
               <!-- RSS: concrete non-parameterized routes, excluding generic /rss template -->
               <a th:if="${!#strings.contains(route.path, ':') and strategies[route.path] != '通用 RSS'}"
-                 class="act" title="RSS"
-                 th:href="${route.path}" target="_blank" rel="noopener">
-                RSS
-              </a>
+                 class="act" title="RSS" aria-label="RSS"
+                 th:href="${route.path}" target="_blank" rel="noopener"><svg th:replace="~{shared/icons :: icon('rss')}"></svg></a>
               <button th:if="${!#strings.contains(route.path, ':') and strategies[route.path] != '通用 RSS'}"
-                      type="button" class="act" title="编辑设置"
+                      type="button" class="act" title="编辑设置" aria-label="编辑设置"
                       hx-get="/index/routes/edit"
                       hx-target="#modal-inner"
                       hx-swap="innerHTML"
-                      th:hx-vals="${'{&quot;path&quot;:&quot;' + route.path + '&quot;}'}">
-                ✏
-              </button>
+                      th:hx-vals="${'{&quot;path&quot;:&quot;' + route.path + '&quot;}'}"><svg th:replace="~{shared/icons :: icon('edit')}"></svg></button>
               <button th:if="${!#strings.contains(route.path, ':') and strategies[route.path] != '通用 RSS'}"
-                      type="button" class="act" title="浏览数据"
+                      type="button" class="act" title="浏览数据" aria-label="浏览数据"
                       hx-get="/index/items"
                       hx-target="#main-content"
                       hx-swap="innerHTML"
-                      th:hx-vals="${'{&quot;path&quot;:&quot;' + route.path + '&quot;}'}">
-                ▤
-              </button>
+                      th:hx-vals="${'{&quot;path&quot;:&quot;' + route.path + '&quot;}'}"><svg th:replace="~{shared/icons :: icon('list')}"></svg></button>
               <button th:if="${route.path != route.sourcePath}"
-                      type="button" class="act del" title="删除配置"
+                      type="button" class="act del" title="删除配置" aria-label="删除配置"
                       hx-delete="/index/routes"
                       hx-target="#routes-table"
                       hx-swap="outerHTML"
                       th:hx-vals="${'{&quot;path&quot;:&quot;' + route.path + '&quot;}'}"
-                      hx-confirm="确认删除此路由的配置？">
-                ✕
-              </button>
+                      hx-confirm="确认删除此路由的配置？"><svg th:replace="~{shared/icons :: icon('trash')}"></svg></button>
             </div>
           </td>
         </tr>

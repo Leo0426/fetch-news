@@ -5,20 +5,24 @@
   <title th:text="'精选日报 · ' + ${page.date()}">精选日报</title>
   <link rel="icon" href="/favicon.svg"><link rel="stylesheet" href="/admin.css"><link rel="stylesheet" href="/radar.css">
   <script defer src="/radar.js"></script><script defer src="/radar-community.js"></script>
+  <link rel="stylesheet" href="/ui-controls.css">
 </head>
 <body class="reader-page">
 <a class="skip-link" href="#radar-content">跳到精选日报</a>
 <main class="radar-wrap" id="radar-content">
-  <nav class="reader-nav" aria-label="阅读导航"><a href="/reader">速览</a><a href="/reader/unread">待读</a><a href="/reader/briefing">原始日报</a><a href="/reader/radar" aria-current="page">精选日报</a><a href="/reader/bookmarks">收藏</a></nav>
-  <header><p class="page-eyebrow">按你的规则，留下值得读的内容</p><h1>精选日报</h1></header>
+  <nav class="reader-nav" aria-label="阅读导航"><a href="/reader"><svg th:replace="~{shared/icons :: icon('book')}"></svg><span>速览</span></a><a href="/reader/unread"><svg th:replace="~{shared/icons :: icon('inbox')}"></svg><span>待读</span></a><a href="/reader/briefing"><svg th:replace="~{shared/icons :: icon('news')}"></svg><span>原始日报</span></a><a href="/reader/radar" aria-current="page"><svg th:replace="~{shared/icons :: icon('radar')}"></svg><span>精选日报</span></a><a href="/reader/bookmarks"><svg th:replace="~{shared/icons :: icon('bookmark')}"></svg><span>收藏</span></a>
+    <a href="/reader/search"><svg th:replace="~{shared/icons :: icon('search')}"></svg><span>搜索</span></a>
+    <a href="/index" class="reader-nav-admin"><svg th:replace="~{shared/icons :: icon('settings')}"></svg><span>管理</span></a>
+  </nav>
+  <header class="rd-head"><div><p class="page-eyebrow">按你的规则，留下值得读的内容</p><h1 class="rd-title">精选日报</h1></div></header>
   <form action="/reader/radar" method="get" class="radar-controls">
-    <label>日期 <input type="date" name="date" th:value="${page.date()}" required></label>
-    <label>时区 <input name="zoneId" th:value="${page.zoneId()}" required maxlength="80"></label><button type="submit">查看</button>
+    <label><span>日期</span><input class="ui-control" type="date" name="date" th:value="${page.date()}" required></label>
+    <label><span>时区</span><input class="ui-control" name="zoneId" th:value="${page.zoneId()}" required maxlength="80"></label><button type="submit"><svg th:replace="~{shared/icons :: icon('search')}"></svg>查看</button>
   </form>
   <p th:if="${!page.enabled()}" class="radar-notice">精选日报尚未启用。可继续阅读历史日报；启用方式见项目文档。</p>
   <form th:if="${page.enabled()}" id="radar-generate" action="/reader/radar/runs" method="post" class="radar-controls">
     <input type="hidden" name="date" th:value="${page.date()}"><input type="hidden" name="zoneId" th:value="${page.zoneId()}">
-    <input type="hidden" name="requestKey" th:value="${page.requestKey()}"><button type="submit">生成新版本</button>
+    <input type="hidden" name="requestKey" th:value="${page.requestKey()}"><button type="submit"><svg th:replace="~{shared/icons :: icon('plus')}"></svg>生成新版本</button>
     <span>后台处理，刷新页面不会重新生成。</span>
   </form>
   <noscript><p>生成与恢复需要 JavaScript；已保存日报可直接阅读。</p></noscript>
@@ -27,7 +31,7 @@
     <strong th:text="${page.stateLabel(page.latest().state())}"></strong>
     <span th:text="'版本 ' + ${page.latest().version()} + ' · 阶段 ' + ${page.latest().stage()} + ' · 模型调用 ' + ${page.latest().calls()}"></span>
     <p th:if="${page.latest().error()!=null}" th:text="${page.latest().error()}"></p>
-    <button th:if="${page.latest().state()=='paused' && page.enabled()}" type="button" id="radar-resume" th:attr="data-run-id=${page.latest().runId()}">恢复任务</button>
+    <button th:if="${page.latest().state()=='paused' && page.enabled()}" type="button" id="radar-resume" th:attr="data-run-id=${page.latest().runId()}"><svg th:replace="~{shared/icons :: icon('refresh')}"></svg>恢复任务</button>
   </section>
   <section th:if="${page.report()==null}" class="radar-empty"><h2>尚未生成精选日报</h2><p>选定日期后生成。原始日报和全部文章仍可随时阅读。</p><a th:href="${'/reader/briefing?date=' + page.date()}">查看原始日报</a></section>
   <section th:if="${page.report()!=null}">
@@ -50,8 +54,8 @@
           <form class="radar-controls">
             <input type="hidden" name="runId" th:value="${page.report().runId()}">
             <input type="hidden" name="link" th:value="${story.event().primary().link()}">
-            <label>讨论链接（来源包含时可留空）<input name="discussionUrl" type="url" placeholder="https://news.ycombinator.com/item?id=..."></label>
-            <button type="submit">获取讨论与背景</button>
+            <label><span>讨论链接（来源包含时可留空）</span><input class="ui-control" name="discussionUrl" type="url" placeholder="https://news.ycombinator.com/item?id=..."></label>
+            <button type="submit"><svg th:replace="~{shared/icons :: icon('search')}"></svg>获取讨论与背景</button>
           </form>
           <p role="status" aria-live="polite"></p><div data-context-output></div>
         </details>

@@ -109,61 +109,47 @@
             <div class="acts">
               <!-- Add instance: parameterized routes and generic RSS route -->
               <button th:if="${#strings.contains(route.path, ':') or strategies[route.path] == '通用 RSS'}"
-                      type="button" class="act" title="添加实例"
+                      type="button" class="act" title="添加实例" aria-label="添加实例"
                       hx-get="/index/routes/instance"
                       hx-target="#modal-inner"
                       hx-swap="innerHTML"
-                      th:hx-vals="${'{&quot;source&quot;:&quot;' + route.path + '&quot;}'}">
-                ＋
-              </button>
+                      th:hx-vals="${'{&quot;source&quot;:&quot;' + route.path + '&quot;}'}"><svg th:replace="~{shared/icons :: icon('plus')}"></svg></button>
               <!-- Fetch now: concrete non-template paths only -->
               <button th:if="${!#strings.contains(route.path, ':') and strategies[route.path] != '通用 RSS'}"
-                      type="button" class="act" title="立即抓取"
+                      type="button" class="act" title="立即抓取" aria-label="立即抓取"
                       hx-post="/index/routes/fetch"
                       hx-target="#cat-view"
                       hx-swap="outerHTML"
-                      th:hx-vals="${'{&quot;path&quot;:&quot;' + route.path + '&quot;,&quot;category&quot;:&quot;' + category + '&quot;}'}">
-                ↺
-              </button>
+                      th:hx-vals="${'{&quot;path&quot;:&quot;' + route.path + '&quot;,&quot;category&quot;:&quot;' + category + '&quot;}'}"><svg th:replace="~{shared/icons :: icon('refresh')}"></svg></button>
               <!-- RSS link: concrete non-template paths -->
               <a th:if="${!#strings.contains(route.path, ':') and strategies[route.path] != '通用 RSS'}"
-                 class="act" title="打开 RSS"
-                 th:href="${route.path}" target="_blank" rel="noopener">
-                RSS
-              </a>
+                 class="act" title="打开 RSS" aria-label="打开 RSS"
+                 th:href="${route.path}" target="_blank" rel="noopener"><svg th:replace="~{shared/icons :: icon('rss')}"></svg></a>
               <!-- Copy RSS URL: concrete non-template paths -->
               <button th:if="${!#strings.contains(route.path, ':') and strategies[route.path] != '通用 RSS'}"
-                      type="button" class="act" title="复制 RSS 链接"
+                      type="button" class="act" title="复制 RSS 链接" aria-label="复制 RSS 链接"
                       th:attr="data-path=${route.path}"
-                      onclick="copyRss(this)">
-                ⎘
-              </button>
+                      onclick="copyRss(this)"><svg th:replace="~{shared/icons :: icon('copy')}"></svg></button>
               <button th:if="${!#strings.contains(route.path, ':') and strategies[route.path] != '通用 RSS'}"
-                      type="button" class="act" title="编辑设置"
+                      type="button" class="act" title="编辑设置" aria-label="编辑设置"
                       hx-get="/index/routes/edit"
                       hx-target="#modal-inner"
                       hx-swap="innerHTML"
-                      th:hx-vals="${'{&quot;path&quot;:&quot;' + route.path + '&quot;}'}">
-                ✏
-              </button>
+                      th:hx-vals="${'{&quot;path&quot;:&quot;' + route.path + '&quot;}'}"><svg th:replace="~{shared/icons :: icon('edit')}"></svg></button>
               <!-- Browse items: only for concrete paths -->
               <button th:if="${!#strings.contains(route.path, ':')}"
-                      type="button" class="act" title="浏览数据"
+                      type="button" class="act" title="浏览数据" aria-label="浏览数据"
                       hx-get="/index/items"
                       hx-target="#main-content"
                       hx-swap="innerHTML"
-                      th:hx-vals="${'{&quot;path&quot;:&quot;' + route.path + '&quot;}'}">
-                ▤
-              </button>
+                      th:hx-vals="${'{&quot;path&quot;:&quot;' + route.path + '&quot;}'}"><svg th:replace="~{shared/icons :: icon('list')}"></svg></button>
               <button th:if="${route.path != route.sourcePath}"
-                      type="button" class="act del" title="删除配置"
+                      type="button" class="act del" title="删除配置" aria-label="删除配置"
                       hx-delete="/index/routes"
                       hx-target="#cat-view"
                       hx-swap="outerHTML"
                       th:hx-vals="${'{&quot;path&quot;:&quot;' + route.path + '&quot;,&quot;category&quot;:&quot;' + category + '&quot;}'}"
-                      hx-confirm="确认删除此路由的配置？">
-                ✕
-              </button>
+                      hx-confirm="确认删除此路由的配置？"><svg th:replace="~{shared/icons :: icon('trash')}"></svg></button>
             </div>
           </td>
         </tr>
@@ -206,10 +192,10 @@ if (!window._popDocListener) {
 function copyRss(btn) {
   var url = location.origin + btn.dataset.path;
   navigator.clipboard.writeText(url).then(function() {
-    var orig = btn.textContent;
+    var orig = Array.from(btn.childNodes).map(function(node) { return node.cloneNode(true); });
     btn.textContent = '✓';
     btn.style.color = 'var(--green)';
-    setTimeout(function() { btn.textContent = orig; btn.style.color = ''; }, 1500);
+    setTimeout(function() { btn.replaceChildren(...orig); btn.style.color = ''; }, 1500);
   });
 }
 </script>

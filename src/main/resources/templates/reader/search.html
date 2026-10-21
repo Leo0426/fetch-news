@@ -10,17 +10,19 @@
   <link rel="stylesheet" href="/search.css">
   <script defer src="/ui.js"></script>
   <script defer src="/article.js"></script>
+  <link rel="stylesheet" href="/ui-controls.css">
 </head>
 <body class="reader-page search-page">
 <a class="skip-link" href="#search-content">跳到搜索结果</a>
 <main class="rd-wrap">
   <nav class="reader-nav" aria-label="阅读导航">
-    <a href="/reader">速览</a>
-    <a href="/reader/unread">待读</a>
-    <a href="/reader/briefing">每日简报</a>
-    <a href="/reader/bookmarks">收藏</a>
-    <a href="/reader/search" aria-current="page">搜索</a>
-    <a href="/index" class="reader-nav-admin">管理 ↗</a>
+    <a href="/reader"><svg th:replace="~{shared/icons :: icon('book')}"></svg><span>速览</span></a>
+    <a href="/reader/unread"><svg th:replace="~{shared/icons :: icon('inbox')}"></svg><span>待读</span></a>
+    <a href="/reader/briefing"><svg th:replace="~{shared/icons :: icon('news')}"></svg><span>每日简报</span></a>
+    <a href="/reader/radar"><svg th:replace="~{shared/icons :: icon('radar')}"></svg><span>精选日报</span></a>
+    <a href="/reader/bookmarks"><svg th:replace="~{shared/icons :: icon('bookmark')}"></svg><span>收藏</span></a>
+    <a href="/reader/search" aria-current="page"><svg th:replace="~{shared/icons :: icon('search')}"></svg><span>搜索</span></a>
+    <a href="/index" class="reader-nav-admin"><svg th:replace="~{shared/icons :: icon('settings')}"></svg><span>管理</span></a>
   </nav>
 
 
@@ -35,11 +37,11 @@
   <section class="reader-toolbar search-toolbar" aria-label="搜索历史内容">
     <form action="/reader/search" method="get" class="rd-search-form" role="search">
       <label class="sr-only" for="history-query">搜索标题、正文描述与 AI 摘要</label>
-      <input id="history-query" class="rd-search-input" type="search" name="q"
+      <input id="history-query" class="ui-control rd-search-input" type="search" name="q"
              th:value="${page.query}"
              placeholder="输入关键词，找回旧文章…" minlength="2" maxlength="200" required
              aria-describedby="history-search-hint" autocomplete="off" autofocus>
-      <button type="submit" class="rd-search-submit">搜索</button>
+      <button type="submit" class="rd-search-submit"><svg th:replace="~{shared/icons :: icon('search')}"></svg>搜索</button>
     </form>
     <p id="history-search-hint" class="reader-toolbar-hint">输入 2–200 个字符；多个关键词用空格分隔，同时匹配。</p>
   </section>

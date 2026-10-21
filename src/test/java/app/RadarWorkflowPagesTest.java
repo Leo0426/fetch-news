@@ -53,5 +53,6 @@ class RadarWorkflowPagesTest {
         var mvc=MockMvcBuilders.standaloneSetup(new FrontendAssetResource()).build();
         mvc.perform(get("/radar-admin.css")).andExpect(status().isOk());
         mvc.perform(get("/radar-community.js")).andExpect(status().isOk());
+        mvc.perform(get("/ui-controls.css")).andExpect(status().isOk());
     }
 }
