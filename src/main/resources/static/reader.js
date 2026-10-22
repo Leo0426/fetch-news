@@ -28,6 +28,7 @@ function readerState() {
     aiUncertain: {},
 
     init() {
+      window.FetchNewsReadingContext?.attach(this);
       this.cards().forEach(card => {
         const link = card.dataset.link;
         this.aiStates[link] = card.dataset.summaryState || 'none';
@@ -134,14 +135,21 @@ function readerState() {
     readBusy(link) { return this.readAllPending || !!this.readPending[link]; },
     anyReadPending() { return this.readAllPending || Object.values(this.readPending).some(Boolean); },
 
-    async post(path, values) {
-      const response = await fetch(path, {
-        method: 'POST',
-        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-        body: new URLSearchParams(values).toString()
-      });
-      if (!response.ok) throw new Error('Request failed');
-      return response.text();
+    async save(path, values, method = 'POST') {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 15000);
+      try {
+        const response = await fetch(path, {
+          method,
+          headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+          body: new URLSearchParams(values).toString(),
+          signal: controller.signal
+        });
+        if (!response.ok) throw new Error('Request failed');
+        return await response.text();
+      } finally {
+        clearTimeout(timeout);
+      }
     },
     async setReadState(link, markOnly) {
       if (this.readBusy(link) || (markOnly && this.isRead(link))) return;
@@ -151,13 +159,12 @@ function readerState() {
       this.reads = {...this.reads, [link]: !previous};
       this.advanceReadingFocus(previousFocus);
       try {
-        const result = await this.post(markOnly ? '/reader/read-all' : '/reader/read',
-          markOnly ? {links: link} : {link});
-        if (markOnly ? result !== 'ok' : !['read', 'unread'].includes(result)) throw new Error('Unexpected response');
-        this.reads = {...this.reads, [link]: markOnly || result === 'read'};
+        const result = await this.save('/reader/read', {link, read: String(markOnly || !previous)}, 'PUT');
+        if (!['read', 'unread'].includes(result)) throw new Error('Unexpected response');
+        this.reads = {...this.reads, [link]: result === 'read'};
       } catch (error) {
         this.reads = {...this.reads, [link]: previous};
-        ui.notify('已读状态未保存，请重试。', 'error');
+        ui.notify('暂时无法确认已读状态，请重试。', 'error');
       } finally {
         this.readPending = {...this.readPending, [link]: false};
       }
@@ -173,17 +180,17 @@ function readerState() {
       this.readAllPending = true;
       this.reads = {...this.reads, ...Object.fromEntries(links.map(link => [link, true]))};
       try {
-        const result = await this.post('/reader/read-all', links.map(link => ['links', link]));
+        const result = await this.save('/reader/read-all', links.map(link => ['links', link]));
         if (result !== 'ok') throw new Error('Unexpected response');
         ui.notify(this.queueMode ? '本页文章已标为已读，可以继续下一页。' : '当前时间范围内的文章已全部标为已读。');
       } catch (error) {
         this.reads = previous;
-        ui.notify('批量标记未保存，请重试。', 'error');
+        ui.notify('暂时无法确认批量已读状态，请重试。', 'error');
       } finally {
         this.readAllPending = false;
       }
     },
-    async toggleBookmark(link, title, routePath) {
+    async toggleBookmark(link) {
       if (this.bookmarkPending[link]) return;
       const previous = this.isBookmarked(link);
       const previousFocus = this.captureReadingFocus(link);
@@ -191,13 +198,13 @@ function readerState() {
       this.bookmarks = {...this.bookmarks, [link]: !previous};
       this.advanceReadingFocus(previousFocus);
       try {
-        const result = await this.post('/reader/bookmark', {link, title: title || '', routePath: routePath || ''});
+        const result = await this.save('/reader/article/bookmark', {link, bookmarked: String(!previous)}, 'PUT');
         if (!['bookmarked', 'removed'].includes(result)) throw new Error('Unexpected response');
         this.bookmarks = {...this.bookmarks, [link]: result === 'bookmarked'};
         ui.notify(result === 'bookmarked' ? '已加入收藏夹。' : '已取消收藏。');
       } catch (error) {
         this.bookmarks = {...this.bookmarks, [link]: previous};
-        ui.notify('收藏状态未保存，请重试。', 'error');
+        ui.notify('暂时无法确认收藏状态，请重试。', 'error');
       } finally {
         this.bookmarkPending = {...this.bookmarkPending, [link]: false};
       }
@@ -384,6 +391,54 @@ document.addEventListener('keydown', event => {
 
 const bookmarkGrid = document.querySelector('[data-bookmark-grid]');
 if (bookmarkGrid) {
+  const readRequests = new Set();
+  async function markBookmarkRead(card) {
+    const link = card.dataset.link;
+    if (!link || readRequests.has(link)) return;
+    readRequests.add(link);
+    const state = card.querySelector('[data-bookmark-read-state]');
+    const error = card.querySelector('[data-bookmark-read-error]');
+    const retry = card.querySelector('[data-bookmark-read-retry]');
+    const previousLabel = state.textContent;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+    state.textContent = '保存已读中…';
+    state.setAttribute('aria-busy', 'true');
+    error.hidden = true;
+    retry.disabled = true;
+    try {
+      const response = await fetch('/reader/read-all', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: new URLSearchParams({links: link}).toString(),
+        keepalive: true,
+        signal: controller.signal
+      });
+      if (!response.ok || await response.text() !== 'ok') throw new Error('Read state was not saved');
+      card.dataset.read = 'true';
+      state.textContent = '已读';
+    } catch (failure) {
+      state.textContent = previousLabel;
+      error.hidden = false;
+      window.FetchNewsUI.notify('暂时无法确认已读状态，请重试，或进入站内阅读后标记。', 'error');
+    } finally {
+      clearTimeout(timeout);
+      readRequests.delete(link);
+      retry.disabled = false;
+      state.removeAttribute('aria-busy');
+    }
+  }
+  bookmarkGrid.addEventListener('click', event => {
+    if (event.defaultPrevented || event.button !== 0) return;
+    const target = event.target.closest('.bm-card-title, [data-bookmark-read-retry]');
+    const card = target?.closest('.bm-card[data-link]');
+    if (card && bookmarkGrid.contains(card)) markBookmarkRead(card);
+  });
+  bookmarkGrid.addEventListener('auxclick', event => {
+    if (event.defaultPrevented || event.button !== 1) return;
+    const card = event.target.closest('.bm-card-title')?.closest('.bm-card[data-link]');
+    if (card && bookmarkGrid.contains(card)) markBookmarkRead(card);
+  });
   const focusAfterRemoval = new WeakMap();
   const reportedFailures = new WeakSet();
   document.addEventListener('htmx:beforeRequest', event => {

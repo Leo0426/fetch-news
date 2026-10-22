@@ -35,7 +35,11 @@ class AiProtocolTest {
             configs.save(new AiConfig(config.host(),config.model(),true,"openai",config.apiKey(),2048,false,"max_tokens"));
             client.generateJson("Return JSON",configs.get());assertFalse(received.get().has("response_format"));assertEquals(2048,received.get().path("max_tokens").asInt());
             output.set("{\"choices\":[{\"message\":{\"content\":\"cut\"},\"finish_reason\":\"length\"}]}");
-            assertThrows(Exception.class,()->client.generate("test"));
+            assertEquals("AI output token limit reached", assertThrows(Exception.class,()->client.generate("test")).getMessage());
+            output.set("{\"choices\":[{\"message\":{\"refusal\":\"private provider detail\"},\"finish_reason\":\"stop\"}]}");
+            assertEquals("AI response refused", assertThrows(Exception.class,()->client.generate("test")).getMessage());
+            output.set("{\"choices\":[{\"message\":{\"tool_calls\":[{}]},\"finish_reason\":\"tool_calls\"}]}");
+            assertEquals("AI response requires unsupported tools", assertThrows(Exception.class,()->client.generate("test")).getMessage());
         } finally { server.stop(0); }
     }
     @Test void anthropicUsesMessagesHeadersAndOnlyTextBlocks() throws Exception {

@@ -2,6 +2,8 @@ package app;
 
 import app.ai.AiConfig;
 import app.ai.AiConfigStore;
+import app.ai.AiModelList;
+import app.ai.AiProviderForm;
 import app.ai.AiSettingsPage;
 import app.ai.ArticleSummarizer;
 import app.ai.OllamaClient;
@@ -32,6 +34,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -399,30 +402,12 @@ public class AdminResource {
     @PostMapping(value = "/ai", consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE, produces = "text/html;charset=UTF-8")
     @ResponseBody
     public ResponseEntity<String> saveAiConfig(
-            @RequestParam String host, @RequestParam String model,
-            @RequestParam(required = false) String enabled,
-            @RequestParam(required = false) String profileId,
-            @RequestParam(defaultValue = "AI 平台") String name,
-            @RequestParam(defaultValue = "ollama") String protocol,
-            @RequestParam(defaultValue = "") String apiKey,
-            @RequestParam(defaultValue = "false") boolean clearKey,
-            @RequestParam(defaultValue = "4096") int maxTokens,
-            @RequestParam(defaultValue = "false") boolean jsonMode,
-            @RequestParam(defaultValue = "max_tokens") String tokenLimitParameter) {
+            @ModelAttribute AiProviderForm form,
+            @RequestParam(required = false) List<String> modelIds,
+            @RequestParam(defaultValue = "false") boolean activate) {
         try {
-            if(!protocol.equals("ollama") && model.isBlank()) throw new IllegalArgumentException("请填写平台提供的模型 ID");
-            AiConfig next=new AiConfig(host,model,"on".equals(enabled),protocol,apiKey,maxTokens,jsonMode,tokenLimitParameter);
-            if(profileId!=null && !profileId.isBlank() && apiKey.isBlank() && !clearKey) {
-                AiConfig previous=aiConfigStore.profile(profileId).config();
-                if(!previous.apiKey().isBlank()) {
-                    if(!previous.protocol().equals(next.protocol()) || !aiOrigin(previous.host()).equals(aiOrigin(next.host())))
-                        throw new IllegalArgumentException("修改协议或平台地址后，请重新输入密钥或勾选清除密钥");
-                    next=new AiConfig(next.host(),next.model(),next.enabled(),next.protocol(),previous.apiKey(),next.maxTokens(),next.jsonMode(),next.tokenLimitParameter());
-                }
-            }
-            if(clearKey) next=new AiConfig(next.host(),next.model(),next.enabled(),next.protocol(),"",next.maxTokens(),next.jsonMode(),next.tokenLimitParameter());
-            String id=aiConfigStore.saveProfile(profileId,name,next,true);
-            return ResponseEntity.ok(renderAiSettings(id,"已保存并切换到此平台"));
+            String id=aiConfigStore.saveProfile(form.profileId(),form.name(),form.resolve(aiConfigStore),activate,modelIds);
+            return ResponseEntity.ok(renderAiSettings(id,activate ? "已保存并启用此提供商" : "已保存提供商配置"));
         } catch(IllegalArgumentException | NoSuchElementException e) { return aiFormError(e.getMessage(),400); }
         catch(java.io.UncheckedIOException e) { return aiFormError("保存失败，原配置未改变",500); }
     }
@@ -433,6 +418,15 @@ public class AdminResource {
         try { aiConfigStore.activate(profileId); return ResponseEntity.ok(renderAiSettings(profileId,"已切换当前平台")); }
         catch(IllegalArgumentException | NoSuchElementException e) { return aiFormError("平台不存在",400); }
         catch(java.io.UncheckedIOException e) { return aiFormError("保存失败，原配置未改变",500); }
+    }
+
+    @PostMapping(value = "/ai/enabled", produces = "text/html;charset=UTF-8")
+    @ResponseBody
+    public ResponseEntity<String> enableAi(@RequestParam(defaultValue = "false") boolean enabled) {
+        try {
+            aiConfigStore.setEnabled(enabled);
+            return ResponseEntity.ok(renderAiSettings(null, enabled ? "已开启 AI" : "已关闭 AI"));
+        } catch (java.io.UncheckedIOException e) { return aiFormError("保存失败，原配置未改变", 500); }
     }
 
     @PostMapping(value = "/ai/delete", produces = "text/html;charset=UTF-8")
@@ -446,12 +440,6 @@ public class AdminResource {
     private String renderAiSettings(String selectedId,String message) {
         int[] counts=aiCounts();
         return templates.aiSettings(AiSettingsPage.from(aiConfigStore,selectedId),counts[0],counts[1],message);
-    }
-
-    private String aiOrigin(String host) {
-        var uri=java.net.URI.create(host);
-        int port=uri.getPort()<0 ? (uri.getScheme().equalsIgnoreCase("https") ? 443 : 80) : uri.getPort();
-        return uri.getScheme().toLowerCase(java.util.Locale.ROOT)+"://"+uri.getHost().toLowerCase(java.util.Locale.ROOT)+":"+port;
     }
 
     private ResponseEntity<String> aiFormError(String message,int status) {
@@ -480,6 +468,25 @@ public class AdminResource {
     @ResponseBody
     public String testAi() {
         return templates.aiTestResult(ollamaClient.checkConnection(), aiConfigStore.get().model());
+    }
+
+    @PostMapping(value = "/ai/test", consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE, produces = "text/html;charset=UTF-8")
+    @ResponseBody
+    public ResponseEntity<String> testAiProvider(@ModelAttribute AiProviderForm form) {
+        try {
+            AiConfig config = form.resolve(aiConfigStore);
+            return ResponseEntity.ok(templates.aiTestResult(ollamaClient.checkConnection(config), config.model()));
+        } catch (IllegalArgumentException | NoSuchElementException e) { return aiFormError(e.getMessage(), 400); }
+    }
+
+    @PostMapping(value = "/ai/models", consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+    @ResponseBody
+    public ResponseEntity<AiModelList> aiModels(@ModelAttribute AiProviderForm form) {
+        try {
+            return ResponseEntity.ok(AiModelList.from(ollamaClient.checkConnection(form.resolveForDiscovery(aiConfigStore))));
+        } catch (IllegalArgumentException | NoSuchElementException e) {
+            return ResponseEntity.badRequest().body(new AiModelList(List.of(), e.getMessage()));
+        }
     }
 
     /**

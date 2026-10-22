@@ -2,7 +2,6 @@ package app.ai;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -111,13 +110,15 @@ public class OllamaClient {
     }
 
     public ConnectionStatus checkConnection() {
-        AiConfig config = configStore.get();
+        return checkConnection(configStore.get());
+    }
+
+    public ConnectionStatus checkConnection(AiConfig config) {
         if (!config.protocol().equals("ollama")) return checkRemoteConnection(config);
-        String host = config.host();
         String model = config.model();
         try {
-            String version = fetchVersion(host);
-            List<String> models = fetchModels(host);
+            String version = fetchVersion(config);
+            List<String> models = fetchModels(config);
             // Ollama model names may include a tag suffix (e.g. "llama3.2:latest").
             // Match by prefix so "llama3.2" matches "llama3.2:latest".
             boolean modelFound = models.stream()
@@ -148,8 +149,8 @@ public class OllamaClient {
         }
     }
 
-    private String fetchVersion(String host) throws Exception {
-        HttpRequest req = HttpRequest.newBuilder(URI.create(host + "/api/version"))
+    private String fetchVersion(AiConfig config) throws Exception {
+        HttpRequest req = AiHttp.builder(config, "api/version")
                 .timeout(Duration.ofSeconds(5))
                 .GET().build();
         HttpResponse<String> resp = http.send(req, HttpResponse.BodyHandlers.ofString());
@@ -157,8 +158,8 @@ public class OllamaClient {
         return mapper.readTree(resp.body()).path("version").asText("?");
     }
 
-    private List<String> fetchModels(String host) throws Exception {
-        HttpRequest req = HttpRequest.newBuilder(URI.create(host + "/api/tags"))
+    private List<String> fetchModels(AiConfig config) throws Exception {
+        HttpRequest req = AiHttp.builder(config, "api/tags")
                 .timeout(Duration.ofSeconds(5))
                 .GET().build();
         HttpResponse<String> resp = http.send(req, HttpResponse.BodyHandlers.ofString());

@@ -36,7 +36,7 @@
            th:attr="data-link=${page.item().link()},data-title=${page.item().title()},data-route-path=${page.item().routePath()},data-read=${page.read()},data-bookmarked=${page.bookmarked()},data-return-url=${page.returnUrl()}">
     <header class="article-header">
       <div class="article-kicker">
-        <span class="article-source" th:text="${page.item().sourceLabel()}">来源</span>
+        <span class="article-source" th:text="${sourceLabels != null and sourceLabels[page.item().routePath()] != null ? sourceLabels[page.item().routePath()] : page.item().sourceLabel()}">来源</span>
         <span class="article-read-state" data-article-read-state th:text="${page.read()} ? '已读' : '未读'" th:classappend="${page.read()} ? ' is-read'">未读</span>
       </div>
       <h1 class="article-title" th:text="${page.item().title()}">文章标题</h1>
@@ -67,14 +67,31 @@
     </div>
     <noscript><p class="article-noscript">正文可以直接阅读。启用 JavaScript 后，可调整字号、收藏或标为已读。</p></noscript>
 
-    <section th:if="${page.item().hasSummary()}" class="article-summary" aria-labelledby="article-summary-title">
+    <section class="article-summary" aria-labelledby="article-summary-title" data-article-summary
+             th:with="summaryState=${page.summaryProgress().state()}"
+             th:attr="data-summary-state=${summaryState},data-ai-enabled=${page.aiEnabled()}">
       <h2 id="article-summary-title"><span aria-hidden="true">✧</span> AI 摘要</h2>
-      <p th:text="${page.item().summary()}">摘要</p>
+      <p data-article-summary-text th:hidden="${!page.item().hasSummary()}" th:text="${page.item().summary()}">摘要</p>
+      <div class="article-summary-feedback" role="status" aria-live="polite" aria-atomic="true">
+        <p class="article-summary-message" data-article-summary-message tabindex="-1"
+           th:text="${summaryState == 'unknown'} ? '摘要状态暂时无法确认。' : (${summaryState == 'success'} ? '摘要已保存。' : (${summaryState == 'queued'} ? (${page.aiEnabled()} ? '已加入队列，完成后自动显示。可以继续阅读正文。' : 'AI 已关闭，任务保留在队列中。') : (${summaryState == 'running'} ? '正在生成摘要，完成后自动显示。可以继续阅读正文。' : (${summaryState == 'error'} ? '摘要生成失败。' : (${page.aiEnabled()} ? '按需生成，快速了解这篇文章。' : '开启 AI 后，可以为文章生成摘要。')))))"></p>
+      </div>
+      <p class="article-summary-error" data-article-summary-error role="alert" th:hidden="${summaryState != 'error' and summaryState != 'unknown'}"
+         th:text="${summaryState == 'unknown'} ? '请先查看状态，确认后再生成摘要。' : (${page.summaryProgress().error() != null} ? ${page.summaryProgress().error()} : '摘要未完成，可以稍后重试。')"></p>
+      <div class="article-summary-actions" data-article-summary-controls hidden>
+        <button type="button" class="article-button" data-article-summary-generate
+                th:hidden="${!page.aiEnabled() or (summaryState != 'none' and summaryState != 'error')}"
+                th:text="${summaryState == 'error'} ? '重试生成' : '生成摘要'">生成摘要</button>
+        <button type="button" class="article-button" data-article-summary-check th:hidden="${summaryState != 'unknown'}">查看状态</button>
+      </div>
+      <a href="/index#ai" class="article-text-link article-summary-settings" data-article-summary-settings
+         th:hidden="${summaryState == 'success' or (page.aiEnabled() and summaryState != 'error')}">配置 AI 摘要 <span aria-hidden="true">→</span></a>
+      <noscript th:if="${!page.item().hasSummary()}"><p class="article-summary-message">启用 JavaScript 后可生成摘要并查看进度，正文仍可直接阅读。</p></noscript>
     </section>
 
     <div class="article-content-note" th:if="${!page.content().isEmpty()}">
       <span class="article-note-mark" aria-hidden="true"></span>
-      <span th:text="${page.content().kind() == 'extract'} ? 'AI 整理的内容' : '订阅中保存的内容，可能是节选'">订阅中保存的内容，可能是节选</span>
+      <span th:text="${page.content().kind() == 'extract'} ? '提取并保存的内容，可能是节选' : '订阅中保存的内容，可能是节选'">订阅中保存的内容，可能是节选</span>
     </div>
     <div th:if="${!page.content().isEmpty()}" class="article-prose" th:utext="${page.content().html()}"></div>
     <section th:if="${page.content().isEmpty()}" class="article-content-empty" aria-labelledby="article-empty-title">

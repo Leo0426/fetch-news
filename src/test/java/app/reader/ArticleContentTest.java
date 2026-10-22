@@ -111,7 +111,7 @@ class ArticleContentTest {
     }
 
     @Test
-    void usesExtractOnlyWhenSourceHasNoTextAndEscapesItsMarkup() {
+    void usesExtractWhenSourceHasNoTextAndEscapesItsMarkup() {
         ArticleContent content = ArticleContent.from(
                 "<p>&nbsp;</p><img src='https://tracking.test' alt='图片不是正文'><script>alert(1)</script>",
                 "AI 提取内容 <strong>这是纯文本</strong>\n\n<script>alert(1)</script>",
@@ -123,6 +123,45 @@ class ArticleContentTest {
         assertTrue(body.select("script, strong").isEmpty());
         assertTrue(body.text().contains("<strong>这是纯文本</strong>"));
         assertTrue(body.text().contains("<script>alert(1)</script>"));
+    }
+
+    @Test
+    void shortCleanedPreviewUsesFullExtractAsEscapedPlainText() {
+        String extract = "已保存的完整正文。".repeat(30) + "\n\n<script>alert(1)</script><img src='https://tracking.test'>";
+        ArticleContent content = ArticleContent.from("<p>订阅预告</p><script>"
+                + "Ignored active content".repeat(30) + "</script>", extract, "https://example.com/article");
+
+        Document body = Jsoup.parseBodyFragment(content.html());
+        assertEquals("extract", content.kind());
+        assertEquals(2, body.select("p").size());
+        assertTrue(body.select("script, img").isEmpty());
+        assertTrue(body.text().contains("<script>alert(1)</script>"));
+        assertTrue(body.text().contains("<img src='https://tracking.test'>"));
+        assertFalse(body.text().contains("订阅预告"));
+    }
+
+    @Test
+    void completenessThresholdUsesTwoHundredUnicodeCodePoints() {
+        String shortSource = "𠀀".repeat(199);
+        String fullExtract = "𠀁".repeat(200);
+        assertEquals("extract", ArticleContent.from(shortSource, fullExtract, null).kind());
+        assertEquals("source", ArticleContent.from("𠀀".repeat(200), fullExtract, null).kind());
+        assertEquals("source", ArticleContent.from(shortSource, "𠀁".repeat(199), null).kind());
+        assertEquals(shortSource, Jsoup.parseBodyFragment(
+                ArticleContent.from(shortSource, "𠀁".repeat(199), null).html()).text());
+    }
+
+    @Test
+    void completeSourceKeepsItsStructureEvenWhenExtractIsLonger() {
+        String original = "完整订阅正文。".repeat(40);
+        ArticleContent content = ArticleContent.from("<h2>文章小标题</h2><p><strong>" + original + "</strong></p>",
+                "更长的缓存内容。".repeat(80), null);
+
+        Document body = Jsoup.parseBodyFragment(content.html());
+        assertEquals("source", content.kind());
+        assertEquals("文章小标题", body.selectFirst("h2").text());
+        assertEquals(original, body.selectFirst("strong").text());
+        assertFalse(body.text().contains("更长的缓存内容"));
     }
 
     @Test

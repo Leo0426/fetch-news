@@ -8,6 +8,7 @@ import app.feishu.FeishuConfigStore;
 import app.feishu.RadarDeliveryService;
 import java.nio.file.Path;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
@@ -18,7 +19,9 @@ class RadarDeliveryTest {
     @Test void retriesOnlyUnsentPagesAndRequiresConfirmationForUnknownDelivery() throws Exception {
         try(var env=new RadarTestEnvironment(directory,"{\"enabled\":true,\"profileSettings\":{\"tech-news\":{\"threshold\":7,\"topicDedup\":false}}}")) {
             env.save("https://a.test/1");env.save("https://a.test/2");
-            var run=env.service.submit(LocalDate.now().toString(),"UTC","report");env.worker.processNext();
+            var run=env.service.submit(LocalDate.now(ZoneOffset.UTC).toString(),"UTC","report");
+            assertEquals(2,run.totalCandidates());
+            env.worker.processNext();
             var config=new FeishuConfigStore(directory.resolve("feishu.json"),env.mapper);
             config.save(new FeishuConfig("https://example.test/hook/secret",true,1,Map.of()));
             var calls=new AtomicInteger();

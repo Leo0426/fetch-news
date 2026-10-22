@@ -71,6 +71,23 @@ class ConditionalRssRouteTest {
     void stopServer() { server.stop(0); }
 
     @Test
+    void fixedSourcesReuseConditionalSnapshotsWithoutConfiguredFeedUrls() throws Exception {
+        replies.add(new Reply(200, xml("A"), Map.of("ETag", "\"fixed-v1\"")));
+        replies.add(new Reply(304, "", Map.of()));
+        try (FeedStore store = store()) {
+            GenericRssRoute source = new GenericRssRoute(new DefaultFetchClient(), store, clock) {
+                public String feedUrl(RouteContext context) { return url; }
+            };
+            RouteContext context = new RouteContext("/fixed/news", Map.of(), Map.of());
+            var first = source.handle(context);
+            clock.advance(60);
+            assertEquals(first, source.handle(context));
+            assertEquals(304, store.loadFeedRefreshState("/fixed/news", url).lastHttpStatus());
+            assertEquals("\"fixed-v1\"", requests.get(1).get("if-none-match"));
+        }
+    }
+
+    @Test
     void validatesAfterRestartAndPreservesItemsUntilContentChanges() throws Exception {
         replies.add(new Reply(200, xml("A"), Map.of("ETag", "\"v1\"")));
         replies.add(new Reply(304, "", Map.of()));

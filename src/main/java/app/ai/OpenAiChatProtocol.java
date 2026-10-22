@@ -18,8 +18,12 @@ final class OpenAiChatProtocol implements AiProtocol {
     @Override public String text(JsonNode response) {
         var choice=response.path("choices").path(0);var message=choice.path("message");
         String finish=choice.path("finish_reason").asText("");
-        if((!finish.isEmpty() && !finish.equals("stop")) || !message.path("refusal").asText("").isBlank()
-                || message.path("tool_calls").size()>0) throw new IllegalStateException("OpenAI response refused, truncated, or requires unsupported tools");
+        if (finish.equals("length")) throw new IllegalStateException("AI output token limit reached");
+        if (finish.equals("content_filter") || !message.path("refusal").asText("").isBlank())
+            throw new IllegalStateException("AI response refused");
+        if (message.path("tool_calls").size() > 0 || finish.equals("tool_calls") || finish.equals("function_call"))
+            throw new IllegalStateException("AI response requires unsupported tools");
+        if (!finish.isEmpty() && !finish.equals("stop")) throw new IllegalStateException("AI response did not complete");
         return AiHttp.content(message.path("content"));
     }
 }

@@ -2,12 +2,33 @@
      th:if="${item.hasSummary() or item.hasSummaryStatus()}"
      th:with="status=${item.summaryStatus()}"
      class="reader-summary-status"
+     role="status" aria-live="polite" aria-atomic="true" tabindex="-1"
      th:classappend="${!item.hasSummary() and status != null and (status.queued() or status.running())} ? ' running' : (${!item.hasSummary() and status != null and status.error()} ? ' err' : '')">
   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
        stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
     <path d="m12 3 2.7 6.3L21 12l-6.3 2.7L12 21l-2.7-6.3L3 12l6.3-2.7Z"/>
   </svg>
   <span th:text="${item.hasSummary()} ? 'AI 摘要' : (${status != null and status.queued()} ? '排队中' : (${status != null and status.running()} ? '正在生成摘要' : (${status != null and status.error()} ? '摘要生成失败' : 'AI 摘要')))">AI 摘要</span>
+</div>
+
+<div th:fragment="compactSummary(item)"
+     th:if="${item.hasSummary() or item.hasSummaryStatus()}"
+     th:with="status=${item.summaryStatus()}"
+     data-compact-summary
+     th:attr="data-link=${item.link()},data-summary-state=${item.hasSummary() ? 'success' : status.status()}">
+  <div th:replace="~{reader/fragments :: summaryStatus(${item})}"></div>
+  <div class="bf-item-summary" data-compact-summary-text
+       th:hidden="${!item.hasSummary()}" th:text="${item.summary()}"></div>
+  <p class="rd-summarize-err" data-compact-summary-error
+     th:hidden="${item.hasSummary() or status == null or !status.error()}"
+     th:text="${!item.hasSummary() and status != null and status.error()} ? ${status.errorMessage()} : ''"></p>
+  <button type="button" class="rd-summarize-retry" data-compact-summary-check hidden>重新查看状态</button>
+  <a class="reader-article-link" data-compact-summary-recovery data-article-link
+     th:hidden="${item.hasSummary() or status == null or !status.error()}"
+     th:href="${'/reader/article?link=' + #uris.escapeQueryParam(item.link())}">查看文章与摘要 →</a>
+  <noscript th:if="${!item.hasSummary() and status != null and (status.queued() or status.running())}">
+    <p class="rd-summarize-loading">刷新页面或进入站内阅读可查看最新摘要。</p>
+  </noscript>
 </div>
 
 <div th:fragment="articleCard(item, aiEnabled)"
@@ -84,7 +105,7 @@
 
   <div class="rd-card-meta">
     <div class="reader-article-info">
-      <span class="rd-src" th:text="${item.sourceLabel()}">来源</span>
+      <span class="rd-src" th:text="${sourceLabels != null and sourceLabels[item.routePath()] != null ? sourceLabels[item.routePath()] : item.sourceLabel()}">来源</span>
       <span class="rd-age" th:text="'获取 ' + ${item.formattedFetchedAt()}">获取 —</span>
       <span class="rd-age" th:text="'发布 ' + ${item.formattedPublishedAt()}">发布 —</span>
     </div>

@@ -1,0 +1,77 @@
+<article th:fragment="card(source)" class="subscription-card" th:id="${source.cardId()}"
+         th:attr="aria-labelledby=${source.cardId() + '-name'},data-subscribed=${source.subscribed()},data-path=${source.path()},data-status=${source.status().kind()},hx-get=${source.status().running() ? source.cardUrl() : null},hx-trigger=${source.status().running() ? 'every 2s' : null}"
+         hx-target="this" hx-swap="outerHTML" hx-sync="this:drop" hx-include="unset">
+  <header class="subscription-card-header">
+    <span class="subscription-category" th:text="${source.category()}">分类</span>
+    <span class="subscription-membership" th:classappend="${source.subscribed()} ? ' is-subscribed'"
+          th:text="${source.subscribed()} ? '已订阅' : (${source.config().enabled()} ? '仅手动更新' : (${source.config().hasSchedule()} ? '已暂停' : '未订阅'))">未订阅</span>
+  </header>
+  <h3 class="subscription-name" th:id="${source.cardId() + '-name'}" tabindex="-1" th:text="${source.name()}">来源名称</h3>
+  <p class="subscription-description" th:text="${source.description()}">来源介绍</p>
+
+  <div class="subscription-status" th:classappend="${'subscription-status--' + source.status().kind()}" role="status" aria-live="polite" aria-atomic="true">
+    <span class="subscription-status-dot" aria-hidden="true"></span>
+    <div>
+      <strong th:text="${source.status().title()}">等待首次抓取</strong>
+      <p th:if="${!#strings.isEmpty(source.status().detail())}" th:text="${source.status().detail()}"></p>
+      <span th:if="${!#strings.isEmpty(source.status().checkedAt())}" class="subscription-checked"
+            th:text="'最近检查 ' + ${source.status().checkedAt()}"></span>
+      <button th:if="${source.status().kind() == 'waiting'}" type="button" class="subscription-settings"
+              data-subscription-check th:hx-get="${source.cardUrl()}" hx-target="closest .subscription-card"
+              hx-swap="outerHTML" hx-sync="closest .subscription-card:replace">重新查看状态</button>
+    </div>
+  </div>
+
+  <div class="subscription-saved">
+    <span th:if="${source.articleCount() >= 0}">已保存 <strong th:text="${source.articleCount()}">0</strong> 篇</span>
+    <span th:if="${source.articleCount() < 0}">保存数量暂不可用</span>
+    <a th:if="${source.articleCount() > 0}" class="subscription-read" th:href="${source.readerUrl()}">去阅读 <span aria-hidden="true">→</span></a>
+  </div>
+
+  <div class="subscription-controls">
+    <form th:unless="${source.subscribed()}" class="subscription-start" data-subscription-action
+          hx-post="/index/subscriptions/start" hx-target="closest .subscription-card"
+          hx-swap="outerHTML" hx-sync="closest .subscription-card:replace">
+      <input type="hidden" name="path" th:value="${source.path()}">
+      <label th:unless="${source.config().hasSchedule()}" class="subscription-frequency">
+        <span class="ui-field-label">自动更新频率</span>
+        <select class="ui-control" name="scheduleMinutes" th:attr="aria-label=${source.name() + '的自动更新频率'}">
+          <option th:each="frequency : ${source.frequencies()}" th:value="${frequency.minutes()}"
+                  th:text="${frequency.label()}" th:selected="${frequency.minutes() == source.recommendedMinutes()}"></option>
+        </select>
+      </label>
+      <p th:if="${source.config().hasSchedule()}" class="subscription-schedule" th:text="${source.scheduleLabel()}">保留原更新计划</p>
+      <button class="btn primary" type="submit" th:disabled="${source.status().running()}"
+              th:text="${source.config().hasSchedule()} ? '恢复订阅' : (${source.config().enabled()} ? '开启自动更新' : '订阅并抓取')">订阅并抓取</button>
+    </form>
+
+    <div th:if="${source.subscribed()}" class="subscription-active-controls">
+      <p class="subscription-schedule" th:text="${source.scheduleLabel()}">每小时自动更新</p>
+      <form data-subscription-action hx-post="/index/subscriptions/refresh" hx-target="closest .subscription-card"
+            hx-swap="outerHTML" hx-sync="closest .subscription-card:replace">
+        <input type="hidden" name="path" th:value="${source.path()}">
+        <button class="btn" type="submit" th:disabled="${source.status().running() or source.status().kind() == 'waiting'}"
+                th:text="${source.status().running()} ? '正在抓取…' : (${source.status().kind() == 'waiting'} ? '等待重试' : (${source.status().kind() == 'error'} ? '重试抓取' : '立即刷新'))">立即刷新</button>
+      </form>
+    </div>
+
+    <div class="subscription-secondary-actions">
+      <button type="button" class="subscription-settings" th:hx-get="${source.editUrl()}"
+              hx-target="#modal-inner" hx-swap="innerHTML" @click="modal = true"
+              hx-sync="closest .subscription-card:replace"
+              th:attr="aria-label=${'高级设置：' + source.name()}">高级设置</button>
+      <form th:if="${source.config().enabled()}" data-subscription-action hx-post="/index/subscriptions/pause"
+            hx-target="closest .subscription-card" hx-swap="outerHTML" hx-sync="closest .subscription-card:replace">
+        <input type="hidden" name="path" th:value="${source.path()}">
+        <button type="submit" class="subscription-pause">暂停订阅</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="subscription-request-error" data-subscription-error hidden role="alert">
+    <p data-subscription-error-message>暂时无法确认状态，请重新查看。</p>
+    <button class="btn" type="button" data-subscription-check th:hx-get="${source.cardUrl()}"
+            hx-target="closest .subscription-card" hx-swap="outerHTML"
+            hx-sync="closest .subscription-card:replace">重新查看状态</button>
+  </div>
+</article>

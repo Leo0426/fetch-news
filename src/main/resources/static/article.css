@@ -57,6 +57,13 @@
 .article-summary h2 { display: flex; align-items: center; gap: 7px; margin-bottom: 10px; color: #826135; font-family: var(--font-ui); font-size: 12px; font-weight: 650; }
 .article-summary h2 span { font-size: 20px; line-height: 1; }
 .article-summary p { color: #5f5446; font-size: calc(var(--article-font-size) - 2px); line-height: 1.9; white-space: pre-wrap; overflow-wrap: anywhere; }
+.article-summary [hidden] { display: none !important; }
+.article-summary .article-summary-message, .article-summary .article-summary-error { margin-top: 10px; font-family: var(--font-ui); font-size: 13px; line-height: 1.7; }
+.article-summary .article-summary-error { color: var(--warn); }
+.article-summary[data-summary-state='queued'] .article-summary-message,
+.article-summary[data-summary-state='running'] .article-summary-message { color: var(--blue); }
+.article-summary-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 14px; }
+.article-summary-settings { display: inline-flex; align-items: center; gap: 5px; min-height: 44px; margin-top: 8px; font-size: 13px; }
 .article-content-note { display: flex; align-items: center; gap: 7px; margin-bottom: 23px; color: var(--ink-faint); font-size: 12px; }
 .article-note-mark { flex: 0 0 auto; width: 4px; height: 4px; border-radius: 50%; background: var(--line-strong); }
 .article-prose { color: var(--ink); font-family: var(--font-body); font-size: var(--article-font-size); font-weight: 400; line-height: 1.95; overflow-wrap: anywhere; }

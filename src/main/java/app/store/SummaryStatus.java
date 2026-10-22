@@ -27,9 +27,12 @@ public record SummaryStatus(
 
     public String errorMessage() {
         if (!error()) return null;
+        if ("AI output token limit reached".equals(errorDetail)) {
+            return "模型输出额度已用尽，请在 AI 设置中提高最大输出 Token 或切换模型后重试。";
+        }
         return errorDetail != null && errorDetail.contains("interrupted")
                 ? "上次摘要任务已中断，请重试。"
-                : "摘要生成失败，请检查本地模型或文章内容后重试。";
+                : "摘要生成失败，请检查 AI Provider 配置或文章内容后重试。";
     }
 
     public String formattedStartedAt() {

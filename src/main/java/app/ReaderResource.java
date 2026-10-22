@@ -3,6 +3,7 @@ package app;
 import app.ai.AiConfigStore;
 import app.ai.ArticleSummarizer;
 import app.ai.SummaryProgress;
+import app.core.RouteConfig;
 import app.reader.ArticleNavigation;
 import app.reader.ArticlePageView;
 import app.reader.BriefingSection;
@@ -119,8 +120,9 @@ public class ReaderResource {
                 .map(e -> {
                     List<ReaderItem> items = e.getValue();
                     ReaderItem first = items.getFirst();
-                    String tag = matchCategory(e.getKey(), categories);
-                    return new ReaderGroup(first.groupName(), tag, items);
+                    RouteConfig config = runtime.routeConfigStore().get(e.getKey());
+                    String tag = matchCategory(config.sourcePath(), categories);
+                    return new ReaderGroup(config.alias() != null ? config.alias() : first.groupName(), tag, items);
                 })
                 .sorted(java.util.Comparator.comparing(
                         g -> g.items().getFirst().firstSeenAt(),
@@ -152,11 +154,25 @@ public class ReaderResource {
         try {
             StoredArticle article = feedStore.loadArticle(link);
             if (article == null) return articleError(404, "这篇文章没有保存在本地，可以打开原文继续阅读。", returnTo, link);
+            boolean aiEnabled = aiConfigStore != null && aiConfigStore.get().enabled();
+            SummaryProgress progress = articleSummaryProgress(article);
             return ResponseEntity.ok().header("Cache-Control", "no-store")
-                    .body(templates.articlePage(ArticlePageView.from(article, returnTo)));
+                    .body(templates.articlePage(ArticlePageView.from(article, returnTo, aiEnabled, progress)));
         } catch (SQLException e) {
             log.warn("failed to load article: {}", e.toString());
             return articleError(500, "已保存内容暂时加载失败，请稍后重试。", returnTo, link);
+        }
+    }
+
+    private SummaryProgress articleSummaryProgress(StoredArticle article) {
+        if (article.summary() != null && !article.summary().isBlank())
+            return new SummaryProgress("success", article.summary(), null);
+        if (articleSummarizer == null) return new SummaryProgress("none", null, null);
+        try {
+            return articleSummarizer.progress(article.item().link());
+        } catch (SQLException | IllegalStateException | NoSuchElementException e) {
+            log.warn("failed to read article summary status: {}", e.getClass().getSimpleName());
+            return new SummaryProgress("unknown", null, "摘要状态暂时不可用，请重新查看状态。");
         }
     }
 
@@ -283,7 +299,7 @@ public class ReaderResource {
             @RequestParam String link,
             @RequestParam(required = false, defaultValue = "") String title) {
         if (aiConfigStore == null || !aiConfigStore.get().enabled()) {
-            return summaryError(400, "AI 功能未启用，请先在后台配置 Ollama。");
+            return summaryError(400, "AI 功能未启用，请先在后台配置并启用 AI Provider。");
         }
         return summaryResponse(link, true);
     }
@@ -299,7 +315,8 @@ public class ReaderResource {
         if (feedStore == null || articleSummarizer == null) return summaryError(503, "文章库暂时不可用。");
         try {
             SummaryProgress progress = submit ? articleSummarizer.request(link) : articleSummarizer.progress(link);
-            return ResponseEntity.status(submit && progress.pending() ? 202 : 200).body(progress);
+            return ResponseEntity.status(submit && progress.pending() ? 202 : 200)
+                    .header("Cache-Control", "no-store").body(progress);
         } catch (NoSuchElementException e) {
             return summaryError(404, "文章尚未保存，无法生成摘要。");
         } catch (IllegalStateException e) {
@@ -311,7 +328,8 @@ public class ReaderResource {
     }
 
     private ResponseEntity<SummaryProgress> summaryError(int status, String message) {
-        return ResponseEntity.status(status).body(new SummaryProgress("error", null, message));
+        return ResponseEntity.status(status).header("Cache-Control", "no-store")
+                .body(new SummaryProgress("error", null, message));
     }
 
     /**
@@ -321,11 +339,14 @@ public class ReaderResource {
     @ResponseBody
     public String bookmarks() {
         List<BookmarkedItem> items = List.of();
+        List<String> readLinks = null;
         if (feedStore != null) {
             try { items = feedStore.loadBookmarks(); }
             catch (Exception e) { log.warn("failed to load bookmarks: {}", e.getMessage()); }
+            try { readLinks = feedStore.loadReadLinks(); }
+            catch (Exception e) { log.warn("failed to load bookmark read states: {}", e.getMessage()); }
         }
-        return templates.bookmarksPage(items);
+        return templates.bookmarksPage(items, readLinks);
     }
 
     /**
@@ -373,6 +394,23 @@ public class ReaderResource {
         } catch (Exception e) {
             log.warn("bookmark remove failed for {}: {}", link, e.getMessage());
             return ResponseEntity.status(500).body("取消收藏失败，请稍后重试");
+        }
+    }
+
+    @PutMapping(value = "/reader/read",
+            consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE, produces = "text/plain;charset=UTF-8")
+    @ResponseBody
+    public ResponseEntity<String> setReadState(@RequestParam String link, @RequestParam boolean read) {
+        if (ArticleNavigation.originalUrl(link) == null) return ResponseEntity.badRequest().body("文章链接无效。");
+        if (feedStore == null) return ResponseEntity.status(503).body("文章库暂时不可用。");
+        try {
+            if (feedStore.loadArticle(link) == null) return ResponseEntity.status(404).body("文章没有保存在本地。");
+            if (read) feedStore.markRead(link);
+            else feedStore.unmarkRead(link);
+            return ResponseEntity.ok(read ? "read" : "unread");
+        } catch (SQLException e) {
+            log.warn("failed to set article read state: {}", e.toString());
+            return ResponseEntity.status(500).body("已读状态暂时无法确认，请重试。");
         }
     }
 
@@ -467,7 +505,7 @@ public class ReaderResource {
             if (s.link()  == null || s.link().isBlank())  continue;
             String summary = finalSummaries.get(s.link());
             SummaryStatus summaryStatus = finalBriefingSummaryStatuses.get(s.link());
-            String cat = matchCategory(s.routePath(), categories);
+            String cat = matchCategory(runtime.routeConfigStore().get(s.routePath()).sourcePath(), categories);
             byCategory.computeIfAbsent(cat, k -> new ArrayList<>())
                     .add(new ReaderItem(s.routePath(), s.title(), s.link(),
                             s.pubDate(), s.firstSeenAt(), summary, summaryStatus));

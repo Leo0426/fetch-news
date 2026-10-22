@@ -31,6 +31,7 @@
     <a href="/reader/radar"><svg th:replace="~{shared/icons :: icon('radar')}"></svg><span>精选日报</span></a>
     <a href="/reader/bookmarks"><svg th:replace="~{shared/icons :: icon('bookmark')}"></svg><span>收藏</span></a>
     <a href="/reader/search"><svg th:replace="~{shared/icons :: icon('search')}"></svg><span>搜索</span></a>
+    <a href="/index#subscriptions"><svg th:replace="~{shared/icons :: icon('rss')}"></svg><span>订阅来源</span></a>
     <a href="/index" class="reader-nav-admin"><svg th:replace="~{shared/icons :: icon('settings')}"></svg><span>管理</span></a>
   </nav>
 
@@ -66,8 +67,8 @@
         <select class="ui-control" id="unread-source" name="source">
           <option value="">全部来源</option>
           <option th:if="${!#strings.isEmpty(page.source) and !page.sources.contains(page.source)}"
-                  th:value="${page.source}" th:text="${page.source}" selected>当前来源</option>
-          <option th:each="source : ${page.sources}" th:value="${source}" th:text="${source}"
+                  th:value="${page.source}" th:text="${sourceLabels != null and sourceLabels.get(page.source) != null ? sourceLabels.get(page.source) : page.source}" selected>当前来源</option>
+          <option th:each="source : ${page.sources}" th:value="${source}" th:text="${sourceLabels != null and sourceLabels.get(source) != null ? sourceLabels.get(source) : source}"
                   th:selected="${source == page.source}">来源</option>
         </select>
       </div>
@@ -104,8 +105,9 @@
         </th:block>
         <th:block th:if="${!page.continued and !hasFilters and page.totalCount == 0}">
           <strong>暂时没有待读内容</strong>
-          <p>新抓取的未读文章会整理在这里，也可以到速览回顾最近的内容。</p>
+          <p>订阅来源并开启自动更新后，新抓取的未读文章会整理在这里。</p>
           <div class="unread-empty-actions">
+            <a href="/index#subscriptions" class="reader-empty-action">选择订阅来源 →</a>
             <a th:href="${page.startUrl}" class="reader-empty-action">刷新待读</a>
             <a href="/reader" class="reader-empty-action">回到速览</a>
           </div>

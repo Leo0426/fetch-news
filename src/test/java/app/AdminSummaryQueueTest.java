@@ -136,7 +136,7 @@ class AdminSummaryQueueTest {
         assertEquals(1, Jsoup.parse(admin.summaryStatus(failed)).select("[hx-post]").size());
         Document initial = Jsoup.parse(admin.browseItems("/news", 0));
         assertFalse(initial.text().contains("private failure"));
-        assertTrue(initial.text().contains("请检查本地模型或文章内容后重试"));
+        assertTrue(initial.text().contains("请检查 AI Provider 配置或文章内容后重试"));
     }
 
     @Test

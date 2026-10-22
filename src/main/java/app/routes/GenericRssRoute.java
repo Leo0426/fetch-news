@@ -45,7 +45,7 @@ public class GenericRssRoute implements RouteHandler {
 
     @Override
     public Feed handle(RouteContext ctx) throws Exception {
-        String url = validateUrl(ctx.feedUrl());
+        String url = validateUrl(feedUrl(ctx));
         FeedRefreshState previous = store == null ? null : store.loadFeedRefreshState(ctx.path(), url);
         if (previous != null && previous.nextRetryAt() != null
                 && previous.nextRetryAt().isAfter(clock.instant())) {
@@ -117,6 +117,10 @@ public class GenericRssRoute implements RouteHandler {
                     response.statusCode(), responseBytes(response), elapsedMillis(start), null, fingerprint));
         }
         return feed;
+    }
+
+    public String feedUrl(RouteContext context) {
+        return context.feedUrl();
     }
 
     private void recordFailure(String path, String url, FeedRefreshState previous,

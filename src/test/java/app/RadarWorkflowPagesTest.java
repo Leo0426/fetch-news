@@ -1,5 +1,6 @@
 package app;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -12,6 +13,7 @@ import app.radar.RadarTestEnvironment;
 import app.radar.eval.EvaluationService;
 import java.nio.file.Path;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -24,7 +26,9 @@ class RadarWorkflowPagesTest {
     @Test void rendersPersistedTasksEvaluationAndDeliveryWithoutExposingCredentials() throws Exception {
         try(var env=new RadarTestEnvironment(directory,"{\"enabled\":true}")) {
             env.save("https://example.test/1");
-            var run=env.service.submit(LocalDate.now().toString(),"UTC","ui-report");env.worker.processNext();
+            var run=env.service.submit(LocalDate.now(ZoneOffset.UTC).toString(),"UTC","ui-report");
+            assertEquals(1,run.totalCandidates());
+            env.worker.processNext();
             var resolver=new ClassLoaderTemplateResolver();resolver.setPrefix("templates/");resolver.setSuffix(".html");resolver.setCharacterEncoding("UTF-8");
             var engine=new SpringTemplateEngine();engine.setTemplateResolver(resolver);var renderer=new RadarAdminRenderer(engine);
             var config=new FeishuConfigStore(directory.resolve("feishu.json"),env.mapper);

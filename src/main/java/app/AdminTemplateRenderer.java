@@ -254,19 +254,32 @@ public class AdminTemplateRenderer {
         ctx.setVariable("bookmarkedLinks", bookmarkedLinks);
         ctx.setVariable("readLinks", readLinks);
         ctx.setVariable("uniqueTags", uniqueTags);
+        ctx.setVariable("sourceLabels", sourceLabels());
         return engine.process("reader/index", ctx);
     }
 
     public String articlePage(ArticlePageView page) {
         Context ctx = new Context();
         ctx.setVariable("page", page);
+        ctx.setVariable("sourceLabels", sourceLabels());
         return engine.process("reader/article", ctx);
     }
 
     public String unreadPage(UnreadPageView page) {
         Context ctx = new Context();
         ctx.setVariable("page", page);
+        ctx.setVariable("sourceLabels", sourceLabels());
         return engine.process("reader/unread", ctx);
+    }
+
+    private Map<String, String> sourceLabels() {
+        Map<String, String> labels = new LinkedHashMap<>();
+        for (RouteConfig config : runtime.routeConfigStore().list(runtime.routeRegistry().paths())) {
+            if (config.alias() != null && !config.alias().isBlank()) {
+                labels.put(config.path(), config.alias());
+            }
+        }
+        return labels;
     }
 
     private static final DateTimeFormatter BRIEFING_DATE_FMT =
@@ -288,6 +301,7 @@ public class AdminTemplateRenderer {
         ctx.setVariable("isToday", date.equals(LocalDate.now()));
         ctx.setVariable("totalCount", totalCount);
         ctx.setVariable("totalStoryCount", sections.stream().mapToInt(BriefingSection::totalStoryCount).sum());
+        ctx.setVariable("sourceLabels", sourceLabels());
         return engine.process("reader/briefing", ctx);
     }
 
@@ -295,8 +309,15 @@ public class AdminTemplateRenderer {
      * Bookmarks page — lists all saved articles.
      */
     public String bookmarksPage(List<BookmarkedItem> items) {
+        return bookmarksPage(items, null);
+    }
+
+    public String bookmarksPage(List<BookmarkedItem> items, List<String> readLinks) {
         Context ctx = new Context();
         ctx.setVariable("items", items);
+        ctx.setVariable("readLinks", readLinks == null ? List.of() : readLinks);
+        ctx.setVariable("readStateAvailable", readLinks != null);
+        ctx.setVariable("sourceLabels", sourceLabels());
         return engine.process("reader/bookmarks", ctx);
     }
 
@@ -306,6 +327,7 @@ public class AdminTemplateRenderer {
     public String searchPage(SearchPageView page) {
         Context ctx = new Context();
         ctx.setVariable("page", page);
+        ctx.setVariable("sourceLabels", sourceLabels());
         return engine.process("reader/search", ctx);
     }
 
@@ -338,10 +360,11 @@ public class AdminTemplateRenderer {
         ctx.setVariable("neverCount",   never);
         Instant now = Instant.now();
         List<RssRefreshStatus> rssRefreshStatuses = routes.stream()
-                .filter(route -> "/rss".equals(route.sourcePath()) && route.feedUrl() != null)
-                .flatMap(route -> refreshStates.stream()
-                        .filter(state -> route.path().equals(state.routePath())
-                                && route.feedUrl().equals(state.feedUrl())))
+                .flatMap(route -> {
+                    String feedUrl = runtime.rssFeedUrl(route);
+                    return refreshStates.stream().filter(state -> feedUrl != null
+                            && route.path().equals(state.routePath()) && feedUrl.equals(state.feedUrl()));
+                })
                 .map(state -> rssRefreshStatus(state, now))
                 .toList();
         ctx.setVariable("rssRefreshStatuses", rssRefreshStatuses);

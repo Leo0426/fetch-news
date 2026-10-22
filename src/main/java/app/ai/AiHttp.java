@@ -10,13 +10,7 @@ import java.util.Map;
 final class AiHttp {
     private AiHttp() {}
     static URI endpoint(AiConfig config,String operation) {
-        String base=config.host();
-        if(!config.protocol().equals("ollama")) {
-            for(String suffix:new String[]{"/chat/completions","/messages"})
-                if(base.endsWith(suffix)) base=base.substring(0,base.length()-suffix.length());
-            if(URI.create(base).getPath().isEmpty()) base+="/v1";
-        }
-        return URI.create(base+"/"+operation);
+        return URI.create(config.host()+"/"+operation);
     }
     static HttpRequest.Builder builder(AiConfig config,String operation) {
         var builder=HttpRequest.newBuilder(endpoint(config,operation)).timeout(Duration.ofSeconds(120)).header("Content-Type","application/json");

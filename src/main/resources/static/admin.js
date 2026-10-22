@@ -3,6 +3,7 @@
 
   const pages = {
     stats: ['/index/stats', '数据统计'],
+    subscriptions: ['/index/subscriptions', '订阅来源'],
     ai: ['/index/ai', 'AI 设置'],
     radar: ['/index/radar', '新闻雷达配置'],
     'radar-tasks': ['/index/radar/tasks', 'AI 任务'],
@@ -17,9 +18,12 @@
   const failedRequests = new WeakSet();
   const contentRequests = new WeakMap();
   const summaryRequests = new WeakMap();
+  const subscriptionRequests = new WeakMap();
+  const pendingSubscriptions = new WeakMap();
   const mobileQuery = window.matchMedia('(max-width: 860px)');
   let shell;
   let opener;
+  let modalReturnCard;
   let navigationVersion = 0;
   let pendingNavigation;
   let loadedTimer;
@@ -36,6 +40,21 @@
     const error = modal.querySelector('.form-msg.err');
     const input = focusable(modal).find(element => element.matches('input:not([readonly]), select, textarea'));
     (error || input || focusable(modal)[0] || modal).focus({ preventScroll: true });
+  }
+
+  function restoreModalFocus() {
+    const card = modalReturnCard;
+    modalReturnCard = null;
+    if (shell.modal) return;
+    const heading = card?.isConnected ? card.querySelector('.subscription-name') : null;
+    if (heading?.isConnected) {
+      heading.focus({preventScroll: true});
+      card.scrollIntoView({block: 'nearest', behavior: window.FetchNewsUI.motionBehavior()});
+    } else if (opener?.isConnected) {
+      opener.focus({preventScroll: true});
+    } else {
+      document.getElementById('main-content').focus({preventScroll: true});
+    }
   }
 
   function updateOverlays() {
@@ -146,11 +165,54 @@
     return true;
   }
 
+  function subscriptionRequest(elt) {
+    const card = elt?.closest('.subscription-card');
+    if (!card) return null;
+    const kind = elt.matches('[data-subscription-action]') ? 'action'
+      : elt.matches('[data-subscription-check]') ? 'check'
+      : elt === card ? 'poll' : null;
+    return kind ? {card, kind, wasSubscribed: card.dataset.subscribed === 'true'} : null;
+  }
+
+  function recoverSubscriptionRequest(event) {
+    const request = subscriptionRequests.get(event.detail.xhr) || subscriptionRequest(event.detail.elt);
+    if (!request) return false;
+    const {card, kind} = request;
+    const content = contentRequests.get(event.detail.xhr);
+    if (!card.isConnected || (content && content.version !== navigationVersion)
+        || (kind === 'poll' && pendingSubscriptions.has(card))) return true;
+    const error = event.detail.xhr?.responseText
+      ? new DOMParser().parseFromString(event.detail.xhr.responseText, 'text/html').querySelector('.form-msg.err') : null;
+    const message = error?.textContent?.trim()
+      || (kind === 'action' ? '操作结果暂时无法确认，请先重新查看状态。' : '暂时无法更新抓取状态，请重新查看。');
+    card.dataset.subscriptionPollPaused = 'true';
+    card.querySelector('[data-subscription-error]').hidden = false;
+    card.querySelector('[data-subscription-error-message]').textContent = message;
+    card.querySelectorAll('[data-subscription-action] button, [data-subscription-action] select').forEach(control => { control.disabled = true; });
+    if (kind !== 'poll') window.FetchNewsUI.notify(message, 'error');
+    return true;
+  }
+
+  function finishSubscriptionRequest(xhr) {
+    const request = subscriptionRequests.get(xhr);
+    if (!request || request.kind === 'poll') return;
+    const {card} = request;
+    if (pendingSubscriptions.get(card) !== xhr) return;
+    pendingSubscriptions.delete(card);
+    if (!card.isConnected) return;
+    card.removeAttribute('aria-busy');
+    request.controls.forEach(({control, disabled}) => { control.disabled = disabled; });
+    if (card.dataset.subscriptionPollPaused === 'true') {
+      card.querySelectorAll('[data-subscription-action] button, [data-subscription-action] select').forEach(control => { control.disabled = true; });
+    }
+  }
+
   function notifyFailure(event) {
     const xhr = event.detail.xhr;
     if (xhr && failedRequests.has(xhr)) return;
     if (xhr) failedRequests.add(xhr);
     if (recoverSummaryRequest(event)) return;
+    if (recoverSubscriptionRequest(event)) return;
     if (event.detail.elt?.closest('[data-ai-settings]') && xhr?.responseText) {
       const error = new DOMParser().parseFromString(xhr.responseText, 'text/html').querySelector('.form-msg.err');
       if (error?.textContent) { window.FetchNewsUI.notify(error.textContent, 'error'); return; }
@@ -162,6 +224,82 @@
   }
 
   document.addEventListener('alpine:init', () => {
+    Alpine.data('aiProviderForm', () => ({
+      protocol: '',
+      model: '',
+      models: [],
+      availableModels: [],
+      draftModel: '',
+      modelError: '',
+      modelsLoading: false,
+      modelMessage: '',
+      modelRequest: 0,
+      modelController: null,
+      init() {
+        this.protocol = this.$root.dataset.protocol;
+        this.model = this.$root.elements.model.value;
+        this.models = Array.from(this.$root.querySelectorAll('[data-saved-model]'), field => field.value);
+      },
+      openModelDialog() {
+        this.draftModel = '';
+        this.modelError = '';
+        this.$refs.modelDialog.showModal();
+        this.$refs.modelId.focus();
+      },
+      addModel() {
+        const id = this.draftModel.trim();
+        if (!id) { this.modelError = '请填写模型 ID，或从接口列表中选择。'; return; }
+        if (this.models.includes(id)) { this.modelError = '此模型已在列表中。'; return; }
+        this.models.push(id);
+        if (!this.model) this.model = id;
+        this.$refs.modelDialog.close();
+      },
+      removeModel(id) {
+        if (id !== this.model) this.models = this.models.filter(value => value !== id);
+      },
+      invalidateModels() {
+        this.modelRequest += 1;
+        this.modelController?.abort();
+        this.availableModels = [];
+        this.modelMessage = '';
+        this.modelsLoading = false;
+      },
+      providerChanged(event) {
+        if (['host', 'protocol', 'apiKey', 'clearKey'].includes(event.target.name)) this.invalidateModels();
+      },
+      destroy() {
+        this.invalidateModels();
+        this.$refs.modelDialog?.close();
+      },
+      async loadModels() {
+        const form = this.$root;
+        if (!form.elements.host.checkValidity()) {
+          this.modelMessage = '请先关闭弹窗并填写有效的 API 基础地址。';
+          return;
+        }
+        this.invalidateModels();
+        const request = this.modelRequest;
+        this.modelsLoading = true;
+        this.modelController = new AbortController();
+        const body = new URLSearchParams();
+        for (const name of ['profileId', 'host', 'protocol', 'apiKey', 'clearKey']) {
+          const field = form.elements[name];
+          if (field && (field.type !== 'checkbox' || field.checked)) body.set(name, field.value);
+        }
+        try {
+          const response = await fetch('/index/ai/models', {method: 'POST', body, signal: this.modelController.signal});
+          const result = await response.json();
+          if (request !== this.modelRequest) return;
+          this.availableModels = response.ok && Array.isArray(result.models) ? result.models : [];
+          this.modelMessage = result.message || '获取失败，请检查地址和密钥，或手动填写模型 ID。';
+        } catch (error) {
+          if (request === this.modelRequest) this.modelMessage = '获取失败，请检查连接后重试，或手动填写模型 ID。';
+        } finally {
+          if (request === this.modelRequest) this.modelsLoading = false;
+        }
+      }
+    }));
+
     Alpine.data('appShell', () => ({
       modal: false,
       activePage: 'stats',
@@ -171,11 +309,12 @@
       init() {
         shell = this;
         this.$watch('modal', open => {
+          if (open) modalReturnCard = null;
           updateOverlays();
           this.$nextTick(() => {
+            if (open !== this.modal) return;
             if (open) focusModal();
-            else if (opener?.isConnected) opener.focus({ preventScroll: true });
-            else document.getElementById('main-content').focus({ preventScroll: true });
+            else restoreModalFocus();
           });
         });
         this.$watch('sbOpen', open => {
@@ -241,6 +380,21 @@
 
   document.addEventListener('htmx:beforeRequest', event => {
     const { target, xhr, elt } = event.detail;
+    const subscription = subscriptionRequest(elt);
+    if (subscription) {
+      const {card, kind} = subscription;
+      if (kind !== 'check' && (card.dataset.subscriptionPollPaused === 'true' || pendingSubscriptions.has(card))) {
+        event.preventDefault();
+        return;
+      }
+      subscriptionRequests.set(xhr, subscription);
+      if (kind !== 'poll') {
+        pendingSubscriptions.set(card, xhr);
+        subscription.controls = Array.from(card.querySelectorAll('button, select'), control => ({control, disabled: control.disabled}));
+        subscription.controls.forEach(({control}) => { control.disabled = true; });
+        card.setAttribute('aria-busy', 'true');
+      }
+    }
     const summary = summaryRequest(elt);
     if (summary && xhr) summaryRequests.set(xhr, summary);
     if (target?.id === 'modal-inner' && !shell.modal) opener = document.activeElement;
@@ -249,18 +403,38 @@
         version: navigationVersion,
         navigation: elt?.id === 'console-sidebar' ? pendingNavigation : null
       });
-      activeRequests.add(xhr);
-      updateLoading();
+      if (subscription?.kind !== 'poll') {
+        activeRequests.add(xhr);
+        updateLoading();
+      }
     }
   });
 
   document.addEventListener('htmx:beforeSwap', event => {
+    if (event.detail.requestConfig?.elt?.matches('form[data-subscription-create]')
+        && [422, 503].includes(event.detail.xhr.status)
+        && event.detail.target?.id === 'modal-inner') {
+      event.detail.shouldSwap = true;
+      event.detail.isError = false;
+    }
     const request = contentRequests.get(event.detail.xhr);
     if (request && request.version !== navigationVersion) event.detail.shouldSwap = false;
+    const subscription = subscriptionRequests.get(event.detail.xhr);
+    if (subscription?.kind === 'poll' && pendingSubscriptions.has(subscription.card)) event.detail.shouldSwap = false;
+    if (subscription && !subscription.card.isConnected) event.detail.shouldSwap = false;
+    if (subscription && event.detail.shouldSwap && subscription.card.contains(document.activeElement)) {
+      const focused = document.activeElement;
+      subscription.focused = {
+        post: focused.closest('form')?.getAttribute('hx-post'),
+        get: focused.getAttribute('hx-get'),
+        href: focused.getAttribute('href')
+      };
+    }
   });
 
   document.addEventListener('htmx:afterRequest', event => {
     const { xhr, successful } = event.detail;
+    finishSubscriptionRequest(xhr);
     if (!activeRequests.delete(xhr)) return;
     updateLoading();
     if (activeRequests.size === 0 && successful) {
@@ -277,6 +451,24 @@
       if (alreadyOpen) shell.$nextTick(focusModal);
     }
     const request = contentRequests.get(event.detail.xhr);
+    const subscription = subscriptionRequests.get(event.detail.xhr);
+    if (subscription && !subscription.updated && (!request || request.version === navigationVersion)) {
+      const replacement = document.getElementById(subscription.card.id);
+      if (replacement && replacement !== subscription.card) {
+        subscription.updated = true;
+        const count = replacement.closest('.subscriptions-view')?.querySelector('[data-subscription-count]');
+        const delta = Number(replacement.dataset.subscribed === 'true') - Number(subscription.wasSubscribed);
+        if (count && delta) count.textContent = String(Math.max(0, Number(count.textContent) + delta));
+        if (subscription.focused) {
+          const {post, get, href} = subscription.focused;
+          const control = Array.from(replacement.querySelectorAll('button:not([disabled]), a[href]')).find(element =>
+            (post && element.closest('form')?.getAttribute('hx-post') === post)
+            || (get && element.getAttribute('hx-get') === get)
+            || (href && element.getAttribute('href') === href));
+          (control || replacement.querySelector('.subscription-name')).focus({preventScroll: true});
+        }
+      }
+    }
     const summary = summaryRequests.get(event.detail.xhr);
     if (summary?.kind === 'batch' && event.detail.target?.id === 'batch-sum-msg'
         && summary.button.isConnected && (!summary.view || summary.view.isConnected)
@@ -306,6 +498,13 @@
     document.addEventListener(eventName, notifyFailure);
   }
   window.addEventListener('closemodal', () => { shell.modal = false; });
+  document.addEventListener('subscriptionCreated', event => {
+    const card = document.getElementById(event.detail.cardId);
+    if (!shell || !card) return;
+    modalReturnCard = card;
+    if (shell.modal) shell.modal = false;
+    else shell.$nextTick(restoreModalFocus);
+  });
   document.addEventListener('keydown', event => {
     if (!shell) return;
     if (event.key === 'Escape') {

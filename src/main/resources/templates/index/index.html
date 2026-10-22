@@ -42,6 +42,12 @@
         </a>
 
         <div class="nav-label" style="margin-top:10px;">阅读</div>
+        <a class="nav-item" :class="{ active: activePage === 'subscriptions' }"
+           :aria-current="activePage === 'subscriptions' ? 'page' : null"
+           @click="navigate($event, 'subscriptions')" href="/index#subscriptions">
+          <svg th:replace="~{shared/icons :: icon('rss')}"></svg>
+          订阅来源
+        </a>
         <a class="nav-item" href="/reader">
           <svg th:replace="~{shared/icons :: icon('book')}"></svg>
           今日速览

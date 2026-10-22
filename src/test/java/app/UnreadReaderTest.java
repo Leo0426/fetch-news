@@ -7,6 +7,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import app.core.CacheService;
 import app.core.FeedItem;
+import app.core.Route;
+import app.core.RouteConfig;
 import app.core.RouteConfigStore;
 import app.core.RouteRegistry;
 import app.store.FeedStore;
@@ -37,7 +39,8 @@ class UnreadReaderTest {
     void setUp() throws Exception {
         ObjectMapper mapper = new ObjectMapper();
         store = new FeedStore(directory.resolve("feed.db"), mapper);
-        runtime = new AppRuntime(new CacheService(), new RouteRegistry(List.of()),
+        runtime = new AppRuntime(new CacheService(), new RouteRegistry(List.of(
+                new Route("/rss", context -> { throw new AssertionError("Reading must not fetch"); }, "RSS", "自定义"))),
                 new RouteConfigStore(directory.resolve("routes.json"), mapper));
         ClassLoaderTemplateResolver resolver = new ClassLoaderTemplateResolver();
         resolver.setPrefix("templates/");
@@ -136,6 +139,37 @@ class UnreadReaderTest {
         assertTrue(filtered.text().contains("没有符合筛选条件"));
         assertTrue(filtered.select("a[href=/reader/unread]").stream()
                 .anyMatch(link -> link.text().contains("查看全部待读")));
+    }
+
+    @Test
+    void namedRssSourceKeepsItsAliasInTheFilterIncludingAfterItsLastArticleIsRead() throws Exception {
+        String source = "/feeds/717368e4-7f43-35cb-836e-5e6b93f266af";
+        runtime.routeConfigStore().save(new RouteConfig(source, "/rss", true, 300, 1800,
+                60, null, "https://example.test/feed.xml", "阅读闭环测试源"));
+        store.saveItems(source, articles("Article", 1));
+        ReaderResource resource = reader(store);
+        Document page = Jsoup.parse(resource.unread(source, "", false, null).getBody());
+        assertEquals("阅读闭环测试源", page.selectFirst(".rd-src").text());
+        assertEquals("阅读闭环测试源", page.selectFirst("#unread-source option[selected]").text());
+        assertEquals(source, page.selectFirst("#unread-source option[selected]").val());
+
+        resource.markAllRead(List.of("https://example.com/unread/0"));
+        Document completed = Jsoup.parse(resource.unread(source, "", false, null).getBody());
+        assertEquals("阅读闭环测试源", completed.selectFirst("#unread-source option[selected]").text());
+        assertEquals(source, completed.selectFirst("#unread-source option[selected]").val());
+    }
+
+    @Test
+    void recentReaderGroupsUseConfiguredMountNameAndRegisteredSourceCategory() throws Exception {
+        String source = "/my-custom-reading";
+        runtime.routeConfigStore().save(new RouteConfig(source, "/rss", true, 300, 1800,
+                60, null, "https://example.test/feed.xml", "我的阅读"));
+        store.saveItems(source, articles("Article", 1));
+
+        Document page = Jsoup.parse(reader(store).reader(24));
+        assertEquals("我的阅读", page.selectFirst(".rd-section-name").text());
+        assertEquals("自定义", page.selectFirst(".reader-source-tag").text());
+        assertEquals("自定义", page.selectFirst(".rd-section").attr("data-tag"));
     }
 
     private ReaderResource reader(FeedStore feedStore) {

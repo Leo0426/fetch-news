@@ -8,8 +8,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import app.core.RouteConfig;
 import io.restassured.RestAssured;
 import io.restassured.path.json.JsonPath;
+import java.util.Map;
 import org.jsoup.Jsoup;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -58,6 +60,97 @@ class RssLiteResourceTest {
                 .statusCode(200)
                 .contentType(containsString("application/json"))
                 .body("find { it.path == '/mritd/blog' }.enabled", equalTo(false));
+    }
+
+    @Test
+    void curatedSocialSourcesAppearAsConcreteSubscriptionsWithCredentialGuidance() {
+        Map<String, String> sources = Map.ofEntries(
+                Map.entry("/telegram/scitech_fans", "TG 科技"),
+                Map.entry("/telegram/newlearner", "TG 科技"),
+                Map.entry("/telegram/solidot", "TG 科技"),
+                Map.entry("/x/openai", "X 科技"),
+                Map.entry("/x/anthropic", "X 科技"),
+                Map.entry("/x/huggingface", "X 科技"),
+                Map.entry("/x/karpathy", "X 科技"),
+                Map.entry("/x/simonw", "X 科技"),
+                Map.entry("/x/github", "X 科技"));
+        sources.forEach((path, category) -> {
+            assertEquals(category, runtime.routeRegistry().categories().get(path), path);
+            var route = runtime.routeRegistry().routes().stream()
+                    .filter(candidate -> candidate.path().equals(path)).findFirst().orElseThrow();
+            assertTrue(route.recommendedScheduleMinutes() > 0, path);
+            assertEquals(false, runtime.routeConfigStore().get(path).enabled());
+            assertEquals(0, runtime.routeConfigStore().get(path).scheduleMinutes());
+            given().get(path).then().statusCode(404).body("error", equalTo("route disabled"));
+        });
+        String telegram = given().param("category", "TG 科技").get("/index/subscriptions")
+                .then().statusCode(200).extract().asString();
+        assertTrue(telegram.contains("科技爱好者周刊"));
+        assertTrue(telegram.contains("Newlearner"));
+        assertTrue(telegram.contains("Solidot"));
+        String twitter = given().param("category", "X 科技").get("/index/subscriptions")
+                .then().statusCode(200).extract().asString();
+        assertTrue(twitter.contains("Karpathy"));
+        assertTrue(twitter.contains("Simon Willison"));
+        assertTrue(twitter.contains("Cookie"));
+        assertNotNull(runtime.routeRegistry().resolve("/telegram/channel/example").handler());
+    }
+
+    @Test
+    void curatedSourcesAreBuiltInAndCategorizedWithoutEnablingBackgroundWork() {
+        Map<String, String> sources = Map.ofEntries(
+                Map.entry("/openai/news", "AI"), Map.entry("/huggingface/blog", "AI"),
+                Map.entry("/google/research", "AI"),
+                Map.entry("/github/open-source", "GitHub 项目"), Map.entry("/github/changelog", "GitHub 项目"),
+                Map.entry("/ollama/releases", "GitHub 项目"),
+                Map.entry("/huggingface/transformers/releases", "GitHub 项目"),
+                Map.entry("/chinanews/society", "社会新闻"), Map.entry("/un/news/zh", "社会新闻"),
+                Map.entry("/rthk/local", "社会新闻"), Map.entry("/guardian/world", "社会新闻"),
+                Map.entry("/nasa/news", "科学探索"), Map.entry("/quanta/magazine", "科学探索"),
+                Map.entry("/sciencenews/latest", "科学探索"),
+                Map.entry("/carbonbrief/news", "气候环境"), Map.entry("/noaa/news", "气候环境"),
+                Map.entry("/cloudflare/blog", "软件工程"), Map.entry("/martinfowler/articles", "软件工程"),
+                Map.entry("/netflix/techblog", "软件工程"), Map.entry("/infoq/china", "软件工程"),
+                Map.entry("/google/security", "网络安全"), Map.entry("/krebs/security", "网络安全"),
+                Map.entry("/schneier/security", "网络安全"),
+                Map.entry("/ecb/blog", "商业经济"), Map.entry("/federalreserve/feds-notes", "商业经济"),
+                Map.entry("/chinanews/finance", "商业经济"),
+                Map.entry("/smashing/articles", "设计文化"), Map.entry("/aeon/essays", "设计文化"),
+                Map.entry("/chinanews/culture", "设计文化"),
+                Map.entry("/ruanyifeng/blog", "科技精选"), Map.entry("/solidot/news", "科技精选"),
+                Map.entry("/kff/health-news", "健康医学"),
+                Map.entry("/stat/news", "健康医学"),
+                Map.entry("/psyche/magazine", "心理认知"),
+                Map.entry("/aps/research", "心理认知"),
+                Map.entry("/edsurge/news", "教育学习"),
+                Map.entry("/hechinger/report", "教育学习"),
+                Map.entry("/jstor/daily", "人文历史"),
+                Map.entry("/public-domain-review/latest", "人文历史"),
+                Map.entry("/colossal/latest", "艺术影像"),
+                Map.entry("/aperture/articles", "艺术影像"),
+                Map.entry("/dezeen/latest", "城市建筑"),
+                Map.entry("/archdaily/latest", "城市建筑"),
+                Map.entry("/ourworldindata/articles", "数据洞察"),
+                Map.entry("/pewresearch/publications", "数据洞察"),
+                Map.entry("/hackaday/posts", "硬件创客"),
+                Map.entry("/raspberrypi/news", "硬件创客"),
+                Map.entry("/godot/news", "游戏开发"),
+                Map.entry("/factorio/blog", "游戏开发"),
+                Map.entry("/gcores/articles", "游戏文化"),
+                Map.entry("/yystv/articles", "游戏文化"));
+        var configs = given().get("/index/api/routes").then().statusCode(200).extract().jsonPath();
+        sources.forEach((path, category) -> {
+            assertEquals(category, runtime.routeRegistry().categories().get(path), path);
+            assertNotNull(runtime.routeRegistry().resolve(path).handler());
+            var route = runtime.routeRegistry().routes().stream()
+                    .filter(candidate -> candidate.path().equals(path)).findFirst().orElseThrow();
+            assertTrue(route.recommendedScheduleMinutes() > 0, path);
+            assertTrue(RouteConfig.defaults(path).isSchedulable(), path);
+            assertEquals(false, configs.getBoolean("find { it.path == '" + path + "' }.enabled"));
+            assertEquals(0, configs.getInt("find { it.path == '" + path + "' }.scheduleMinutes"));
+        });
+        String html = given().get("/index").then().statusCode(200).extract().asString();
+        sources.values().stream().distinct().forEach(category -> assertTrue(html.contains(category), category));
     }
 
     /**

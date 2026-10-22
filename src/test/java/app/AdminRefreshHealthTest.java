@@ -9,7 +9,9 @@ import app.core.CacheService;
 import app.core.Route;
 import app.core.RouteConfig;
 import app.core.RouteConfigStore;
+import app.core.RouteContext;
 import app.core.RouteRegistry;
+import app.routes.GenericRssRoute;
 import app.store.FeedRefreshState;
 import app.store.FeedStore;
 import app.store.RouteHealth;
@@ -28,6 +30,7 @@ import org.thymeleaf.templateresolver.ClassLoaderTemplateResolver;
 
 class AdminRefreshHealthTest {
     private static final String FEED_URL = "https://example.com/feed.xml?token=private-token";
+    private static final String FIXED_FEED_URL = "https://example.com/fixed.xml";
     private static final Instant CHECKED_AT = Instant.parse("2026-10-03T10:15:30Z");
 
     @TempDir
@@ -39,9 +42,17 @@ class AdminRefreshHealthTest {
     @BeforeEach
     void setUp() {
         runtime = new AppRuntime(new CacheService(), new RouteRegistry(List.of(
-                new Route("/rss", context -> {
+                new Route("/rss", new GenericRssRoute(url -> {
                     throw new AssertionError("Health display must not fetch upstream feeds");
-                }, "Generic RSS", "Test"))),
+                }), "Generic RSS", "Test"),
+                new Route("/fixed/news", new GenericRssRoute(url -> {
+                    throw new AssertionError("Health display must not fetch upstream feeds");
+                }) {
+                    @Override public String feedUrl(RouteContext context) { return FIXED_FEED_URL; }
+                }, "Fixed RSS", "Test"),
+                new Route("/hn/top", context -> {
+                    throw new AssertionError("Health display must not fetch upstream feeds");
+                }, "Native source", "Test"))),
                 new RouteConfigStore(tempDir.resolve("routes.json"), new ObjectMapper()));
         ClassLoaderTemplateResolver resolver = new ClassLoaderTemplateResolver();
         resolver.setPrefix("templates/");
@@ -116,6 +127,34 @@ class AdminRefreshHealthTest {
         assertFalse(status.contains("/changed"));
         assertFalse(status.contains("/deleted"));
         assertFalse(status.contains("/native"));
+    }
+
+    @Test
+    void fixedSourcesAndTheirAliasesShowOnlyTheCurrentRouteAndUpstreamUrl() {
+        List<RouteConfig> routes = List.of(
+                new RouteConfig("/fixed/news", "/fixed/news", true, 300, 1800,
+                        0, null, FEED_URL, null),
+                new RouteConfig("/fixed-copy", "/fixed/news", true, 300, 1800));
+        List<FeedRefreshState> states = List.of(
+                new FeedRefreshState("/fixed/news", FIXED_FEED_URL, CHECKED_AT, CHECKED_AT,
+                        CHECKED_AT, null, 0, 304, 0, 25, null),
+                new FeedRefreshState("/fixed-copy", FIXED_FEED_URL, CHECKED_AT, null, null,
+                        Instant.parse("2999-01-01T00:00:00Z"), 1, 429, 0, 10, "Rate limited"),
+                new FeedRefreshState("/fixed/news", FEED_URL, CHECKED_AT.plusSeconds(60),
+                        CHECKED_AT.plusSeconds(60), CHECKED_AT.plusSeconds(60), null, 0, 200, 100, 20, null),
+                new FeedRefreshState("/deleted", FIXED_FEED_URL, CHECKED_AT, CHECKED_AT,
+                        CHECKED_AT, null, 0, 200, 100, 20, null));
+
+        Document document = Jsoup.parse(renderer.healthSection(routes, Map.of(), states));
+        var rows = document.select("#rss-refresh-status tbody tr");
+
+        assertEquals(2, rows.size());
+        assertTrue(rows.get(0).text().contains("/fixed/news"));
+        assertTrue(rows.get(0).text().contains("内容未变化"));
+        assertTrue(rows.get(1).text().contains("/fixed-copy"));
+        assertTrue(rows.get(1).text().contains("等待重试"));
+        assertFalse(document.select("#rss-refresh-status").text().contains("刷新成功"));
+        assertFalse(document.select("#rss-refresh-status").text().contains("/deleted"));
     }
 
     @Test

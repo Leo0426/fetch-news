@@ -28,6 +28,7 @@
     <a href="/reader/radar"><svg th:replace="~{shared/icons :: icon('radar')}"></svg><span>精选日报</span></a>
     <a href="/reader/bookmarks"><svg th:replace="~{shared/icons :: icon('bookmark')}"></svg><span>收藏</span></a>
     <a href="/reader/search"><svg th:replace="~{shared/icons :: icon('search')}"></svg><span>搜索</span></a>
+    <a href="/index#subscriptions"><svg th:replace="~{shared/icons :: icon('rss')}"></svg><span>订阅来源</span></a>
     <a href="/index" class="reader-nav-admin"><svg th:replace="~{shared/icons :: icon('settings')}"></svg><span>管理</span></a>
   </nav>
   <header class="rd-head reader-digest-head">
@@ -104,8 +105,8 @@
 
   <div th:if="${groups.isEmpty()}" class="rd-empty" id="rd-main" tabindex="-1">
     <strong>阅读从一个订阅开始</strong>
-    <p>启用来源并配置定时抓取后，新内容会整理在这里。</p>
-    <a href="/index" class="reader-empty-action">添加或启用订阅 →</a>
+    <p>选择感兴趣的来源并开启自动更新，新内容会整理在这里。</p>
+    <a href="/index#subscriptions" class="reader-empty-action">选择订阅来源 →</a>
   </div>
   <div th:if="${!groups.isEmpty()}" class="rd-empty" x-show="visibleCount() === 0" x-cloak>
     <strong x-text="filter === 'unread' && activeTag === 'all' && !searchQuery.trim() ? '这段时间的内容已读完' : '没有符合筛选条件的内容'"></strong>

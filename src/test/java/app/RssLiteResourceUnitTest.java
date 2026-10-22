@@ -11,6 +11,8 @@ import app.core.Route;
 import app.core.RouteConfig;
 import app.core.RouteConfigStore;
 import app.core.RouteRegistry;
+import app.routes.GenericRssRoute;
+import app.routes.OpenAiNewsRoute;
 import app.store.FeedStore;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.file.Path;
@@ -74,6 +76,44 @@ class RssLiteResourceUnitTest {
 
         assertEquals(200, response.getStatusCode().value());
         assertEquals(1, calls.get());
+    }
+
+    @Test
+    void builtInSourceDoesNotReplaceAnExistingMountWithTheSamePath() {
+        String customUrl = "https://custom.example/feed.xml";
+        var config = new RouteConfig("/openai/news", "/rss", true, 300, 1800,
+                0, null, customUrl, "My existing feed");
+        var configs = new RouteConfigStore(tempDir.resolve("existing-routes.json"), new ObjectMapper());
+        configs.save(config);
+        var registry = new RouteRegistry(List.of(
+                new Route("/openai/news", new OpenAiNewsRoute(url -> {
+                    throw new AssertionError("The new built-in must not replace the saved source");
+                }, null)),
+                new Route("/rss", new GenericRssRoute(url -> {
+                    assertEquals(customUrl, url);
+                    return "<rss version=\"2.0\"><channel><title>Custom</title><link>https://custom.example/</link>"
+                            + "<item><title>Custom article</title><link>https://custom.example/article</link>"
+                            + "</item></channel></rss>";
+                }))));
+        var runtime = new AppRuntime(new CacheService(), registry, configs);
+        var response = new RssLiteResource(runtime, new ObjectMapper()).get("openai/news", "json", null);
+
+        assertEquals(200, response.getStatusCode().value());
+        assertTrue(response.getBody().toString().contains("Custom article"));
+        assertEquals(customUrl, runtime.rssFeedUrl(config));
+        assertEquals(config, configs.get(config.path()));
+    }
+
+    @Test
+    void concretePathsStillSupplyParametersWhenTheSavedSourceIsAPattern() {
+        var registry = new RouteRegistry(List.of(new Route("/github/releases/:owner/:repo", context -> null)));
+        var runtime = new AppRuntime(new CacheService(), registry,
+                new RouteConfigStore(tempDir.resolve("parameter-routes.json"), new ObjectMapper()));
+
+        var match = runtime.resolveRoute("/github/releases/ollama/ollama", "/github/releases/:owner/:repo");
+
+        assertEquals("ollama", match.context().pathParam("owner"));
+        assertEquals("ollama", match.context().pathParam("repo"));
     }
 
     /**

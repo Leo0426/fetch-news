@@ -1,53 +1,103 @@
-<div class="stats-row" style="margin-bottom:16px;">
-  <div class="stat-card"><div class="stat-label">AI 状态</div><div class="stat-value" style="font-size:15px;"><span th:class="${config.enabled()} ? 'pill on' : 'pill off'" th:text="${config.enabled()} ? '开' : '关'"></span></div></div>
-  <div class="stat-card"><div class="stat-label">当前协议</div><div class="stat-value" style="font-size:14px;" th:text="${config.protocol()}"></div></div>
-  <div class="stat-card"><div class="stat-label">当前模型</div><div class="stat-value" style="font-size:14px;overflow-wrap:anywhere;" th:text="${config.model()}"></div></div>
-  <div class="stat-card"><div class="stat-label">已缓存提取数</div><div class="stat-value" th:text="${extractCount}"></div></div>
-  <div class="stat-card"><div class="stat-label">已缓存摘要数</div><div class="stat-value" th:text="${summaryCount}"></div></div>
-</div>
-<div th:if="${message!=null}" class="form-msg ok" th:text="${message}"></div>
-<div class="card" style="margin-bottom:16px;">
-  <div class="card-head"><span class="card-title">平台与模型</span><button class="btn" hx-get="/index/ai?profileId=new" hx-target="#main-content" hx-swap="innerHTML"><svg th:replace="~{shared/icons :: icon('plus')}"></svg>新增平台</button></div>
-  <div style="padding:16px;display:grid;gap:12px;">
-    <div th:each="platform : ${page.platforms()}" style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:10px;border:1px solid var(--border);border-radius:6px;">
-      <strong th:text="${platform.name()}"></strong><span th:text="${platform.config().protocol()}"></span><span style="overflow-wrap:anywhere;" th:text="${platform.config().model()}"></span>
-      <span th:if="${platform.active()}" class="pill on">当前使用</span>
-      <button class="btn" th:attr="hx-get='/index/ai?profileId=' + ${platform.id()}" hx-target="#main-content" hx-swap="innerHTML">编辑</button>
-      <form data-ai-settings th:if="${!platform.active()}" hx-post="/index/ai/activate" hx-target="#main-content" hx-swap="innerHTML"><input type="hidden" name="profileId" th:value="${platform.id()}"><button class="btn" type="submit">切换使用</button></form>
+<div class="ai-settings">
+  <div class="stats-row">
+    <div class="stat-card"><div class="stat-label">AI 状态</div><div class="stat-value ai-stat-text"><span th:class="${config.enabled()} ? 'pill on' : 'pill off'" th:text="${config.enabled()} ? '已开启' : '已关闭'"></span></div></div>
+    <div class="stat-card"><div class="stat-label">当前提供商</div><div class="stat-value ai-stat-text" th:text="${page.activeName()}"></div></div>
+    <div class="stat-card"><div class="stat-label">当前模型</div><div class="stat-value ai-stat-text" th:text="${config.model()}"></div></div>
+    <div class="stat-card"><div class="stat-label">已缓存提取数</div><div class="stat-value" th:text="${extractCount}"></div></div>
+    <div class="stat-card"><div class="stat-label">已缓存摘要数</div><div class="stat-value" th:text="${summaryCount}"></div></div>
+  </div>
+  <div th:if="${message!=null}" class="form-msg ok" role="status" th:text="${message}"></div>
+  <div class="card ai-global">
+    <div><strong>AI 功能</strong><p class="field-hint">摘要、全文提取和精选日报共用当前提供商。切换提供商保留此开关。</p></div>
+    <form data-ai-settings hx-post="/index/ai/enabled" hx-target="#main-content" hx-swap="innerHTML" hx-disabled-elt="find button">
+      <input type="hidden" name="enabled" th:value="${!config.enabled()}">
+      <button class="btn" type="submit" th:text="${config.enabled()} ? '关闭 AI' : '开启 AI'"></button>
+    </form>
+  </div>
+  <div class="card">
+    <div class="card-head">
+      <div><span class="card-title">平台与模型</span><p class="field-hint">添加你自己的 Provider，分别保存地址、密钥和模型，随时切换使用。</p></div>
+      <button class="btn primary" hx-get="/index/ai?profileId=new" hx-target="#main-content" hx-swap="innerHTML"><svg th:replace="~{shared/icons :: icon('plus')}"></svg>添加自定义提供商</button>
+    </div>
+    <div class="ai-provider-list">
+      <div th:each="platform : ${page.platforms()}" class="ai-provider" th:classappend="${platform.active()} ? 'is-active' : ''">
+        <div class="ai-provider-info">
+          <div class="ai-provider-heading"><strong th:text="${platform.name()}"></strong><span th:if="${platform.active()}" class="pill on">当前使用</span><span class="ai-protocol" th:text="${platform.protocolLabel()}"></span></div>
+          <div class="ai-provider-model"><span>默认模型</span><code th:text="${platform.config().model()}"></code><span th:text="${platform.models().size()} + ' 个模型'"></span></div>
+          <div class="ai-provider-endpoint" th:text="${platform.config().host()}"></div>
+        </div>
+        <div class="ai-provider-actions">
+          <button class="btn" th:attr="hx-get='/index/ai?profileId=' + ${platform.id()}" hx-target="#main-content" hx-swap="innerHTML">编辑</button>
+          <form data-ai-settings th:if="${!platform.active()}" hx-post="/index/ai/activate" hx-target="#main-content" hx-swap="innerHTML" hx-disabled-elt="find button"><input type="hidden" name="profileId" th:value="${platform.id()}"><button class="btn" type="submit">启用此提供商</button></form>
+        </div>
+      </div>
     </div>
   </div>
-</div>
-<div class="card">
-  <div class="card-head"><span class="card-title" th:text="${editing.fresh()} ? '新增平台配置' : '编辑 · ' + ${editing.name()}"></span></div>
-  <div style="padding:20px;">
-    <form data-ai-settings hx-post="/index/ai" hx-target="#main-content" hx-swap="innerHTML" x-data="{protocol: $el.dataset.protocol}" th:attr="data-protocol=${editing.config().protocol()}">
-      <input type="hidden" name="profileId" th:value="${editing.id()}">
-      <div class="toggle-row" style="margin-bottom:16px;"><input type="checkbox" name="enabled" id="ai-enabled" th:checked="${config.enabled()}"><label for="ai-enabled">启用 AI 摘要与精选日报处理</label></div>
-      <div class="field-row" style="margin-bottom:14px;">
-        <label class="field"><span>平台名称</span><input class="ui-control" name="name" required maxlength="100" th:value="${editing.name()}" placeholder="例如：我的中转平台"></label>
-        <label class="field"><span>协议</span><select class="ui-control" name="protocol" x-model="protocol">
-          <option value="ollama" th:selected="${editing.config().protocol()=='ollama'}">Ollama</option>
-          <option value="openai" th:selected="${editing.config().protocol()=='openai'}">OpenAI Chat Completions</option>
-          <option value="anthropic" th:selected="${editing.config().protocol()=='anthropic'}">Anthropic Messages</option>
-        </select></label>
-      </div>
-      <div class="field-row" style="margin-bottom:14px;">
-        <label class="field"><span>API 地址</span><input class="ui-control" name="host" type="url" required autocomplete="off" th:value="${editing.config().host()}" placeholder="https://your-platform.example/v1"><span class="field-hint">可填含版本路径的 Base URL 或完整的 chat/completions、messages 地址。Ollama 默认 http://localhost:11434。</span></label>
-        <label class="field"><span>模型 ID</span><input class="ui-control" name="model" required autocomplete="off" th:value="${editing.fresh() ? '' : editing.config().model()}" placeholder="平台提供的模型 ID"><span class="field-hint">填写平台实际支持的模型 ID，无需在本项目预先注册。</span></label>
-      </div>
-      <div class="field-row" style="margin-bottom:14px;">
-        <label class="field"><span>API Key</span><input class="ui-control" name="apiKey" type="password" autocomplete="new-password" th:placeholder="${editing.hasKey()} ? '已配置，留空保留原密钥' : '填写平台密钥（可留空）'"><span class="field-hint">密钥只保存在服务端，不回显到页面。更换协议或平台地址后需重新输入。</span></label>
-        <label class="field" x-show="protocol !== 'ollama'"><span>最大输出 Token</span><input class="ui-control" name="maxTokens" type="number" min="1" max="1000000" required th:value="${editing.config().maxTokens()}"></label>
-      </div>
-      <label th:if="${editing.hasKey()}" style="display:block;margin-bottom:14px;"><input name="clearKey" type="checkbox" value="true"> 清除已保存密钥</label>
-      <div class="field-row" style="margin-bottom:14px;">
-        <label class="field" x-show="protocol === 'openai'"><span>输出上限字段</span><select class="ui-control" name="tokenLimitParameter"><option value="max_tokens" th:selected="${editing.config().tokenLimitParameter()=='max_tokens'}">max_tokens（多数兼容平台）</option><option value="max_completion_tokens" th:selected="${editing.config().tokenLimitParameter()=='max_completion_tokens'}">max_completion_tokens</option></select></label>
-        <label class="field" x-show="protocol !== 'anthropic'"><span><input name="jsonMode" type="checkbox" value="true" th:checked="${editing.config().jsonMode()}"> 使用原生 JSON 模式</span><span class="field-hint">平台不支持 response_format 时可关闭；精选日报仍会校验返回的 JSON。Anthropic 使用 JSON 提示词。</span></label>
-      </div>
-      <div class="form-acts"><button class="btn primary" type="submit"><svg th:replace="~{shared/icons :: icon('save')}"></svg>保存并使用</button><button class="btn" type="button" hx-get="/index/ai/test" hx-target="#ai-test-result" hx-swap="innerHTML"><svg th:replace="~{shared/icons :: icon('health')}"></svg>测试当前平台连接</button></div>
-      <p class="field-hint" style="margin-top:10px;">切换后摘要、全文提取和精选日报共用当前平台；正在进行的请求保留原配置。连接测试仅使用已保存的当前平台，只查询模型列表，不生成内容。</p>
-    </form>
-    <form data-ai-settings th:if="${!editing.fresh() && !editing.active()}" hx-post="/index/ai/delete" hx-target="#main-content" hx-swap="innerHTML" style="margin-top:14px;"><input name="profileId" type="hidden" th:value="${editing.id()}"><button class="btn" type="submit">删除此平台配置</button></form>
-    <div id="ai-test-result" style="margin-top:14px;"></div>
+  <div class="card">
+    <div class="card-head"><span class="card-title" th:text="${editing.fresh()} ? '添加自定义提供商' : '编辑提供商 · ' + ${editing.name()}"></span></div>
+    <div class="ai-editor">
+      <form id="ai-provider-form" data-ai-settings hx-post="/index/ai" hx-target="#main-content" hx-swap="innerHTML"
+            hx-sync="this:drop" hx-disabled-elt="#ai-provider-form button:not([disabled])" x-data="aiProviderForm" th:attr="data-protocol=${editing.config().protocol()}"
+            @input="providerChanged($event)" @change="providerChanged($event)">
+        <input type="hidden" name="profileId" th:value="${editing.id()}">
+        <input type="hidden" name="model" x-model="model" th:value="${editing.fresh() ? '' : editing.config().model()}">
+        <input type="hidden" data-saved-model th:each="savedModel : ${editing.models()}" th:value="${savedModel}">
+        <div class="field-row">
+          <label class="field"><span>提供商名称</span><input class="ui-control" name="name" required maxlength="100" th:value="${editing.name()}" placeholder="例如：我的中转服务"><span class="field-hint">自定义名称，用于区分不同服务或账号。</span></label>
+          <label class="field"><span>API 协议</span><select class="ui-control" name="protocol" x-model="protocol">
+            <option value="openai" th:selected="${editing.config().protocol()=='openai'}">OpenAI 兼容（Chat Completions）</option>
+            <option value="anthropic" th:selected="${editing.config().protocol()=='anthropic'}">Anthropic 兼容（Messages）</option>
+            <option value="ollama" th:selected="${editing.config().protocol()=='ollama'}">Ollama</option>
+          </select><span class="field-hint">按提供商支持的接口选择；名称和模型可自由填写。</span></label>
+        </div>
+        <label class="field"><span>API 基础地址 / Base URL</span><input class="ui-control" name="host" type="url" required autocomplete="off" th:value="${editing.fresh() ? '' : editing.config().host()}" placeholder="https://your-provider.example/v1" :placeholder="protocol === 'ollama' ? 'http://localhost:11434' : 'https://your-provider.example/v1'"><span class="field-hint" x-show="protocol !== 'ollama'">填写到 /v1，例如 https://your-provider.example/v1；系统自动补充模型列表和生成接口路径。</span><span class="field-hint" x-show="protocol === 'ollama'" x-cloak>填写 Ollama 服务地址，例如 http://localhost:11434；系统自动补充 /api 路径。</span></label>
+        <label class="field"><span>API Key</span><input class="ui-control" name="apiKey" type="password" autocomplete="new-password" th:placeholder="${editing.hasKey()} ? '已配置，留空保留原密钥' : '填写提供商密钥（无认证可留空）'"><span class="field-hint">密钥不回显；更换协议或目标服务器后需重新输入。</span></label>
+        <label th:if="${editing.hasKey()}" class="toggle-row"><input name="clearKey" type="checkbox" value="true"> 清除已保存密钥</label>
+        <section class="ai-models" aria-labelledby="ai-models-title">
+          <div class="ai-models-head"><h3 id="ai-models-title">模型列表 <span class="ai-model-count" x-text="models.length"></span></h3><button class="btn" type="button" @click="openModelDialog()"><svg th:replace="~{shared/icons :: icon('plus')}"></svg>添加模型</button></div>
+          <p class="field-hint">选择默认模型用于此提供商。添加、删除和默认模型更改在保存提供商后生效；删除默认模型前请先选择其他模型。</p>
+          <p class="ai-model-empty" x-show="models.length === 0" x-cloak>尚未添加模型，点击“添加模型”开始配置。</p>
+          <input type="hidden" name="modelIds" value="" :disabled="models.length > 0">
+          <ul class="ai-model-list" aria-label="已添加的模型">
+            <template x-for="savedModel in models" :key="savedModel">
+              <li class="ai-model-item">
+                <input type="hidden" name="modelIds" :value="savedModel">
+                <label class="ai-model-choice"><input type="radio" name="modelChoice" :value="savedModel" x-model="model" :aria-label="'设为默认模型：' + savedModel"><code x-text="savedModel"></code><span class="pill on" x-show="model === savedModel">默认</span></label>
+                <button class="btn" type="button" @click="removeModel(savedModel)" :disabled="model === savedModel" :aria-label="'删除模型：' + savedModel">删除</button>
+              </li>
+            </template>
+          </ul>
+        </section>
+        <dialog class="ai-model-dialog" x-ref="modelDialog" aria-labelledby="ai-model-dialog-title" @keydown.escape.stop>
+          <div class="modal-head"><h2 class="modal-ttl" id="ai-model-dialog-title">添加模型</h2><button class="modal-x" type="button" aria-label="关闭添加模型" @click="$refs.modelDialog.close()"><svg th:replace="~{shared/icons :: icon('close')}"></svg></button></div>
+          <div class="modal-body">
+            <p class="field-hint">为当前提供商添加一个模型。可手动填写，也可从 API 获取后选择。</p>
+            <label class="field"><span>模型 ID</span><input class="ui-control" x-ref="modelId" x-model="draftModel" autocomplete="off" placeholder="例如：glm-5.3-flash" @input="modelError = ''" @keydown.enter.prevent="addModel()"></label>
+            <button class="btn ai-discover-models" type="button" @click="loadModels()" :disabled="modelsLoading" :aria-busy="modelsLoading" x-text="modelsLoading ? '正在获取模型…' : '获取模型列表'">获取模型列表</button>
+            <label class="field" x-show="availableModels.length > 0"><span>可用模型</span><select class="ui-control" x-model="draftModel"><option value="">请选择模型</option><template x-for="availableModel in availableModels" :key="availableModel"><option :value="availableModel" :disabled="models.includes(availableModel)" x-text="availableModel + (models.includes(availableModel) ? '（已添加）' : '')"></option></template></select></label>
+            <p class="field-hint" role="status" aria-live="polite" x-text="modelMessage"></p>
+            <p class="form-msg err" role="alert" x-show="modelError" x-text="modelError"></p>
+            <div class="form-acts"><button class="btn" type="button" @click="$refs.modelDialog.close()">取消</button><button class="btn primary" type="button" @click="addModel()">添加到列表</button></div>
+          </div>
+        </dialog>
+        <details class="ai-advanced">
+          <summary>高级选项</summary>
+          <div class="field-row">
+            <label class="field" x-show="protocol !== 'ollama'"><span>最大输出 Token</span><input class="ui-control" name="maxTokens" type="number" min="1" max="1000000" required th:value="${editing.config().maxTokens()}"></label>
+            <label class="field" x-show="protocol === 'openai'"><span>输出上限字段</span><select class="ui-control" name="tokenLimitParameter"><option value="max_tokens" th:selected="${editing.config().tokenLimitParameter()=='max_tokens'}">max_tokens</option><option value="max_completion_tokens" th:selected="${editing.config().tokenLimitParameter()=='max_completion_tokens'}">max_completion_tokens</option></select></label>
+          </div>
+          <label class="field" x-show="protocol !== 'anthropic'"><span><input name="jsonMode" type="checkbox" value="true" th:checked="${editing.config().jsonMode()}"> 使用原生 JSON 模式</span><span class="field-hint">提供商不支持 response_format 时关闭；精选日报仍会校验返回内容。</span></label>
+          <p class="field-hint" x-show="protocol === 'anthropic'">Anthropic 使用 JSON 提示词。</p>
+        </details>
+        <div class="form-acts">
+          <button class="btn primary" type="submit" name="activate" value="false" :disabled="!model"><svg th:replace="~{shared/icons :: icon('save')}"></svg>保存提供商</button>
+          <button class="btn" type="submit" name="activate" value="true" th:if="${!editing.active()}" :disabled="!model">保存并启用</button>
+          <button class="btn" type="button" hx-post="/index/ai/test" hx-include="closest form" hx-target="#ai-test-result" hx-swap="innerHTML" hx-sync="#ai-provider-form:drop"><svg th:replace="~{shared/icons :: icon('health')}"></svg>测试此配置</button>
+        </div>
+        <p class="field-hint" th:text="${editing.active()} ? '保存后当前提供商立即更新。连接测试使用当前表单，不保存配置，只查询模型列表。' : '保存不改变当前提供商。连接测试使用当前表单，不保存配置，只查询模型列表。'"></p>
+        <div id="ai-test-result" aria-live="polite"></div>
+      </form>
+      <form data-ai-settings th:if="${!editing.fresh() && !editing.active()}" hx-post="/index/ai/delete" hx-target="#main-content" hx-swap="innerHTML" hx-disabled-elt="find button" class="ai-delete"><input name="profileId" type="hidden" th:value="${editing.id()}"><button class="btn" type="submit">删除此提供商</button></form>
+    </div>
   </div>
 </div>

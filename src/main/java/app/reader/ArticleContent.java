@@ -29,11 +29,21 @@ public record ArticleContent(String html, String kind) {
         var body = new Cleaner(ALLOWED).clean(source);
         body.outputSettings().prettyPrint(false);
         body.select("a[href]").forEach(link -> link.attr("target", "_blank").attr("rel", "noopener noreferrer"));
-        if (hasText(plainText ? plainSource : body.text())) {
+        String sourceText = plainText ? plainSource : body.text();
+        if (textLength(sourceText) < 200 && textLength(extract) >= 200) {
+            return new ArticleContent(paragraphs(extract), "extract");
+        }
+        if (hasText(sourceText)) {
             return new ArticleContent(plainText ? paragraphs(plainSource) : body.body().html(), "source");
         }
         return hasText(extract) ? new ArticleContent(paragraphs(extract), "extract")
                 : new ArticleContent("", "empty");
+    }
+
+    private static int textLength(String value) {
+        if (value == null) return 0;
+        String text = value.strip();
+        return text.codePointCount(0, text.length());
     }
 
     private static boolean hasText(String value) {

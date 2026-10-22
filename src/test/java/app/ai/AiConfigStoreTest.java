@@ -8,8 +8,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 class AiConfigStoreTest {
     @TempDir Path directory;
@@ -44,6 +47,40 @@ class AiConfigStoreTest {
             var error=assertThrows(IllegalArgumentException.class,()->new AiConfig("https://relay.test/v1","m",true,"openai",key,1024,false,"max_tokens"));
             assertFalse(error.toString().contains("SECRET-KEY"));
         }
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+            "openai, https://relay.test/, https://relay.test/v1",
+            "openai, https://relay.test/proxy/v1/, https://relay.test/proxy/v1",
+            "openai, https://relay.test/proxy/v1/chat/completions/, https://relay.test/proxy/v1",
+            "anthropic, https://relay.test/proxy/v1/messages, https://relay.test/proxy/v1",
+            "openai, https://relay.test/custom-api, https://relay.test/custom-api",
+            "ollama, http://localhost:11434/, http://localhost:11434"
+    })
+    void loadsExistingUrlsAsBaseUrlsAndPreservesProviderSettings(String protocol, String host, String expected) throws Exception {
+        Path path = directory.resolve("ai.json");
+        Files.writeString(path, mapper.writeValueAsString(Map.of("host", host, "model", "custom-model",
+                "enabled", true, "protocol", protocol, "apiKey", "saved-key")));
+        var store = new AiConfigStore(path, mapper);
+        assertEquals(expected, store.get().host());
+        assertEquals(protocol, store.get().protocol());
+        assertEquals("custom-model", store.get().model());
+        assertEquals("saved-key", store.get().apiKey());
+        assertEquals(java.util.List.of("custom-model"), store.profile("default").models());
+        assertTrue(store.get().enabled());
+        store.save(store.get());
+        assertEquals(expected, mapper.readTree(path.toFile()).path("profiles").get(0).path("config").path("host").asText());
+        assertEquals(store.get(), new AiConfigStore(path, mapper).get());
+    }
+
+    @Test void existingCallersKeepSavedModelsWhenUpdatingProviderOptions() {
+        var store = new AiConfigStore(directory.resolve("ai.json"), mapper);
+        var config = new AiConfig("https://relay.test/v1", "first", true, "openai", "saved-key", 4096, false, "max_tokens");
+        String id = store.saveProfile(null, "Relay", config, true, java.util.List.of("first", " second ", "second"));
+        store.save(config.withEnabled(false));
+        assertEquals(java.util.List.of("first", "second"), store.profile(id).models());
+        assertFalse(store.get().enabled());
     }
 
 }

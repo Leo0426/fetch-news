@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="/article.css">
   <script defer src="/ui.js"></script>
   <script defer src="/article.js"></script>
+  <script defer src="/compact-summary.js"></script>
   <link rel="stylesheet" href="/ui-controls.css">
 </head>
 <body class="reader-page">
@@ -24,6 +25,7 @@
     <a href="/reader/radar"><svg th:replace="~{shared/icons :: icon('radar')}"></svg><span>精选日报</span></a>
     <a href="/reader/bookmarks"><svg th:replace="~{shared/icons :: icon('bookmark')}"></svg><span>收藏</span></a>
     <a href="/reader/search"><svg th:replace="~{shared/icons :: icon('search')}"></svg><span>搜索</span></a>
+    <a href="/index#subscriptions"><svg th:replace="~{shared/icons :: icon('rss')}"></svg><span>订阅来源</span></a>
     <a href="/index" class="reader-nav-admin"><svg th:replace="~{shared/icons :: icon('settings')}"></svg><span>管理</span></a>
   </nav>
 
@@ -69,7 +71,10 @@
   <div th:if="${sections.isEmpty()}" class="bf-empty">
     <strong>这一天还没有内容</strong>
     <p>切换日期回看历史简报，或到速览查看最近的更新。</p>
-    <a href="/reader" class="reader-empty-action">查看最近内容 →</a>
+    <div class="reader-source-empty-actions">
+      <a href="/reader" class="reader-empty-action">查看最近内容 →</a>
+      <a href="/index#subscriptions" class="reader-empty-action">选择订阅来源</a>
+    </div>
   </div>
 
   <!-- ── Sections grid ───────────────────────────────────────── -->
@@ -92,14 +97,11 @@
                target="_blank" rel="noopener noreferrer">标题</a>
             <div class="bf-item-meta">
               <a class="reader-article-link" th:href="${'/reader/article?link=' + #uris.escapeQueryParam(item.link())}" data-article-link>站内阅读</a>
-              <span class="bf-item-src" th:text="${item.sourceLabel()}">来源</span>
+              <span class="bf-item-src" th:text="${sourceLabels != null and sourceLabels.get(item.routePath()) != null ? sourceLabels.get(item.routePath()) : item.sourceLabel()}">来源</span>
               <span class="bf-item-age" th:text="'获取 ' + ${item.formattedFetchedAt()}">获取 —</span>
               <span class="bf-item-age" th:text="'发布 ' + ${item.formattedPublishedAt()}">发布 —</span>
             </div>
-            <div th:replace="~{reader/fragments :: summaryStatus(${item})}"></div>
-            <div th:if="${item.hasSummary()}"
-                 class="bf-item-summary"
-                 th:text="${item.summary()}"></div>
+            <div th:replace="~{reader/fragments :: compactSummary(${item})}"></div>
             <details th:if="${!story.related().isEmpty()}" class="bf-related">
               <summary th:text="'另有 ' + ${#lists.size(story.related())} + ' 篇同标题报道'">同标题报道</summary>
               <div th:each="related : ${story.related()}" class="bf-related-item">
@@ -107,12 +109,11 @@
                    target="_blank" rel="noopener noreferrer">标题</a>
                 <div class="bf-item-meta">
                   <a class="reader-article-link" th:href="${'/reader/article?link=' + #uris.escapeQueryParam(related.link())}" data-article-link>站内阅读</a>
-                  <span class="bf-item-src" th:text="${related.sourceLabel()}">来源</span>
+                  <span class="bf-item-src" th:text="${sourceLabels != null and sourceLabels.get(related.routePath()) != null ? sourceLabels.get(related.routePath()) : related.sourceLabel()}">来源</span>
                   <span class="bf-item-age" th:text="'获取 ' + ${related.formattedFetchedAt()}">获取 —</span>
                   <span class="bf-item-age" th:text="'发布 ' + ${related.formattedPublishedAt()}">发布 —</span>
                 </div>
-                <div th:replace="~{reader/fragments :: summaryStatus(${related})}"></div>
-                <div th:if="${related.hasSummary()}" class="bf-item-summary" th:text="${related.summary()}"></div>
+                <div th:replace="~{reader/fragments :: compactSummary(${related})}"></div>
               </div>
             </details>
           </div>

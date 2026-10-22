@@ -34,18 +34,28 @@ public class AiConfigStore {
         saveProfile(current.activeProfile(),profile(current.activeProfile()).name(),config,true);return config;
     }
     public synchronized String saveProfile(String id,String name,AiConfig config,boolean activate) {
+        return saveProfile(id, name, config, activate, null);
+    }
+    public synchronized String saveProfile(String id,String name,AiConfig config,boolean activate,List<String> models) {
+        if (models == null) {
+            models = new ArrayList<>(id == null || id.isBlank() ? List.of() : profile(id).models());
+            if (!models.contains(config.model())) models.add(config.model());
+        }
         if(id==null || id.isBlank()) id=java.util.UUID.randomUUID().toString();
         else profile(id);
         if(name==null || name.isBlank() || name.length()>100) throw new IllegalArgumentException("Platform name must be 1–100 characters");
         String profileId=id;
         List<Provider> providers=new ArrayList<>(current.profiles());
         providers.removeIf(p->p.id().equals(profileId));
-        providers.add(new Provider(id,name.strip(),config.withEnabled(false)));
+        providers.add(new Provider(id,name.strip(),config.withEnabled(false),models));
         persist(new Settings(activate ? id : current.activeProfile(),activate ? config.enabled() : current.enabled(),providers));
         return id;
     }
     public synchronized void activate(String id) {
         profile(id);persist(new Settings(id,current.enabled(),current.profiles()));
+    }
+    public synchronized void setEnabled(boolean enabled) {
+        persist(new Settings(current.activeProfile(),enabled,current.profiles()));
     }
     public synchronized void deleteProfile(String id) {
         profile(id);
@@ -74,9 +84,15 @@ public class AiConfigStore {
     }
     private Settings legacy(AiConfig config) { return new Settings("default",config.enabled(),List.of(new Provider("default","Ollama",config.withEnabled(false)))); }
 
-    public record Provider(String id,String name,AiConfig config) {
+    public record Provider(String id,String name,AiConfig config,List<String> models) {
+        public Provider(String id,String name,AiConfig config) { this(id,name,config,null); }
         public Provider {
             if(id==null || !id.matches("[A-Za-z0-9_-]{1,80}") || name==null || name.isBlank() || config==null) throw new IllegalArgumentException("Invalid AI platform");
+            if (models == null) models = List.of(config.model());
+            if (models.isEmpty() || models.stream().anyMatch(model -> model == null || model.isBlank()))
+                throw new IllegalArgumentException("请至少添加一个模型，模型 ID 不能为空");
+            models = models.stream().map(String::strip).distinct().toList();
+            if (!models.contains(config.model())) throw new IllegalArgumentException("请从模型列表中选择默认模型");
         }
         @Override public String toString() { return "Provider[id="+id+", name="+name+", config="+config+"]"; }
     }

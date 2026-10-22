@@ -26,6 +26,15 @@ public record AiConfig(String host, String model, boolean enabled, String protoc
         if(uri.getHost()==null || uri.getUserInfo()!=null || uri.getQuery()!=null || uri.getFragment()!=null
                 || !("http".equalsIgnoreCase(uri.getScheme()) || "https".equalsIgnoreCase(uri.getScheme())))
             throw new IllegalArgumentException("API URL must be HTTP(S) without credentials, query or fragment");
+        if (!protocol.equals("ollama")) {
+            for (String suffix : List.of("/chat/completions", "/messages")) {
+                if (host.endsWith(suffix)) {
+                    host = host.substring(0, host.length() - suffix.length());
+                    break;
+                }
+            }
+            if (URI.create(host).getPath().isEmpty()) host += "/v1";
+        }
         model=model==null || model.isBlank() ? DEFAULT_MODEL : model.strip();
         apiKey=apiKey==null ? "" : apiKey.strip();
         if(apiKey.chars().anyMatch(c->c<33 || c>126)) throw new IllegalArgumentException("API key must contain printable ASCII characters without whitespace");

@@ -60,7 +60,7 @@ class SummaryWorkerTest {
             if (attempt == 2) throw new RuntimeException();
             assertTrue(prompt.contains("已抽取的正文"));
             return new OllamaClient.Generation("重试摘要", "summary-model");
-        }, url -> { fetches.incrementAndGet(); return "<article>" + body() + "</article>"; })) {
+        }, url -> { fetches.incrementAndGet(); return "<body>" + body() + "</body>"; })) {
             var item = fixture.save("short", "短描述");
             fixture.service.request(item.link()); fixture.service.processNext();
             assertEquals("error", fixture.service.progress(item.link()).state());

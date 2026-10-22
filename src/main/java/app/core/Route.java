@@ -10,12 +10,17 @@ package app.core;
  * @param fetchStrategy data-acquisition type for badge colouring: "RSS 代理", "JSON API",
  *                      "HTML 解析", or "通用 RSS"
  * @param fetchDetail   one-line explanation of what specifically the handler fetches and parses
+ * @param recommendedScheduleMinutes suggested refresh interval when subscribing; 0 means no recommendation
  */
 public record Route(String path, RouteHandler handler, String description,
-                    String category, String fetchStrategy, String fetchDetail) {
+                    String category, String fetchStrategy, String fetchDetail,
+                    int recommendedScheduleMinutes) {
     public Route {
         if (path == null || path.isBlank() || !path.startsWith("/")) {
             throw new IllegalArgumentException("route path must start with /");
+        }
+        if (recommendedScheduleMinutes < 0) {
+            throw new IllegalArgumentException("recommended schedule interval must be non-negative");
         }
     }
 
@@ -34,5 +39,10 @@ public record Route(String path, RouteHandler handler, String description,
     public Route(String path, RouteHandler handler, String description,
                  String category, String fetchStrategy) {
         this(path, handler, description, category, fetchStrategy, null);
+    }
+
+    public Route(String path, RouteHandler handler, String description,
+                 String category, String fetchStrategy, String fetchDetail) {
+        this(path, handler, description, category, fetchStrategy, fetchDetail, 0);
     }
 }

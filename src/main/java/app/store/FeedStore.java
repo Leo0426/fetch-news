@@ -1128,6 +1128,22 @@ public class FeedStore implements Closeable {
         }
     }
 
+    public synchronized FetchLogEntry latestFetchLog(String routePath) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement("""
+                SELECT id,route_path,fetched_at,duration_ms,item_count,new_item_count,status,error_detail
+                FROM fetch_log WHERE route_path=? ORDER BY id DESC LIMIT 1
+                """)) {
+            ps.setString(1, routePath);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) return null;
+                return new FetchLogEntry(rs.getLong("id"), rs.getString("route_path"),
+                        Instant.parse(rs.getString("fetched_at")), rs.getLong("duration_ms"),
+                        rs.getInt("item_count"), rs.getInt("new_item_count"),
+                        rs.getString("status"), rs.getString("error_detail"));
+            }
+        }
+    }
+
     /**
      * Returns the most recent fetch log entries for a route, newest first.
      * Parameterized patterns like {@code /hn/:feed} are matched via SQL LIKE

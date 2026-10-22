@@ -1,7 +1,7 @@
 package app.routes.twitter;
 
-import app.core.CacheService;
 import app.CredentialConfigStore;
+import app.core.CacheService;
 import app.core.Feed;
 import app.core.FeedItem;
 import app.core.FetchClient;
@@ -12,6 +12,7 @@ import app.core.RouteHandler;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 
 /**
@@ -28,22 +29,29 @@ import java.util.List;
 public class TwitterUserRoute implements RouteHandler {
 
     private final TwitterHelper helper;
+    private final String fixedUser;
 
     public TwitterUserRoute(FetchClient fetchClient, ObjectMapper objectMapper,
                              CacheService cacheService,
                              CredentialConfigStore credStore) {
+        this(fetchClient, objectMapper, cacheService, credStore, null);
+    }
+
+    protected TwitterUserRoute(FetchClient fetchClient, ObjectMapper objectMapper,
+                               CacheService cacheService, CredentialConfigStore credStore, String fixedUser) {
         this.helper = new TwitterHelper(fetchClient, objectMapper, cacheService, credStore);
+        this.fixedUser = fixedUser;
     }
 
     @Override
     public Feed handle(RouteContext context) throws Exception {
-        String id = context.pathParam("id");
+        String id = fixedUser != null ? fixedUser : context.pathParam("id");
         if (id == null || id.isBlank()) {
             throw new RouteException(RouteError.INVALID_PARAMETER, "id is required");
         }
         if (!helper.hasCookie()) {
             throw new RouteException(RouteError.INVALID_PARAMETER,
-                    "TWITTER_COOKIE env var is required (set auth_token + ct0 from browser)");
+                    "Configure the X login Cookie in /index#credentials or TWITTER_COOKIE (requires auth_token + ct0)");
         }
 
         try {
@@ -69,10 +77,10 @@ public class TwitterUserRoute implements RouteHandler {
                 throw new RouteException(RouteError.EMPTY_FEED);
             }
 
-            List<FeedItem> items = new ArrayList<>();
+            var items = new LinkedHashMap<String, FeedItem>();
             for (JsonNode legacy : legacies) {
                 FeedItem item = toItem(legacy, screenName);
-                if (item != null) items.add(item);
+                if (item != null) items.putIfAbsent(item.link(), item);
             }
             if (items.isEmpty()) throw new RouteException(RouteError.EMPTY_FEED);
 
@@ -80,7 +88,7 @@ public class TwitterUserRoute implements RouteHandler {
                     "@" + screenName + " 的推文",
                     "https://x.com/" + screenName,
                     userDesc,
-                    items);
+                    List.copyOf(items.values()));
         } catch (RouteException e) {
             throw e;
         } catch (Exception e) {
@@ -121,11 +129,11 @@ public class TwitterUserRoute implements RouteHandler {
         if (isRetweet) {
             String rtUserName = TwitterHelper.nullIfBlank(bodyUser);
             title = "RT " + (rtUserName != null ? "@" + rtUserName + ": " : "") +
-                    truncate(rawTitle, 100);
+                    rawTitle;
         } else if (!legacy.path("in_reply_to_screen_name").asText("").isBlank()) {
-            title = "Re " + truncate(rawTitle, 100);
+            title = "Re " + rawTitle;
         } else {
-            title = truncate(rawTitle.isBlank() ? "(media)" : rawTitle, 100);
+            title = rawTitle.isBlank() ? "(media)" : rawTitle;
         }
 
         // Tweet link
@@ -151,8 +159,4 @@ public class TwitterUserRoute implements RouteHandler {
                 categories.isEmpty() ? List.of() : categories);
     }
 
-    private static String truncate(String s, int max) {
-        if (s == null || s.length() <= max) return s;
-        return s.substring(0, max) + "…";
-    }
 }

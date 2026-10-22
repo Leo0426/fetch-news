@@ -5,7 +5,9 @@ import app.core.FeedItem;
 import app.core.RouteError;
 import app.core.RouteException;
 import java.util.List;
+import java.util.stream.Collectors;
 import org.jsoup.Jsoup;
+import org.jsoup.nodes.CDataNode;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.parser.Parser;
@@ -66,12 +68,11 @@ public final class FeedParser {
             }
         }
         String desc    = inner(item.selectFirst("description"));
+        if (desc == null) desc = inner(item.selectFirst("content|encoded"));
         String pubDate = text(item.selectFirst("pubDate"));
         String author  = text(item.selectFirst("author"));
-        if (author == null) {
-            // dc:creator is commonly used; JSoup XML mode stores it as "creator"
-            author = text(item.selectFirst("creator"));
-        }
+        if (author == null) author = text(item.selectFirst("dc|creator"));
+        if (author == null) author = text(item.selectFirst("creator"));
         List<String> cats = item.select("category").stream()
                 .map(Element::text).filter(t -> !t.isBlank()).toList();
 
@@ -146,7 +147,9 @@ public final class FeedParser {
 
     private static String inner(Element el) {
         if (el == null) return null;
-        String content = el.html().strip();
+        String content = el.childNodes().stream()
+                .map(node -> node instanceof CDataNode data ? data.getWholeText() : node.outerHtml())
+                .collect(Collectors.joining()).strip();
         return content.isBlank() ? null : content;
     }
 }

@@ -6,6 +6,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import app.core.CacheService;
 import app.core.FeedItem;
+import app.core.Route;
+import app.core.RouteConfig;
 import app.core.RouteConfigStore;
 import app.core.RouteRegistry;
 import app.store.FeedStore;
@@ -25,13 +27,15 @@ class SearchReaderTest {
     @TempDir
     Path directory;
     private FeedStore store;
+    private AppRuntime runtime;
     private AdminTemplateRenderer renderer;
 
     @BeforeEach
     void setUp() throws Exception {
         ObjectMapper mapper = new ObjectMapper();
         store = new FeedStore(directory.resolve("feed.db"), mapper);
-        AppRuntime runtime = new AppRuntime(new CacheService(), new RouteRegistry(List.of()),
+        runtime = new AppRuntime(new CacheService(), new RouteRegistry(List.of(
+                new Route("/rss", context -> { throw new AssertionError("Search must not fetch"); }, "RSS", "通用"))),
                 new RouteConfigStore(directory.resolve("routes.json"), mapper));
         ClassLoaderTemplateResolver resolver = new ClassLoaderTemplateResolver();
         resolver.setPrefix("templates/");
@@ -101,6 +105,24 @@ class SearchReaderTest {
         var noResults = reader(store).search("不存在");
         assertEquals(200, noResults.getStatusCode().value());
         assertTrue(Jsoup.parse(noResults.getBody()).select(".search-result-meta").text().contains("暂无匹配"));
+    }
+
+    @Test
+    void findingAnArticleBySummaryShowsItsConfiguredSourceNameWithoutChangingItsLink() throws Exception {
+        runtime.routeConfigStore().save(new RouteConfig("/my-reading", "/rss", true, 300, 1800,
+                60, null, "https://example.test/feed.xml", "阅读 <script>我的来源</script>"));
+        String link = "https://example.test/article";
+        store.saveItems("/my-reading", List.of(new FeedItem("Saved article", link,
+                "Original body", null, null, List.of())));
+        store.saveSummary(link, "这是卫星模型资料", "fixture");
+
+        var page = Jsoup.parse(reader(store).search("模型").getBody());
+
+        assertEquals(1, page.select(".search-result").size());
+        assertEquals("阅读 <script>我的来源</script>", page.selectFirst(".rd-src").text());
+        assertEquals(link, page.selectFirst(".rd-card-title").attr("href"));
+        assertTrue(page.select(".search-result script").isEmpty());
+        assertEquals("模型", page.selectFirst("#history-query").val());
     }
 
     private ReaderResource reader(FeedStore feedStore) {

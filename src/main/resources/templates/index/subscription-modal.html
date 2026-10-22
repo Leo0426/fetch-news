@@ -1,0 +1,29 @@
+<div class="modal-head">
+  <h2 class="modal-ttl" id="modal-title">添加 RSS 订阅</h2>
+  <button class="modal-x" type="button" aria-label="关闭添加订阅" @click="modal = false">
+    <svg th:replace="~{shared/icons :: icon('close')}"></svg>
+  </button>
+</div>
+<div class="modal-body">
+  <form data-subscription-create hx-post="/index/subscriptions/create" hx-target="#modal-inner"
+        hx-swap="innerHTML" hx-disabled-elt="find button[type='submit']" hx-sync="this:drop" hx-include="unset">
+    <p class="field-hint">保存后可以选择更新频率，再订阅并抓取首批文章。</p>
+    <p th:if="${error != null}" class="form-msg err" role="alert" tabindex="-1" th:text="${error}"></p>
+    <div class="field">
+      <label class="field-label" for="subscription-name">订阅名称</label>
+      <input class="ui-control" id="subscription-name" name="name" type="text" th:value="${name}"
+             placeholder="例如：我的科学阅读" maxlength="80" required autocomplete="off">
+    </div>
+    <div class="field">
+      <label class="field-label" for="subscription-feed-url">RSS / Atom 地址</label>
+      <input class="ui-control" id="subscription-feed-url" name="feedUrl" type="url" th:value="${feedUrl}"
+             placeholder="https://example.com/feed.xml" maxlength="2048" required autocomplete="off"
+             spellcheck="false" aria-describedby="subscription-feed-hint">
+      <span class="field-hint" id="subscription-feed-hint">粘贴以 http:// 或 https:// 开头的订阅地址。</span>
+    </div>
+    <div class="form-acts">
+      <button class="btn primary" type="submit">保存来源</button>
+      <button class="btn" type="button" @click="modal = false">取消</button>
+    </div>
+  </form>
+</div>
