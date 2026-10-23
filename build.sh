@@ -31,7 +31,8 @@ echo
 # ── Build JAR on host (avoids QEMU network flakiness for cross-platform builds) ──
 echo "Step 1/2  : building fat JAR locally…"
 ./gradlew bootJar --no-daemon -x test -q
-JAR_SRC="$(ls build/libs/*.jar | head -1)"
+JAR_SRC="build/libs/fetch-news-${VERSION}.jar"
+[[ -f "$JAR_SRC" ]] || { echo "ERROR: $JAR_SRC not found"; exit 1; }
 cp "$JAR_SRC" app.jar
 echo "           → $(du -sh app.jar | cut -f1) written to app.jar"
 echo
