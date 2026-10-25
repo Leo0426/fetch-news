@@ -6,6 +6,10 @@
   <title th:text="${page.query.isEmpty()} ? '搜索' : '搜索：' + ${page.query}">搜索</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/admin.css">
+  <link rel="stylesheet" href="/admin-controls.css">
+  <link rel="stylesheet" href="/admin-views.css">
+  <link rel="stylesheet" href="/reader.css">
+  <link rel="stylesheet" href="/briefing.css">
   <link rel="stylesheet" href="/article.css">
   <link rel="stylesheet" href="/search.css">
   <script defer src="/ui.js"></script>
@@ -22,8 +26,9 @@
     <a href="/reader/radar"><svg th:replace="~{shared/icons :: icon('radar')}"></svg><span>精选日报</span></a>
     <a href="/reader/bookmarks"><svg th:replace="~{shared/icons :: icon('bookmark')}"></svg><span>收藏</span></a>
     <a href="/reader/search" aria-current="page"><svg th:replace="~{shared/icons :: icon('search')}"></svg><span>搜索</span></a>
-    <a href="/index#subscriptions"><svg th:replace="~{shared/icons :: icon('rss')}"></svg><span>订阅来源</span></a>
-    <a href="/index" class="reader-nav-admin"><svg th:replace="~{shared/icons :: icon('settings')}"></svg><span>管理</span></a>
+    <a th:if="${viewer == null or viewer.admin()}" href="/index#subscriptions"><svg th:replace="~{shared/icons :: icon('rss')}"></svg><span>订阅来源</span></a>
+    <a th:if="${viewer == null or viewer.admin()}" href="/index" class="reader-nav-admin"><svg th:replace="~{shared/icons :: icon('settings')}"></svg><span>管理</span></a>
+    <a href="/account" class="reader-nav-account" th:if="${viewer != null}" th:classappend="${!viewer.admin()} ? ' reader-nav-admin'"><svg th:replace="~{shared/icons :: icon('user')}"></svg><span th:text="${viewer.name()}">账户</span></a>
   </nav>
 
 
@@ -60,7 +65,7 @@
         <strong>记住一个关键词，就能重新找到</strong>
         <p>中文短词也可以搜索。试试文章主题、工具名称，或记忆中的一句话。</p>
         <span class="search-empty-note">搜索已保存的文章，不受速览时间范围限制。</span>
-        <a href="/index#subscriptions" class="reader-empty-action">订阅来源，积累值得读的内容 →</a>
+        <a th:if="${viewer == null or viewer.admin()}" href="/index#subscriptions" class="reader-empty-action">订阅来源，积累值得读的内容 →</a>
       </div>
 
       <th:block th:if="${!page.query.isEmpty()}">

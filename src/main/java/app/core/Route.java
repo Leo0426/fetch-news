@@ -13,7 +13,7 @@ package app.core;
  * @param recommendedScheduleMinutes suggested refresh interval when subscribing; 0 means no recommendation
  */
 public record Route(String path, RouteHandler handler, String description,
-                    String category, String fetchStrategy, String fetchDetail,
+                    Topic topic, String fetchStrategy, String fetchDetail,
                     int recommendedScheduleMinutes) {
     public Route {
         if (path == null || path.isBlank() || !path.startsWith("/")) {
@@ -32,17 +32,22 @@ public record Route(String path, RouteHandler handler, String description,
         this(path, handler, description, null, null, null);
     }
 
-    public Route(String path, RouteHandler handler, String description, String category) {
-        this(path, handler, description, category, null, null);
+    public Route(String path, RouteHandler handler, String description, Topic topic) {
+        this(path, handler, description, topic, null, null);
     }
 
     public Route(String path, RouteHandler handler, String description,
-                 String category, String fetchStrategy) {
-        this(path, handler, description, category, fetchStrategy, null);
+                 Topic topic, String fetchStrategy) {
+        this(path, handler, description, topic, fetchStrategy, null);
     }
 
     public Route(String path, RouteHandler handler, String description,
-                 String category, String fetchStrategy, String fetchDetail) {
-        this(path, handler, description, category, fetchStrategy, fetchDetail, 0);
+                 Topic topic, String fetchStrategy, String fetchDetail) {
+        this(path, handler, description, topic, fetchStrategy, fetchDetail, 0);
+    }
+
+    /** The topic's label, or null for routes without a topic. */
+    public String category() {
+        return topic == null ? null : topic.label();
     }
 }

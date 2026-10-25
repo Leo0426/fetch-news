@@ -3,6 +3,7 @@ package app;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.Set;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -14,6 +15,12 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @RestController
 public class FrontendAssetResource {
+    /** Asset files served below; they are reachable without signing in. */
+    public static final Set<String> ASSETS = Set.of("admin.css", "ai-settings.js", "reader-page.js", "admin-controls.css", "admin-views.css", "reader.css", "briefing.css", "htmx.min.js", "alpine.min.js", "ui.js",
+            "reader.js", "admin.js", "unread.css", "search.css", "article.css", "article.js",
+            "compact-summary.js", "radar.css", "radar.js", "radar-community.js",
+            "ui-controls.css");
+
     /**
      * Serves CSS and JavaScript assets used by the admin page.
      *
@@ -26,9 +33,9 @@ public class FrontendAssetResource {
         return ResponseEntity.ok().contentType(MediaType.valueOf("image/svg+xml")).body(content);
     }
 
-    @GetMapping({"/{file:admin\\.css}", "/{file:htmx\\.min\\.js}", "/{file:alpine\\.min\\.js}",
+    @GetMapping({"/{file:admin\\.css}", "/{file:ai-settings\\.js}", "/{file:reader-page\\.js}", "/{file:admin-controls\\.css}", "/{file:admin-views\\.css}", "/{file:reader\\.css}", "/{file:briefing\\.css}", "/{file:htmx\\.min\\.js}", "/{file:alpine\\.min\\.js}",
             "/{file:ui\\.js}", "/{file:reader\\.js}", "/{file:admin\\.js}", "/{file:unread\\.css}",
-            "/{file:search\\.css}", "/{file:article\\.css}", "/{file:article\\.js}", "/{file:compact-summary\\.js}", "/{file:radar\\.css}", "/{file:radar\\.js}", "/{file:radar-admin\\.css}", "/{file:radar-community\\.js}", "/{file:ui-controls\\.css}"})
+            "/{file:search\\.css}", "/{file:article\\.css}", "/{file:article\\.js}", "/{file:compact-summary\\.js}", "/{file:radar\\.css}", "/{file:radar\\.js}", "/{file:radar-community\\.js}", "/{file:ui-controls\\.css}"})
     public ResponseEntity<String> asset(@PathVariable String file) {
         String content = readAsset(file);
         MediaType mediaType = file.endsWith(".css")

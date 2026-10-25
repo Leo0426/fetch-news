@@ -1,16 +1,17 @@
 package app;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import app.core.DefaultFetchClient;
 import app.core.RouteContext;
-import app.core.RouteMatch;
-import app.core.RouteException;
 import app.core.RouteError;
+import app.core.RouteException;
+import app.core.RouteMatch;
+import app.fetch.FeedFetcher;
 import app.routes.GenericRssRoute;
 import app.store.FeedStore;
 import app.store.HttpFeedSnapshot;
@@ -26,6 +27,7 @@ import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
@@ -52,7 +54,7 @@ class ConditionalRssRouteTest {
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/feed", exchange -> {
             try (exchange) {
-                var headers = new java.util.HashMap<String, String>();
+                var headers = new HashMap<String, String>();
                 exchange.getRequestHeaders().forEach((key, values) -> headers.put(key.toLowerCase(), values.getFirst()));
                 requests.add(headers);
                 Reply reply = replies.poll();
@@ -82,7 +84,7 @@ class ConditionalRssRouteTest {
             var first = source.handle(context);
             clock.advance(60);
             assertEquals(first, source.handle(context));
-            assertEquals(304, store.loadFeedRefreshState("/fixed/news", url).lastHttpStatus());
+            assertEquals(304, store.fetchState().loadFeedRefreshState("/fixed/news", url).lastHttpStatus());
             assertEquals("\"fixed-v1\"", requests.get(1).get("if-none-match"));
         }
     }
@@ -96,19 +98,19 @@ class ConditionalRssRouteTest {
         Instant firstCheck = clock.instant();
         try (FeedStore store = store()) {
             fetch(store);
-            firstSeen = store.loadNewItemsSince("/news", Instant.EPOCH).getFirst().firstSeenAt();
+            firstSeen = store.items().loadNewItemsSince("/news", Instant.EPOCH).getFirst().firstSeenAt();
         }
         clock.advance(60);
         try (FeedStore store = store()) {
             assertEquals(1, fetch(store).items().size());
-            assertEquals(firstSeen, store.loadNewItemsSince("/news", Instant.EPOCH).getFirst().firstSeenAt());
-            assertEquals(304, store.loadFeedRefreshState("/news", url).lastHttpStatus());
-            assertEquals(firstCheck, store.loadFeedRefreshState("/news", url).lastChangedAt());
-            assertEquals(0, store.getRecentLogs("/news", 1).getFirst().newItemCount());
+            assertEquals(firstSeen, store.items().loadNewItemsSince("/news", Instant.EPOCH).getFirst().firstSeenAt());
+            assertEquals(304, store.fetchState().loadFeedRefreshState("/news", url).lastHttpStatus());
+            assertEquals(firstCheck, store.fetchState().loadFeedRefreshState("/news", url).lastChangedAt());
+            assertEquals(0, store.fetchState().getRecentLogs("/news", 1).getFirst().newItemCount());
             clock.advance(60);
             assertEquals(2, fetch(store).items().size());
-            assertEquals(clock.instant(), store.loadFeedRefreshState("/news", url).lastChangedAt());
-            assertEquals(1, store.getRecentLogs("/news", 1).getFirst().newItemCount());
+            assertEquals(clock.instant(), store.fetchState().loadFeedRefreshState("/news", url).lastChangedAt());
+            assertEquals(1, store.fetchState().getRecentLogs("/news", 1).getFirst().newItemCount());
         }
         assertEquals(3, requests.size());
         assertNull(requests.getFirst().get("if-none-match"));
@@ -126,7 +128,7 @@ class ConditionalRssRouteTest {
             fetch(store);
             clock.advance(60);
             assertThrows(RouteException.class, () -> fetch(store));
-            var state = store.loadFeedRefreshState("/news", url);
+            var state = store.fetchState().loadFeedRefreshState("/news", url);
             assertEquals(clock.instant().plusSeconds(180), state.nextRetryAt());
             assertEquals(successfulCheck, state.lastSuccessAt());
             assertEquals(1, state.consecutiveFailures());
@@ -136,13 +138,13 @@ class ConditionalRssRouteTest {
             clock.advance(179);
             assertThrows(RouteException.class, () -> fetch(store));
             assertEquals(2, requests.size());
-            assertEquals(2, store.getRecentLogs("/news", 10).size());
-            assertEquals(1, store.loadFeedRefreshState("/news", url).consecutiveFailures());
+            assertEquals(2, store.fetchState().getRecentLogs("/news", 10).size());
+            assertEquals(1, store.fetchState().loadFeedRefreshState("/news", url).consecutiveFailures());
             clock.advance(1);
             assertEquals(1, fetch(store).items().size());
-            assertNull(store.loadFeedRefreshState("/news", url).nextRetryAt());
-            assertEquals(0, store.loadFeedRefreshState("/news", url).consecutiveFailures());
-            assertEquals(successfulCheck, store.loadFeedRefreshState("/news", url).lastChangedAt());
+            assertNull(store.fetchState().loadFeedRefreshState("/news", url).nextRetryAt());
+            assertEquals(0, store.fetchState().loadFeedRefreshState("/news", url).consecutiveFailures());
+            assertEquals(successfulCheck, store.fetchState().loadFeedRefreshState("/news", url).lastChangedAt());
         }
         assertEquals(3, requests.size());
     }
@@ -154,7 +156,7 @@ class ConditionalRssRouteTest {
                 DateTimeFormatter.RFC_1123_DATE_TIME.format(deadline.atZone(ZoneOffset.UTC)))));
         try (FeedStore store = store()) {
             assertThrows(RouteException.class, () -> fetch(store));
-            assertEquals(deadline, store.loadFeedRefreshState("/news", url).nextRetryAt());
+            assertEquals(deadline, store.fetchState().loadFeedRefreshState("/news", url).nextRetryAt());
         }
         assertEquals(1, requests.size());
     }
@@ -166,10 +168,10 @@ class ConditionalRssRouteTest {
                 replies.add(new Reply(500, "unavailable", Map.of("Retry-After", "invalid")));
                 assertThrows(RouteException.class, () -> fetch(store));
                 assertEquals(clock.instant().plusSeconds(delay),
-                        store.loadFeedRefreshState("/news", url).nextRetryAt());
+                        store.fetchState().loadFeedRefreshState("/news", url).nextRetryAt());
                 clock.advance(delay);
             }
-            assertEquals(8, store.loadFeedRefreshState("/news", url).consecutiveFailures());
+            assertEquals(8, store.fetchState().loadFeedRefreshState("/news", url).consecutiveFailures());
         }
         assertEquals(8, requests.size());
     }
@@ -180,7 +182,7 @@ class ConditionalRssRouteTest {
         replies.add(new Reply(200, xml("A"), Map.of("ETag", "\"v1\"")));
         try (FeedStore store = store()) {
             assertEquals(1, fetch(store).items().size());
-            assertEquals(200, store.loadFeedRefreshState("/news", url).lastHttpStatus());
+            assertEquals(200, store.fetchState().loadFeedRefreshState("/news", url).lastHttpStatus());
         }
         assertEquals(2, requests.size());
         assertTrue(requests.stream().allMatch(headers -> !headers.containsKey("if-none-match")));
@@ -192,8 +194,8 @@ class ConditionalRssRouteTest {
         replies.add(new Reply(304, "", Map.of()));
         try (FeedStore store = store()) {
             assertThrows(RouteException.class, () -> fetch(store));
-            assertEquals(304, store.loadFeedRefreshState("/news", url).lastHttpStatus());
-            assertNull(store.loadHttpFeedSnapshot(url));
+            assertEquals(304, store.fetchState().loadFeedRefreshState("/news", url).lastHttpStatus());
+            assertNull(store.fetchState().loadHttpFeedSnapshot(url));
         }
         assertEquals(2, requests.size());
     }
@@ -202,9 +204,9 @@ class ConditionalRssRouteTest {
     void replacesCorruptSnapshotWithAnUnconditionalFetch() throws Exception {
         replies.add(new Reply(200, xml("A"), Map.of("ETag", "\"fresh\"")));
         try (FeedStore store = store()) {
-            store.saveHttpFeedSnapshot(new HttpFeedSnapshot(url, "not xml", "\"broken\"", null));
+            store.fetchState().saveHttpFeedSnapshot(new HttpFeedSnapshot(url, "not xml", "\"broken\"", null));
             assertEquals(1, fetch(store).items().size());
-            assertEquals("\"fresh\"", store.loadHttpFeedSnapshot(url).etag());
+            assertEquals("\"fresh\"", store.fetchState().loadHttpFeedSnapshot(url).etag());
         }
         assertNull(requests.getFirst().get("if-none-match"));
     }
@@ -219,9 +221,9 @@ class ConditionalRssRouteTest {
             clock.advance(60);
             RouteException failure = assertThrows(RouteException.class, () -> fetch(store));
             assertEquals(RouteError.UPSTREAM_INVALID_CONTENT, failure.error());
-            assertEquals("\"good\"", store.loadHttpFeedSnapshot(url).etag());
-            assertEquals(200, store.loadFeedRefreshState("/news", url).lastHttpStatus());
-            assertNotNull(store.loadFeedRefreshState("/news", url).lastError());
+            assertEquals("\"good\"", store.fetchState().loadHttpFeedSnapshot(url).etag());
+            assertEquals(200, store.fetchState().loadFeedRefreshState("/news", url).lastHttpStatus());
+            assertNotNull(store.fetchState().loadFeedRefreshState("/news", url).lastError());
             clock.advance(60);
             assertEquals(1, fetch(store).items().size());
         }
@@ -238,9 +240,9 @@ class ConditionalRssRouteTest {
         try (FeedStore store = store()) {
             fetch(store);
             assertEquals(body.getBytes(StandardCharsets.UTF_8).length,
-                    store.loadFeedRefreshState("/news", url).responseBytes());
+                    store.fetchState().loadFeedRefreshState("/news", url).responseBytes());
             fetch(store);
-            assertEquals(0, store.loadFeedRefreshState("/news", url).responseBytes());
+            assertEquals(0, store.fetchState().loadFeedRefreshState("/news", url).responseBytes());
             fetch(store);
         }
         assertEquals(modified, requests.get(1).get("if-modified-since"));
@@ -258,14 +260,14 @@ class ConditionalRssRouteTest {
         replies.add(new Reply(200, xml("A"), Map.of(parts[0], parts[1])));
         try (FeedStore store = store()) {
             fetch(store);
-            Instant firstChange = store.loadFeedRefreshState("/news", url).lastChangedAt();
+            Instant firstChange = store.fetchState().loadFeedRefreshState("/news", url).lastChangedAt();
             clock.advance(60);
             fetch(store);
-            assertNull(store.loadHttpFeedSnapshot(url));
+            assertNull(store.fetchState().loadHttpFeedSnapshot(url));
             clock.advance(60);
             fetch(store);
-            assertNull(store.loadHttpFeedSnapshot(url));
-            assertEquals(firstChange, store.loadFeedRefreshState("/news", url).lastChangedAt());
+            assertNull(store.fetchState().loadHttpFeedSnapshot(url));
+            assertEquals(firstChange, store.fetchState().loadFeedRefreshState("/news", url).lastChangedAt());
         }
         assertNull(requests.getLast().get("if-none-match"));
     }
@@ -280,7 +282,7 @@ class ConditionalRssRouteTest {
         try (FeedStore store = store()) {
             fetch(store);
             assertThrows(RouteException.class, () -> fetch(store));
-            assertNull(store.loadHttpFeedSnapshot(url));
+            assertNull(store.fetchState().loadHttpFeedSnapshot(url));
             assertEquals(1, store.loadItems("/news").size());
         }
     }
@@ -308,7 +310,7 @@ class ConditionalRssRouteTest {
             route.handle(other);
             clock.advance(60);
             assertEquals(2, fetch(store).items().size());
-            assertEquals(clock.instant(), store.loadFeedRefreshState("/news", url).lastChangedAt());
+            assertEquals(clock.instant(), store.fetchState().loadFeedRefreshState("/news", url).lastChangedAt());
         }
     }
 

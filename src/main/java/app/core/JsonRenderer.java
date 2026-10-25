@@ -50,6 +50,7 @@ public class JsonRenderer implements FeedRenderer {
                 node.put("pubDate", item.pubDate().toString());
             }
             node.put("author", item.author());
+            node.put("image", item.image());
             ArrayNode categories = node.putArray("categories");
             for (String category : item.categories()) {
                 categories.add(category);

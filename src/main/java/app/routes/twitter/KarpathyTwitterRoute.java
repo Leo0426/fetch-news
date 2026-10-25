@@ -1,7 +1,7 @@
 package app.routes.twitter;
 
-import app.CredentialConfigStore;
 import app.core.CacheService;
+import app.core.CredentialConfigStore;
 import app.core.FetchClient;
 import com.fasterxml.jackson.databind.ObjectMapper;
 

@@ -1,0 +1,271 @@
+{
+  "/techcrunch": {
+    "intro": "TechCrunch 是全球最知名的科技媒体之一，专注科技行业动态、创业公司和风险投资。",
+    "columns": ["领域", "内容"],
+    "rows": [
+      ["AI", "OpenAI、Anthropic、Google AI 等大模型动态"],
+      ["Startup", "创业公司融资与成长"],
+      ["Venture Capital", "风投动态与市场分析"],
+      ["Security", "网络安全事件与漏洞"],
+      ["Cloud", "云计算与基础设施"],
+      ["Software", "SaaS、开发工具"],
+      ["Hardware", "消费电子与芯片"],
+      ["Robotics", "机器人产业"],
+      ["Space", "航天科技"],
+      ["Crypto", "加密货币与区块链"]
+    ]
+  },
+  "/wired/latest": {
+    "intro": "WIRED 是美国知名科技文化杂志，以深度报道和前瞻视角著称，兼顾技术与人文。",
+    "columns": ["领域", "内容"],
+    "rows": [
+      ["Technology", "科技趋势与创新"],
+      ["AI", "人工智能的社会影响"],
+      ["Culture", "科技对文化的渗透与改变"],
+      ["Security", "网络安全与隐私"],
+      ["Science", "前沿科学研究"],
+      ["Politics", "科技政策与监管"],
+      ["Business", "科技公司与商业模式"]
+    ]
+  },
+  "/mritd/blog": {
+    "intro": "mritd 是国内知名 DevOps / 云原生工程师的个人博客，内容深入实用，聚焦生产环境实践。",
+    "columns": ["领域", "内容"],
+    "rows": [
+      ["Kubernetes", "K8s 集群配置、调优与运维"],
+      ["Docker", "容器化实践与镜像管理"],
+      ["Linux", "系统运维与性能优化"],
+      ["CI/CD", "自动化部署与流水线"],
+      ["Network", "网络配置、代理与安全"],
+      ["Tools", "运维工具链推荐与评测"]
+    ]
+  },
+  "/microsoft/devops": {
+    "intro": "Microsoft DevOps Blog 是微软工程师团队发布 Azure DevOps 和 GitHub 相关更新的官方博客。",
+    "columns": ["领域", "内容"],
+    "rows": [
+      ["Azure DevOps", "Boards、Pipelines、Repos、Artifacts 更新"],
+      ["GitHub", "GitHub Actions、Copilot 集成动态"],
+      ["Release Notes", "功能发布与版本说明"],
+      ["Best Practices", "DevOps 工程最佳实践"],
+      ["Tools", "开发工具与 VS Code 扩展"]
+    ]
+  },
+  "/diygod/blog": {
+    "intro": "DIYGod 是国内知名开源开发者，RSSHub 和 RSS3 协议联合创始人，博客记录技术思考与项目进展。",
+    "columns": ["领域", "内容"],
+    "rows": [
+      ["Open Source", "RSSHub、xLog 等开源项目动态"],
+      ["Web3", "RSS3 协议与去中心化应用"],
+      ["Frontend", "前端技术探索"],
+      ["Life", "生活随笔与思考"]
+    ]
+  },
+  "/github/releases/:owner/:repo": {
+    "intro": "订阅任意 GitHub 公开仓库的 Release 版本更新，第一时间获取版本号、更新日志和发布说明。",
+    "columns": ["参数", "说明"],
+    "rows": [
+      [":owner", "仓库所有者（用户名或组织名）"],
+      [":repo", "仓库名称"],
+      ["示例", "/github/releases/anthropics/claude-code"],
+      ["过滤", "跳过草稿（draft）版本"]
+    ]
+  },
+  "/hn/:feed": {
+    "intro": "Hacker News 是由 Y Combinator 运营的科技社区，是创业者、工程师和投资人的聚集地。",
+    "columns": [":feed 值", "内容"],
+    "rows": [
+      ["top", "当前综合热门"],
+      ["new", "最新提交"],
+      ["best", "历史最高质量"],
+      ["ask", "社区提问（Ask HN）"],
+      ["show", "项目展示（Show HN）"],
+      ["job", "职位招聘"]
+    ]
+  },
+  "/cnblogs/post": {
+    "intro": "博客园是国内历史悠久的技术博客平台，精华文章经编辑人工筛选，整体质量较高。",
+    "columns": ["领域", "内容"],
+    "rows": [
+      [".NET / C#", "ASP.NET、WPF、微软技术栈"],
+      ["Java", "Spring、JVM 生态技术"],
+      ["前端", "JavaScript、Vue、React"],
+      ["运维", "Linux、K8s、Docker"],
+      ["数据库", "MySQL、Redis、MongoDB"],
+      ["算法", "数据结构与竞赛"]
+    ]
+  },
+  "/arxiv/:category": {
+    "intro": "arXiv 是学术预印本平台，在论文正式发表前即可公开获取，覆盖计算机科学、数学、物理等领域。",
+    "columns": ["常用 :category", "领域"],
+    "rows": [
+      ["cs.AI", "人工智能"],
+      ["cs.LG", "机器学习"],
+      ["cs.CV", "计算机视觉"],
+      ["cs.CL", "自然语言处理"],
+      ["cs.CR", "密码学与安全"],
+      ["cs.SE", "软件工程"],
+      ["stat.ML", "统计机器学习"],
+      ["q-bio", "定量生物学"]
+    ]
+  },
+  "/bbc/news/:channel": {
+    "intro": "BBC News 是英国广播公司旗下的国际新闻媒体，以客观报道著称，支持英文和中文频道，并抓取全文。",
+    "columns": [":channel 值", "内容"],
+    "rows": [
+      ["world", "国际新闻"],
+      ["technology", "科技"],
+      ["world-asia", "亚洲新闻"],
+      ["science-environment", "科学与环境"],
+      ["business", "商业财经"],
+      ["chinese", "BBC 中文（简体）"],
+      ["traditionalchinese", "BBC 中文（繁体）"]
+    ]
+  },
+  "/bbc/learningenglish/:channel": {
+    "intro": "BBC 英语学习频道提供专为学习者设计的音频、视频和文字内容，涵盖时事词汇与语法讲解，附全文。",
+    "columns": [":channel 值", "内容"],
+    "rows": [
+      ["take-away-english", "时事英语（每周更新）"],
+      ["media-english", "媒体英语（新闻词汇）"],
+      ["lingohack", "最新词汇与实际用法"],
+      ["6-minute-english", "六分钟英语"]
+    ]
+  },
+  "/sspai/articles": {
+    "intro": "少数派是国内专注 Apple 生态与效率工具的科技媒体，以高质量使用教程和应用评测著称。",
+    "columns": ["领域", "内容"],
+    "rows": [
+      ["iOS / macOS", "Apple 系统使用技巧与深度评测"],
+      ["效率工具", "生产力应用评测与工作流分享"],
+      ["硬件", "数码产品测评与推荐"],
+      ["自动化", "快捷指令、脚本与自动化工作流"]
+    ]
+  },
+  "/36kr/news": {
+    "intro": "36氪是国内最具影响力的科技创业媒体，专注报道中国互联网、科技公司和创业生态。",
+    "columns": ["领域", "内容"],
+    "rows": [
+      ["创业融资", "最新投融资动态与估值分析"],
+      ["AI", "国内 AI 产品、公司与政策"],
+      ["新能源", "电动车与能源科技"],
+      ["消费科技", "消费品牌与产品趋势"],
+      ["互联网", "大厂动态与行业分析"]
+    ]
+  },
+  "/huanqiu/news": {
+    "intro": "环球网是人民日报旗下的综合新闻网站，主要聚焦国际新闻与时事评论。",
+    "columns": ["领域", "内容"],
+    "rows": [
+      ["国际", "全球政治、外交与冲突"],
+      ["财经", "国际经济动态与市场"],
+      ["军事", "国防与军事新闻"],
+      ["社会", "国内外社会事件"]
+    ]
+  },
+  "/huanqiu/tech/:section": {
+    "intro": "环球网科技频道聚焦国内外科技行业动态，支持多个子栏目。",
+    "columns": [":section 值", "内容"],
+    "rows": [
+      ["original", "人工智能（原创深度报道）"],
+      ["it", "IT 行业动态"],
+      ["internet", "互联网资讯"],
+      ["automobile", "智能汽车"]
+    ]
+  },
+  "/xinhua/news": {
+    "intro": "新华社是中国官方通讯社，提供权威的国内外新闻资讯，包括时政、财经、国际等内容。",
+    "columns": ["领域", "内容"],
+    "rows": [
+      ["时政", "国内政策与党政动态"],
+      ["国际", "全球重要事件与外交"],
+      ["财经", "宏观经济与政策解读"],
+      ["社会", "民生与社会事件"]
+    ]
+  },
+  "/cctv/news/:category": {
+    "intro": "央视新闻是中央电视台的新闻平台，提供图文、视频、图集等多种内容形式，覆盖各类分类频道。",
+    "columns": [":category 值", "内容"],
+    "rows": [
+      ["news", "综合新闻"],
+      ["china", "国内"],
+      ["world", "国际"],
+      ["society", "社会"],
+      ["law", "法治"],
+      ["ent", "娱乐"],
+      ["tech", "科技"],
+      ["life", "生活"],
+      ["edu", "教育"]
+    ]
+  },
+  "/twitter/user/:id": {
+    "intro": "订阅 Twitter/X 上任意用户的公开推文，适合追踪科技博主、研究者或机构账号的最新发布。",
+    "columns": ["参数", "说明"],
+    "rows": [
+      [":id", "用户名（如 elonmusk）或 +数字ID（如 +44196397）"],
+      ["前置条件", "需在凭据页配置有效的 TWITTER_COOKIE"]
+    ]
+  },
+  "/producthunt/daily": {
+    "intro": "Product Hunt 是全球最知名的新产品发现平台，每日精选最值得关注的新应用、工具和服务。",
+    "columns": ["领域", "内容"],
+    "rows": [
+      ["AI Tools", "生产力 AI 应用"],
+      ["Developer Tools", "开发者工具与 SDK"],
+      ["Web Apps", "SaaS 产品"],
+      ["Mobile", "iOS / Android 应用"],
+      ["Hardware", "硬件与设备"]
+    ]
+  },
+  "/bilibili/user/video/:uid": {
+    "intro": "订阅指定 B 站 UP 主的最新视频投稿，包含封面、标题和简介。",
+    "columns": ["参数", "说明"],
+    "rows": [
+      [":uid", "UP 主的用户 UID（主页 URL 中的数字）"],
+      ["前置条件", "需配置 BILIBILI_COOKIE"]
+    ]
+  },
+  "/bilibili/user/dynamic/:uid": {
+    "intro": "订阅指定 B 站 UP 主的全部动态，涵盖视频、图文、纯文字、专栏文章和转发。",
+    "columns": ["参数", "说明"],
+    "rows": [
+      [":uid", "UP 主的用户 UID"],
+      ["前置条件", "需配置 BILIBILI_COOKIE"],
+      ["动态类型", "视频、图文、纯文字、专栏、转发"]
+    ]
+  },
+  "/bilibili/followings/dynamic/:uid": {
+    "intro": "聚合已登录账号所有关注 UP 主的最新动态，相当于 B 站首页的关注动态流。",
+    "columns": ["参数", "说明"],
+    "rows": [
+      [":uid", "已登录用户自身的 UID"],
+      ["前置条件", "需配置完整的 BILIBILI_COOKIE（含 SESSDATA + bili_jct）"],
+      ["动态类型", "视频、图文、纯文字、专栏、转发"]
+    ]
+  },
+  "/bilibili/followings/video/:uid": {
+    "intro": "仅聚合已登录账号关注 UP 主的最新视频投稿，过滤掉图文和文字动态。",
+    "columns": ["参数", "说明"],
+    "rows": [
+      [":uid", "已登录用户自身的 UID"],
+      ["前置条件", "需配置 BILIBILI_COOKIE（SESSDATA 即可）"]
+    ]
+  },
+  "/bilibili/followings/article/:uid": {
+    "intro": "仅聚合已登录账号关注 UP 主发布的专栏文章（图文长文），过滤掉视频和普通动态。",
+    "columns": ["参数", "说明"],
+    "rows": [
+      [":uid", "已登录用户自身的 UID"],
+      ["前置条件", "需配置 BILIBILI_COOKIE（SESSDATA 即可）"]
+    ]
+  },
+  "/rss": {
+    "intro": "代理任意外部 RSS 2.0 或 Atom 订阅源，统一格式后供客户端订阅，适合没有内置路由的内容源。",
+    "columns": ["使用方法", "说明"],
+    "rows": [
+      ["feedUrl", "在路由配置中填写完整的 RSS / Atom 订阅地址"],
+      ["格式支持", "RSS 2.0 / Atom"],
+      ["挂载路径", "建议使用有意义的别名路径，如 /my-newsletter"]
+    ]
+  }
+}

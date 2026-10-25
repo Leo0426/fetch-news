@@ -19,6 +19,7 @@ import java.nio.charset.StandardCharsets;
 import java.sql.SQLException;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
@@ -46,18 +47,18 @@ public class GenericRssRoute implements RouteHandler {
     @Override
     public Feed handle(RouteContext ctx) throws Exception {
         String url = validateUrl(feedUrl(ctx));
-        FeedRefreshState previous = store == null ? null : store.loadFeedRefreshState(ctx.path(), url);
+        FeedRefreshState previous = store == null ? null : store.fetchState().loadFeedRefreshState(ctx.path(), url);
         if (previous != null && previous.nextRetryAt() != null
                 && previous.nextRetryAt().isAfter(clock.instant())) {
             throw new FetchDeferredException(previous.nextRetryAt());
         }
-        HttpFeedSnapshot snapshot = store == null ? null : store.loadHttpFeedSnapshot(url);
+        HttpFeedSnapshot snapshot = store == null ? null : store.fetchState().loadHttpFeedSnapshot(url);
         Feed cachedFeed = null;
         if (snapshot != null) {
             try {
                 cachedFeed = parse(snapshot.body(), url);
             } catch (RouteException invalidSnapshot) {
-                store.deleteHttpFeedSnapshot(url);
+                store.fetchState().deleteHttpFeedSnapshot(url);
                 snapshot = null;
             }
         }
@@ -76,7 +77,7 @@ public class GenericRssRoute implements RouteHandler {
                 response = client.fetch(url, Map.of());
             }
             if (store != null && !allowsSnapshot(response)) {
-                store.deleteHttpFeedSnapshot(url);
+                store.fetchState().deleteHttpFeedSnapshot(url);
             }
             if (response.statusCode() == 304 && snapshot != null) {
                 xml = snapshot.body();
@@ -104,15 +105,15 @@ public class GenericRssRoute implements RouteHandler {
             Instant now = clock.instant();
             boolean unchanged = response.statusCode() == 304;
             if (allowsSnapshot(response)) {
-                store.saveHttpFeedSnapshot(new HttpFeedSnapshot(url, xml,
+                store.fetchState().saveHttpFeedSnapshot(new HttpFeedSnapshot(url, xml,
                         validator(response, "ETag", unchanged ? snapshot.etag() : null),
                         validator(response, "Last-Modified", unchanged ? snapshot.lastModified() : null)));
             } else {
-                store.deleteHttpFeedSnapshot(url);
+                store.fetchState().deleteHttpFeedSnapshot(url);
             }
             String fingerprint = FeedFingerprint.of(feed);
             boolean changed = previous == null || !fingerprint.equals(previous.contentFingerprint());
-            store.saveFeedRefreshState(new FeedRefreshState(ctx.path(), url, now, now,
+            store.fetchState().saveFeedRefreshState(new FeedRefreshState(ctx.path(), url, now, now,
                     changed || previous == null ? now : previous.lastChangedAt(), null, 0,
                     response.statusCode(), responseBytes(response), elapsedMillis(start), null, fingerprint));
         }
@@ -133,7 +134,7 @@ public class GenericRssRoute implements RouteHandler {
         Instant retryAfter = response == null ? null : RetryAfter.parse(response.header("Retry-After"), now);
         if (retryAfter != null && retryAfter.isAfter(retryAt)) retryAt = retryAfter;
         try {
-            store.saveFeedRefreshState(new FeedRefreshState(path, url, now,
+            store.fetchState().saveFeedRefreshState(new FeedRefreshState(path, url, now,
                     previous == null ? null : previous.lastSuccessAt(),
                     previous == null ? null : previous.lastChangedAt(), retryAt, failures,
                     response == null ? 0 : response.statusCode(), responseBytes(response),
@@ -163,7 +164,7 @@ public class GenericRssRoute implements RouteHandler {
         return response.headers().entrySet().stream()
                 .filter(entry -> entry.getKey().equalsIgnoreCase("Cache-Control"))
                 .flatMap(entry -> entry.getValue().stream())
-                .flatMap(value -> java.util.Arrays.stream(value.split(",")))
+                .flatMap(value -> Arrays.stream(value.split(",")))
                 .map(value -> value.trim().toLowerCase(Locale.ROOT).split("=", 2)[0].trim())
                 .noneMatch(value -> value.equals("no-store") || value.equals("private"));
     }

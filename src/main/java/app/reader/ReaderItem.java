@@ -9,7 +9,8 @@ import java.time.format.DateTimeFormatter;
 
 /**
  * A feed item enriched with reader-friendly display fields.
- * {@code summary} is {@code null} when no AI summary has been generated yet.
+ * {@code summary} is {@code null} when no AI summary has been generated yet; {@code excerpt} is the
+ * source's own description when it is long enough to stand in for one.
  */
 public record ReaderItem(
         String routePath,
@@ -18,10 +19,17 @@ public record ReaderItem(
         Instant pubDate,
         Instant firstSeenAt,
         String summary,
-        SummaryStatus summaryStatus) {
+        SummaryStatus summaryStatus,
+        String image,
+        String excerpt) {
 
     private static final DateTimeFormatter SHORT =
             DateTimeFormatter.ofPattern("MM-dd HH:mm").withZone(ZoneId.systemDefault());
+
+    public ReaderItem(String routePath, String title, String link, Instant pubDate, Instant firstSeenAt,
+                      String summary, SummaryStatus summaryStatus) {
+        this(routePath, title, link, pubDate, firstSeenAt, summary, summaryStatus, null, null);
+    }
 
     /** Short source label derived from the route path's first segment. */
     public String sourceLabel() {
@@ -63,6 +71,14 @@ public record ReaderItem(
     /** Whether this item has an AI-generated summary. */
     public boolean hasSummary() {
         return summary != null && !summary.isBlank();
+    }
+
+    public boolean hasExcerpt() {
+        return excerpt != null && !excerpt.isBlank();
+    }
+
+    public boolean hasImage() {
+        return image != null && !image.isBlank();
     }
 
     public boolean hasSummaryStatus() {

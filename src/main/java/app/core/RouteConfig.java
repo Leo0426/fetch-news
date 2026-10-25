@@ -1,5 +1,7 @@
 package app.core;
 
+import org.springframework.scheduling.support.CronExpression;
+
 /**
  * Persisted runtime configuration for a route or mount alias.
  *
@@ -13,6 +15,8 @@ package app.core;
  *                     over scheduleMinutes when non-null. Example: {@code "0 0 8 * * *"} = 8 AM daily.
  * @param feedUrl RSS/Atom feed URL for the generic {@code /rss} route; null for all other routes
  * @param alias   optional human-readable label for this route; shown in the admin UI instead of the path
+ * @param autoSummary whether scheduled fetches queue AI summaries for newly discovered items
+ * @param category topic shown in the reader and used by triage and Feishu; null inherits the source route's
  */
 public record RouteConfig(
         String path,
@@ -23,9 +27,27 @@ public record RouteConfig(
         int scheduleMinutes,
         String scheduleCron,
         String feedUrl,
-        String alias) {
+        String alias,
+        boolean autoSummary,
+        String category) {
     public static final int DEFAULT_ROUTE_CACHE_TTL_SECONDS = 300;
     public static final int DEFAULT_DETAIL_CACHE_TTL_SECONDS = 1800;
+
+    /** Creates a configuration that inherits its source route's category. */
+    public RouteConfig(String path, String sourcePath, boolean enabled,
+                       int routeCacheTtlSeconds, int detailCacheTtlSeconds,
+                       int scheduleMinutes, String scheduleCron, String feedUrl, String alias, boolean autoSummary) {
+        this(path, sourcePath, enabled, routeCacheTtlSeconds, detailCacheTtlSeconds,
+                scheduleMinutes, scheduleCron, feedUrl, alias, autoSummary, null);
+    }
+
+    /** Creates a configuration with automatic summaries off. */
+    public RouteConfig(String path, String sourcePath, boolean enabled,
+                       int routeCacheTtlSeconds, int detailCacheTtlSeconds,
+                       int scheduleMinutes, String scheduleCron, String feedUrl, String alias) {
+        this(path, sourcePath, enabled, routeCacheTtlSeconds, detailCacheTtlSeconds,
+                scheduleMinutes, scheduleCron, feedUrl, alias, false);
+    }
 
     /** Creates a configuration whose exposed path is also its source path, with no schedule. */
     public RouteConfig(String path, boolean enabled, int routeCacheTtlSeconds, int detailCacheTtlSeconds) {
@@ -71,7 +93,7 @@ public record RouteConfig(
         }
         if (scheduleCron != null && !scheduleCron.isBlank()) {
             try {
-                org.springframework.scheduling.support.CronExpression.parse(scheduleCron);
+                CronExpression.parse(scheduleCron);
             } catch (IllegalArgumentException e) {
                 throw new RouteException(RouteError.INVALID_PARAMETER,
                         "invalid cron expression: " + e.getMessage());
@@ -80,6 +102,17 @@ public record RouteConfig(
         scheduleCron = (scheduleCron != null && scheduleCron.isBlank()) ? null : scheduleCron;
         feedUrl      = (feedUrl      != null && feedUrl.isBlank())      ? null : feedUrl;
         alias        = (alias        != null && alias.isBlank())        ? null : alias;
+        category     = (category     == null || category.isBlank())     ? null : category.strip();
+    }
+
+    public RouteConfig withEnabled(boolean value) {
+        return new RouteConfig(path, sourcePath, value, routeCacheTtlSeconds, detailCacheTtlSeconds,
+                scheduleMinutes, scheduleCron, feedUrl, alias, autoSummary, category);
+    }
+
+    public RouteConfig withScheduleMinutes(int value) {
+        return new RouteConfig(path, sourcePath, enabled, routeCacheTtlSeconds, detailCacheTtlSeconds,
+                value, scheduleCron, feedUrl, alias, autoSummary, category);
     }
 
     /** Returns whether this route can be scheduled (concrete path, no pattern params). */

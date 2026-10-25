@@ -1,294 +1,107 @@
 # AGENTS.md
 
-## Project
+fetch-news — self-hosted news aggregator, RSS proxy and reader.
+Stack: **Spring Boot 4 · Java 25 · SQLite · Thymeleaf + HTMX + Alpine.js**; AI via Ollama, OpenAI- or Anthropic-compatible APIs.
+Domain vocabulary and data flow: `CONTEXT.md`. Decisions: `docs/adr/`. Radar reports: `docs/radar.md`.
 
-fetch-news — self-hosted news aggregator and RSS proxy.  
-Stack: **Spring Boot 4 · Java 25 · SQLite · Ollama · Thymeleaf + HTMX + Alpine.js**
-
-See `CONTEXT.md` for full domain vocabulary and data flow.
-
----
-
-## Package Layout
+## Package map
 
 ```
-src/main/java/app/
-  FetchNewsApplication.java     — Spring Boot entry point
-  AppRuntime.java               — owns RouteRegistry, RouteConfigStore, CacheService; all routes registered here
-  AppConfig.java                — Spring beans (ObjectMapper, FeedStore, etc.)
-  AppInfo.java                  — version / build info
-  RssLiteResource.java          — public feed endpoint: /<route-path>?format=&limit=
-  ReaderResource.java           — reader UI endpoints: /reader, /reader/bookmarks, /reader/search
-  AdminResource.java            — route config UI endpoints at /index (HTMX fragments)
-  AdminTemplateRenderer.java    — Thymeleaf rendering helpers for /index templates
-  FeedFetcher.java              — fetch → persist → log; shared by endpoint and scheduler
-  FetchScheduler.java           — background scheduler, fires every 60 s
-
-app/core/
-  Feed.java, FeedItem.java      — immutable records: the canonical feed model
-  Route.java                    — path + RouteHandler + description + category
-  RouteHandler.java             — single-method interface: Feed handle(RouteContext)
-  RouteRegistry.java            — path-pattern matching (supports :param segments)
-  RouteMatch.java               — matched route + extracted path params
-  RouteContext.java             — request context: path, pathParams, queryParams, detailCacheTtl, feedUrl
-  RouteConfig.java              — persisted config record: enabled, TTLs, schedule, sourcePath, feedUrl
-  RouteConfigStore.java         — read/write route-config.json; merges with registry defaults
-  RouteError.java               — error codes with HTTP status
-  RouteException.java           — runtime exception carrying a RouteError
-  CacheService.java             — Caffeine TTL cache, two levels: route-feed and detail-page
-  FetchClient.java              — interface; DefaultFetchClient uses Java HttpClient with retry
-  FeedRenderer.java             — interface for RSS/JSON output
-  RssRenderer.java              — hand-written RSS 2.0 XML renderer
-  JsonRenderer.java             — JSON feed renderer
-
-app/routes/                     — one class per source
-  GenericRssRoute.java          — any RSS 2.0 or Atom URL (feedUrl from RouteContext)
-  HackerNewsRoute.java
-  GithubReleaseRoute.java
-  GithubIssuesRoute.java
-  GithubStarsRoute.java
-  ArxivRoute.java
-  BBCNewsRoute.java
-  RedditRoute.java
-  BilibiliVideoRoute.java
-  StackOverflowRoute.java
-  CnblogsRoute.java
-  TechCrunchRoute.java
-  WiredRoute.java
-  ZedBlogRoute.java
-  MritdRoute.java
-  MsDevOpsRoute.java
-  DiygodRoute.java
-  SspaiRoute.java
-  ThirtySixKrRoute.java
-  HuanqiuRoute.java
-  XinhuaRoute.java
-  Cctv7Route.java
-  ProductHuntRoute.java
-  RssProxyRoute.java
-
-app/store/
-  FeedStore.java                — SQLite: items, bookmarks, summaries, fetch_log, route_health
-  StoredItem.java, BookmarkedItem.java, FetchLogEntry.java, RouteHealth.java
-
-app/ai/
-  OllamaClient.java             — Ollama REST API wrapper
-  AiConfig.java, AiConfigStore.java — Ollama host/model config, persisted to ai-config.json
-  ArticleExtractor.java         — fetches full article HTML, extracts main text
-  ArticleSummarizer.java        — generates 2-3 sentence Chinese summary via Ollama
-
-app/reader/
-  ReaderItem.java, ReaderGroup.java — view models for the reader digest page
-
-app/support/
-  DateParser.java               — multi-format date parsing utility
-  FeedParser.java               — RSS/Atom XML parsing utility
-  Urls.java                     — URL resolution helpers
-  XmlEscaper.java               — XML text escaping
-
-src/main/resources/templates/
-  index/                        — route config UI (HTMX-driven, mounted at /index)
-  reader/                       — reader, bookmarks, search pages
+app/                 entry point and wiring only: AppRuntime (registry, config, topics), AppConfig (beans),
+                     BuiltInRoutes/CuratedRoutes (all routes), RssLiteResource (public feeds), FrontendAssetResource
+app/core/            Feed/FeedItem model, Route, Topic, RouteRegistry, RouteConfig(+Store), CredentialConfig(+Store),
+                     CacheService, FetchClient, RouteError/RouteException, RSS/JSON renderers
+app/routes/          one RouteHandler per source; GenericRssRoute serves /rss mounts
+app/fetch/           FeedFetcher (fetch → persist → log), FetchScheduler (60 s tick), FeedFetchCoordinator
+app/store/           FeedStore (the only SQLite access) and the modules sharing its connection and lock:
+                     AccountStore, ReadingState, SummaryQueue, PickStore, RadarStore, RadarJobs, … (feedStore.radar() …)
+app/admin/           everything under /index: AdminResource, AdminItemsResource, AI/Feishu/subscription
+                     settings pages, AdminTemplateRenderer; route blurbs come from resources/route-about.json
+app/reader/          everything under /reader: ReaderResource, ReaderSummaryResource, radar pages,
+                     ReaderTemplateRenderer, ReaderItems (builds every reader card) and view models
+app/ai/              OllamaClient (multi-protocol facade), ArticleSummarizer, ArticleExtractor, ArticleTriage
+app/auth/            AuthFilter, AuthService, login/account and user admin
+app/radar/           built-in daily reports (精选日报): RadarConfig.BUILT_IN, BuiltInProfiles, scoring pipeline
+app/feishu/          Feishu push
+app/subscriptions/   subscription catalogue behind /index#subscriptions
+app/support/         parsing, dates, URLs, cover images, XML escaping
+templates/           index/ (admin, HTMX), reader/, auth/, shared/
 ```
 
----
+## Core principles
 
-## Core Principles
+1. One source = one class implementing `RouteHandler`, registered explicitly in `BuiltInRoutes` (curated catalog feeds in `CuratedRoutes`) — nowhere else. No annotations, classpath scanning, reflection-heavy libraries or dynamic class loading.
+2. All outbound HTTP goes through the injected `FetchClient`; never build an `HttpClient` in a handler.
+3. `FeedFetcher` owns fetch → persist → log; never duplicate it in controllers, handlers or the scheduler.
+4. All database access goes through `app.store` — `FeedStore` and the modules it hands out. Tests may pass `null` for the store, so callers null-check.
+5. Keep controllers thin and handlers stateless — handler instances are singletons.
+6. Prefer source APIs and native RSS/Atom feeds; scrape HTML only when neither exists, after checking network traffic.
 
-1. One route = one class implementing `RouteHandler`. No annotations, no framework magic.
-2. All routes registered explicitly in `AppRuntime` — one place, fully visible.
-3. All outbound HTTP goes through `FetchClient` — consistent timeout, User-Agent, retry.
-4. Cache at two levels: route-feed (default 5 min) and detail-page (default 30 min).
-5. Prefer source APIs and native RSS/Atom feeds over HTML scraping.
-6. Use HTML scraping only when no stable API or feed exists.
-7. Do not hold shared mutable state in route handlers.
-8. `FeedFetcher` centralises fetch-persist-log — never duplicate this logic in controllers or the scheduler.
-9. No reflection-heavy libraries; no runtime classpath scanning; no dynamic class loading.
-10. Keep controllers thin — delegate all feed logic to core classes.
+## Adding a route
 
----
+1. Create `app/routes/MySourceRoute.java`; the constructor takes `FetchClient` (plus `CacheService` / `ObjectMapper` if needed).
+2. In `handle(RouteContext ctx)`: build the URL from `ctx.pathParam(...)`, fetch with `client.get(url)`, parse once with JSoup or Jackson, map entries to `FeedItem`, return `new Feed(title, link, description, items)`.
+3. Register in `BuiltInRoutes` (or `CuratedRoutes` for catalog feeds) with exactly one topic: `new Route("/my/:param", new MySourceRoute(defaultFetchClient), "Description", Topic.SOFTWARE)`. Topics are declared in `app.core.Topic`; regrouping old names goes into `Topic.RENAMED`.
 
-## Adding a Route
+To mount an external feed without code, create a `/rss` mount with a `feedUrl` in `/index` or `route-config.json`.
 
-1. Create `src/main/java/app/routes/MySourceRoute.java` implementing `RouteHandler`.
-2. Constructor accepts `FetchClient` (and `CacheService` / `ObjectMapper` if needed).
-3. In `handle(RouteContext ctx)`:
-   - Build upstream URL using `ctx.pathParam("name")` or `ctx.queryParam("name")`.
-   - Call `client.get(url)` to fetch.
-   - Parse with JSoup or Jackson.
-   - Map entries to `FeedItem` — include pubDate, author, real source link.
-   - Return `new Feed(title, link, description, items)`.
-4. Register in `AppRuntime` inside the `RouteRegistry` constructor call:
-   ```java
-   new Route("/my/path", new MySourceRoute(defaultFetchClient), "Description", "Category")
-   ```
-5. That's it — the route immediately appears in `/index` and is available for scheduling.
+## Route rules
 
-### Using the generic RSS route
+**Paths and parameters**
+- Paths start with `/`; variable segments are `:param`. Configure routes through path params, never route-specific query params.
+- `format` and `limit` are applied by `RssLiteResource` after the handler; do not implement them, pagination, "load more" or tag filtering in a handler. Fetch the first page only.
 
-To mount an external RSS 2.0 or Atom feed without writing a new handler:
+**Items**
+- Use only `FeedItem` fields: `title`, `link`, `description`, `pubDate`, `author`, `categories`, `image`. Omit absent values rather than passing `null` explicitly.
+- `link` is the real source URL and the RSS `<guid>`: unique per item, never the feed URL.
+- `description` is the main body HTML only — no title, author, date or tags. Tags go in `categories`.
+- `pubDate` comes from the source via `DateParser`; never fabricate it or fall back to `Instant.now()`.
+- `image` is the source's cover (thumbnail, og or list image). Leave it `null` when unknown — `FeedFetcher` falls back to the first image in `description`.
+- Do not trim or truncate titles; rendering does that.
+- The feed-level `link` is a human-readable page, not an API endpoint.
 
-1. In `/index`, create a mount alias with sourcePath `/rss` and set `feedUrl` to the target feed address.
-2. Or add directly to `route-config.json`:
-   ```json
-   "/my-blog": {
-     "sourcePath": "/rss",
-     "feedUrl": "https://example.com/feed.xml",
-     "enabled": true
-   }
-   ```
+**Fetching**
+- Fetching N detail pages: wrap each in `cacheService.getDetailPage(url, () -> client.get(url))` and fetch concurrently (`CompletableFuture` or virtual threads) rather than in a sequential loop.
+- Extract changing tokens or hashes from the upstream page instead of hardcoding them.
 
----
+**Errors** — throw `new RouteException(RouteError.X, "actionable message")` and let it propagate (do not re-wrap):
+`INVALID_PARAMETER` bad or missing input · `UPSTREAM_REQUEST_FAILED` network/HTTP failure · `UPSTREAM_INVALID_CONTENT` unparseable response · `EMPTY_FEED` zero items. Never return a fake message item to dodge the empty-feed check.
 
-## Route Rules
+## Route configuration
 
-**Do:**
-- Include real source links in every FeedItem.
-- Include `pubDate` when the source provides one.
-- Strip HTML from description; keep it focused on main content.
-- Use `CacheService` when fetching multiple detail pages per route.
+Fields are listed in `CONTEXT.md`. Two rules matter for code:
+- Copy a `RouteConfig` with its `with…` methods so fields added later are not dropped.
+- Ask `AppRuntime.isTemplate` whether a route is a template (path pattern or bare `/rss`); never compare display labels such as a fetch-strategy name.
+- Resolve a route's topic only through `AppRuntime.categoryOf` — it applies a route's own `category` before inheriting the source route's.
+- Build reader cards only through `ReaderItems`, so summary, excerpt, cover and labels stay consistent across pages.
 
-**Don't:**
-- Put title, author, date, or tags inside description.
-- Generate or fabricate dates.
-- Produce duplicate item links.
-- Add route-specific query parameters without an explicit request.
-- Implement pagination in route handlers.
+## Authentication
 
----
+- `AuthFilter` protects every endpoint. `/index/**` is admin-only; add other admin-only writes to `AuthFilter.classify`.
+- New static assets go into `FrontendAssetResource.ASSETS`, or the login page cannot load them.
+- Per-user data (bookmarks, read state, pick feedback) is keyed by `CurrentUser.id()`, never stored globally.
+- Never log or persist plain tokens; store `AuthTokens.hash(token)`. The one-time bootstrap log line in `AuthService` is the sole exception.
 
-## Common Parameters (handled by RssLiteResource)
+## AI layer
 
-| Parameter | Behaviour |
-|---|---|
-| `format=rss` | RSS 2.0 XML output (default) |
-| `format=json` | JSON output |
-| `limit=N` | Cap returned item count |
-
-Route handlers do not need to handle these — they are applied by the HTTP layer after the handler returns.
-
----
-
-## RouteConfig Fields
-
-Routes can be configured in `/index` or directly in `route-config.json`:
-
-| Field | Meaning |
-|---|---|
-| `enabled` | Whether the route is served |
-| `sourcePath` | Source route path (for mount aliases) |
-| `routeCacheTtlSeconds` | Feed cache TTL (default 300) |
-| `detailCacheTtlSeconds` | Detail-page cache TTL (default 1800) |
-| `scheduleMinutes` | Background fetch interval in minutes (0 = off) |
-| `scheduleCron` | Spring 6-field cron; takes precedence over scheduleMinutes |
-| `feedUrl` | External feed URL — only used when sourcePath is `/rss` |
-
----
-
-## Error Handling
-
-Throw `RouteException(RouteError.X, "message")` from handlers. The HTTP layer maps `RouteError` to the appropriate HTTP status. Standard errors:
-
-- `ROUTE_NOT_FOUND` — unknown path
-- `INVALID_PARAMETER` — bad or missing parameter (including blank feedUrl)
-- `UPSTREAM_ERROR` — network or HTTP failure
-- `PARSE_ERROR` — upstream returned unparseable content
-- `EMPTY_FEED` — handler produced zero items
-
----
-
-## Persistence Rules
-
-- All database access goes through `FeedStore`.
-- `FeedStore` is injected as `null` in unit tests — all callers must null-check before using it.
-- `FeedFetcher` persists items and writes fetch log entries — do not duplicate this in route handlers or controllers.
-
----
-
-## AI Layer
-
-- `OllamaClient` reads host and model from `AiConfigStore` on every call — config changes take effect without restart.
-- `ArticleSummarizer` generates summaries and caches them in SQLite — each item is summarised at most once.
-- `ArticleExtractor` fetches full article HTML when an item has no description; result also cached.
-- AI features are opt-in: disabled when `AiConfig.enabled()` is false.
-
----
+- AI is opt-in (`AiConfig.enabled()`). `OllamaClient` reads the active platform on every call; all generation shares one permit that admits interactive work before background work. Generations are background unless run inside `ollama.interactive()`.
+- Summaries are on demand. A reader's click is interactive and runs before background work; background tasks (from `autoSummary` routes or admin batch) expire after 24 h or once the item is read. Never enqueue every fetched item.
+- `ArticleTriage` labels at most three 必知 and three 精选 articles per category over 24 h by asking the model to choose within a batch, never by per-article scoring. Labels live in `item_picks`.
+- Readers rate labels 准/不准 (`pick_feedback`). Recent verdicts become prompt examples, and a rejected label is never re-applied to that article.
 
 ## Testing
 
-Test file: `src/test/java/app/RssLiteResourceTest.java`
-
-- Uses Spring Boot integration test with RestAssured.
-- Route config is written to `build/test-route-config.json` (set via system property).
-- Database is `build/test-feed-store.db`.
-- Add tests for: new route registry paths, edge-case RSS rendering, parameter handling.
-
----
+- JUnit 5 under `src/test/java`, mirroring the main packages; HTTP flows use Spring Boot + RestAssured (e.g. `RssLiteResourceTest`).
+- Gradle runs each test task in `build/test-runtime/<task>/` with its own database and config files and auth disabled; tests never touch the developer checkout.
+- Test new route paths, parameter handling and edge-case rendering. Send non-ASCII form values with `charset=UTF-8`.
+- Tests in package `app` that render pages or need a runtime use `TestPages.engine()` and `TestPages.runtime(configs, routes…)`.
+- Simulate storage failures at the database (rename a table, add a failing trigger) rather than subclassing stores.
 
 ## Style
 
-- Records for all data types where practical.
-- Small classes with clear, single responsibilities.
-- No comments explaining what the code does — only comments explaining non-obvious constraints or workarounds.
-- No multi-paragraph Javadoc on obvious methods.
-- English for all code and comments.
-
----
-
-## Route Review Checklist
-
-### Route Registration
-
-- Route path must start with `/` and use `:param` for variable segments (e.g., `/github/release/:owner/:repo`).
-- Register the route in `AppRuntime` — nowhere else.
-- Provide exactly ONE category string per `Route(...)` constructor call.
-- Do not create separate config or doc files for a route. Put the description in the `Route` constructor.
-- Do not add routes to any deprecated or legacy router file.
-
-### Code Style
-
-- Use `camelCase` for all variable and method names.
-- Use specific imports, not wildcard imports (`import app.core.*` is banned).
-- Keep imports sorted (IDE autoformat on save).
-- Avoid `String.format(...)` for plain strings with no substitution — use a string literal.
-- Parse a JSoup `Document` once, then reuse `$` (the `Document`). Do not call `Jsoup.parse()` again on the same content.
-- Define helper methods at class level, not inside `handle()` or inside loops.
-- Do not explicitly pass `null` for a `FeedItem` field that simply doesn't exist — `null` is the natural absent value; omit the assignment.
-- Use only fields defined on `FeedItem`: `title`, `link`, `description`, `pubDate`, `author`, `categories`. Do not add phantom fields.
-- Prefer `startsWith()` over `contains()` when checking a string prefix.
-- Combine optional-value chains with `||`-equivalent patterns (e.g., `Optional.ofNullable(a).orElse(b)` or ternary) rather than multi-step `if` blocks.
-- Use `try-with-resources` for anything that implements `Closeable`.
-
-### Data Handling
-
-- **Cache detail pages**: when a route fetches N article detail pages inside a loop, wrap each fetch in `cacheService.getDetailPage(url, () -> client.get(url))`.
-- **description** = main article body HTML only. Do NOT put `title`, `author`, `pubDate`, or tag text inside `description`.
-- **categories** = tags/labels extracted from the source. Do not embed them in `description`.
-- **pubDate**: always populate when the source provides a date. Use `DateParser` utilities.
-- Do NOT use `Instant.now()` as a fallback for `pubDate`. Leave it `null` if the source has no date.
-- Do not manually trim or truncate titles. The rendering layer handles that.
-- Every item's `link` must be unique — it is used as the RSS `<guid>`. Do not fall back to the feed URL.
-- The feed-level `link` in `new Feed(title, link, ...)` must point to a human-readable webpage, not an API endpoint.
-
-### API and Data Fetching
-
-- Prefer stable source APIs and native RSS/Atom feeds over HTML scraping. Check network traffic before writing a scraper.
-- Jackson's `ObjectMapper.readTree()` already parses JSON — do not call `JSON.parse` or double-decode.
-- Only fetch the first page of results. Do not add pagination or "load more" logic.
-- Do not add a `limit` query parameter to routes — `limit=N` is already handled by `RssLiteResource`.
-- Use path parameters (`:param`) for route configuration. Do not read route-specific options from query parameters.
-- Do not implement tag/category filtering inside a route handler. Users apply filters via common parameters.
-- If an API requires a token or hash that changes over time, extract it dynamically from the upstream page rather than hardcoding it.
-- All outbound HTTP must go through the injected `FetchClient`. Never construct a raw `HttpClient` inside a route handler.
-
-### Error Handling
-
-- Throw `new RouteException(RouteError.X, "clear message")` with an actionable message that explains what went wrong.
-- Use `INVALID_PARAMETER` for missing/malformed path params; `UPSTREAM_REQUEST_FAILED` for HTTP/network errors; `UPSTREAM_INVALID_CONTENT` for unparseable responses; `EMPTY_FEED` when the handler produces zero items.
-- Do not catch `RouteException` and re-wrap it — let it propagate.
-- Do not return an empty item list with a fake message item to avoid the empty-feed check.
-
-### Concurrency
-
-- Avoid sequential `client.get()` calls inside a loop when items can be fetched concurrently. Prefer `CompletableFuture` + `CacheService.getDetailPage()` or a structured virtual-thread approach.
-- Do not share mutable state between route handler invocations. `RouteHandler` instances are singletons.
+- No source file over 500 lines (Java, templates, JS, CSS; vendored `*.min.js` excepted). `SourceSizeTest` enforces it — split by responsibility, not by line count.
+- New HTTP endpoints go into the package of their audience: `app.admin` for `/index`, `app.reader` for `/reader`; domain logic stays in its feature package (`app.ai`, `app.radar`, …).
+- Records for data types; small single-purpose classes; specific, sorted imports (no wildcards, no inline fully-qualified names); `camelCase`.
+- Format like the surrounding code: one statement per line, spaces around operators, lines ≤ 120 columns. Write prompts and multi-line SQL as text blocks.
+- Comments only for non-obvious constraints or workarounds; no multi-paragraph Javadoc on obvious methods. English for code and comments.
+- Helpers live at class level, not inside `handle()` or loops. Use `try-with-resources` for `Closeable`s, `startsWith()` for prefix checks, and string literals instead of `String.format` without substitutions.

@@ -6,11 +6,16 @@
   <title>收藏夹</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/admin.css">
+  <link rel="stylesheet" href="/admin-controls.css">
+  <link rel="stylesheet" href="/admin-views.css">
+  <link rel="stylesheet" href="/reader.css">
+  <link rel="stylesheet" href="/briefing.css">
   <link rel="stylesheet" href="/article.css">
   <script src="/htmx.min.js"></script>
   <script defer src="/ui.js"></script>
   <script defer src="/article.js"></script>
   <script defer src="/reader.js"></script>
+  <script defer src="/reader-page.js"></script>
   <link rel="stylesheet" href="/ui-controls.css">
 </head>
 <body class="reader-page">
@@ -26,8 +31,9 @@
     <a href="/reader/radar"><svg th:replace="~{shared/icons :: icon('radar')}"></svg><span>精选日报</span></a>
     <a href="/reader/bookmarks" aria-current="page"><svg th:replace="~{shared/icons :: icon('bookmark')}"></svg><span>收藏</span></a>
     <a href="/reader/search"><svg th:replace="~{shared/icons :: icon('search')}"></svg><span>搜索</span></a>
-    <a href="/index#subscriptions"><svg th:replace="~{shared/icons :: icon('rss')}"></svg><span>订阅来源</span></a>
-    <a href="/index" class="reader-nav-admin"><svg th:replace="~{shared/icons :: icon('settings')}"></svg><span>管理</span></a>
+    <a th:if="${viewer == null or viewer.admin()}" href="/index#subscriptions"><svg th:replace="~{shared/icons :: icon('rss')}"></svg><span>订阅来源</span></a>
+    <a th:if="${viewer == null or viewer.admin()}" href="/index" class="reader-nav-admin"><svg th:replace="~{shared/icons :: icon('settings')}"></svg><span>管理</span></a>
+    <a href="/account" class="reader-nav-account" th:if="${viewer != null}" th:classappend="${!viewer.admin()} ? ' reader-nav-admin'"><svg th:replace="~{shared/icons :: icon('user')}"></svg><span th:text="${viewer.name()}">账户</span></a>
   </nav>
 
 
@@ -46,7 +52,7 @@
     <p>在速览中点击书签图标，即可随时回来继续阅读。</p>
     <div class="reader-source-empty-actions">
       <a href="/reader" class="reader-empty-action">去速览发现内容 →</a>
-      <a href="/index#subscriptions" class="reader-empty-action">选择订阅来源</a>
+      <a th:if="${viewer == null or viewer.admin()}" href="/index#subscriptions" class="reader-empty-action">选择订阅来源</a>
     </div>
   </div>
 

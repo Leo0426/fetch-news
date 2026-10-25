@@ -11,6 +11,7 @@ import app.core.Route;
 import app.core.RouteConfig;
 import app.core.RouteConfigStore;
 import app.core.RouteRegistry;
+import app.fetch.FetchScheduler;
 import app.routes.GenericRssRoute;
 import app.routes.OpenAiNewsRoute;
 import app.store.FeedStore;
@@ -169,7 +170,7 @@ class RssLiteResourceUnitTest {
 
         assertEquals(200, response.getStatusCode().value());
         assertTrue(response.getHeaders().getContentType().toString().contains("rss+xml"));
-        assertTrue(response.getBody().toString().contains("<rss version=\"2.0\">"));
+        assertTrue(response.getBody().toString().contains("<rss version=\"2.0\""));
     }
 
     /**

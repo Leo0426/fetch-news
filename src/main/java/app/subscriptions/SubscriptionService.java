@@ -1,12 +1,12 @@
 package app.subscriptions;
 
 import app.AppRuntime;
-import app.FetchProgress;
-import app.FetchScheduler;
 import app.core.Route;
 import app.core.RouteConfig;
 import app.core.RouteError;
 import app.core.RouteException;
+import app.fetch.FetchProgress;
+import app.fetch.FetchScheduler;
 import app.store.FeedRefreshState;
 import app.store.FeedStore;
 import app.store.FetchLogEntry;
@@ -74,9 +74,7 @@ public class SubscriptionService {
                     : scheduleMinutes == null ? recommendation(route) : scheduleMinutes;
             if (!config.hasSchedule() && (minutes < 1 || minutes > 43200))
                 throw new IllegalArgumentException("更新间隔需为 1–43200 分钟");
-            runtime.routeConfigStore().save(new RouteConfig(path, config.sourcePath(), true,
-                    config.routeCacheTtlSeconds(), config.detailCacheTtlSeconds(), minutes,
-                    config.scheduleCron(), config.feedUrl(), config.alias()));
+            runtime.routeConfigStore().save(config.withEnabled(true).withScheduleMinutes(minutes));
             scheduler.triggerFetch(path);
         }
     }
@@ -85,9 +83,7 @@ public class SubscriptionService {
         synchronized (runtime.routeConfigStore()) {
             RouteConfig config = configuredSource(path);
             if (!config.enabled()) return;
-            runtime.routeConfigStore().save(new RouteConfig(path, config.sourcePath(), false,
-                    config.routeCacheTtlSeconds(), config.detailCacheTtlSeconds(), config.scheduleMinutes(),
-                    config.scheduleCron(), config.feedUrl(), config.alias()));
+            runtime.routeConfigStore().save(config.withEnabled(false));
         }
     }
 
@@ -138,7 +134,7 @@ public class SubscriptionService {
             category = Objects.requireNonNullElse(route.category(), "自定义");
             if (route.path().contains(":")) description = "已配置的" + category + "订阅，可在高级设置中调整来源。";
             recommended = recommendation(route);
-            if (feedStore != null) articles = feedStore.countItems(config.path());
+            if (feedStore != null) articles = feedStore.items().countItems(config.path());
             status = status(config);
         } catch (RouteException | IllegalArgumentException e) {
             status = new Status("error", "请检查来源配置", e.getMessage(), null, false);
@@ -157,7 +153,7 @@ public class SubscriptionService {
             return new Status("running", "正在抓取内容…", "完成后会自动显示结果，也可以稍后回到此页查看。", time(progress.startedAt()), true);
         String feedUrl = runtime.rssFeedUrl(config);
         FeedRefreshState refresh = feedStore == null || feedUrl == null ? null
-                : feedStore.loadFeedRefreshState(config.path(), feedUrl);
+                : feedStore.fetchState().loadFeedRefreshState(config.path(), feedUrl);
         if (refresh != null && refresh.nextRetryAt() != null && refresh.nextRetryAt().isAfter(Instant.now()))
             return waiting(refresh.nextRetryAt(), refresh.lastError(), refresh.lastCheckedAt(), config);
         if (progress != null && progress.state() == FetchProgress.State.DEFERRED
@@ -165,7 +161,7 @@ public class SubscriptionService {
             return waiting(progress.retryAt(), progress.error(), progress.finishedAt(), config);
         if (refresh != null && refresh.lastError() != null)
             return new Status("error", "当前地址上次抓取失败", refresh.lastError(), time(refresh.lastCheckedAt()), false);
-        FetchLogEntry latest = feedStore == null ? null : feedStore.latestFetchLog(config.path());
+        FetchLogEntry latest = feedStore == null ? null : feedStore.fetchState().latestFetchLog(config.path());
         if (progress != null && (progress.logId() < 0 || latest == null || latest.id() <= progress.logId())) {
             switch (progress.state()) {
                 case FAILED -> { return new Status("error", "抓取失败", progress.error(), time(progress.finishedAt()), false); }

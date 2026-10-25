@@ -13,50 +13,82 @@ import java.time.Clock;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Function;
 
 public final class RadarTestEnvironment implements AutoCloseable {
-    public final ObjectMapper mapper=new ObjectMapper();
+    public final ObjectMapper mapper = new ObjectMapper();
     public final FeedStore store;
     public final AiConfigStore ai;
-    public final RadarConfigStore config;
-    public final ProfileStore profiles;
+    public final RadarConfig config;
+    public final BuiltInProfiles profiles;
     public final RadarService service;
     public final RadarWorker worker;
     public final HttpServer server;
-    public final AtomicInteger requests=new AtomicInteger();
-    public volatile String blocksResponse="{\"blocks\":{\"summary\":[\"摘要\"],\"importance\":[\"价值\"]}}";
-    public volatile Runnable onBlocks=()->{};
-    public volatile String scoreResponse="{\"score\":8,\"reason\":\"Useful\",\"summary\":\"Evidence\",\"tags\":[]}";
+    public final AtomicInteger requests = new AtomicInteger();
+    public volatile String blocksResponse = "{\"blocks\":{\"summary\":[\"摘要\"],\"importance\":[\"价值\"]}}";
+    public volatile Runnable onBlocks = () -> {};
+    public volatile String scoreResponse = "{\"score\":8,\"reason\":\"Useful\",\"summary\":\"Evidence\",\"tags\":[]}";
 
-    public volatile java.util.function.Function<String,String> scoring=p->scoreResponse;
+    public volatile Function<String, String> scoring = p -> scoreResponse;
 
-    public RadarTestEnvironment(Path directory,String configJson) throws Exception {
-        store=new FeedStore(directory.resolve("feed.db"),mapper);
-        ai=new AiConfigStore(directory.resolve("ai.json"),mapper);
-        config=new RadarConfigStore(directory.resolve("radar.json"),mapper);
-        config.save(mapper.readValue(configJson,RadarConfig.class));
-        profiles=new ProfileStore(directory.resolve("profiles"),mapper);
-        server=HttpServer.create(new InetSocketAddress("127.0.0.1",0),0);
-        server.createContext("/",e->{
+    public RadarTestEnvironment(Path directory, String configJson) throws Exception {
+        store = new FeedStore(directory.resolve("feed.db"), mapper);
+        ai = new AiConfigStore(directory.resolve("ai.json"), mapper);
+        config = mapper.readValue(configJson, RadarConfig.class);
+        profiles = new BuiltInProfiles(mapper);
+        server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/", e -> {
             requests.incrementAndGet();
-            var input=mapper.readTree(e.getRequestBody());
-            String prompt=input.has("messages") ? input.path("messages").path(0).path("content").asText() : input.path("prompt").asText();
-            String output=prompt.startsWith("TASK: score") ? scoring.apply(prompt) : prompt.startsWith("TASK: dedup") ? "{\"match\":\"distinct\"}" : prompt.startsWith("TASK: route") ? "{\"profile\":\"tech-news\"}" : blocksResponse;
-            if(prompt.startsWith("TASK: blocks")) onBlocks.run();
-            Object envelope=input.has("messages") ? e.getRequestURI().getPath().endsWith("messages")
-                    ? Map.of("content",java.util.List.of(Map.of("type","text","text",output)),"stop_reason","end_turn")
-                    : Map.of("choices",java.util.List.of(Map.of("message",Map.of("content",output),"finish_reason","stop")))
-                    : Map.of("response",output);
-            byte[] body=mapper.writeValueAsBytes(envelope);
-            e.sendResponseHeaders(200,body.length);try(var out=e.getResponseBody()){out.write(body);}
-        }); server.start();
-        ai.save(new AiConfig("http://127.0.0.1:"+server.getAddress().getPort(),"fake",true));
-        var client=new OllamaClient(ai,mapper);
-        service=new RadarService(store,config,profiles,ai,()->Map.of("/a","AI"));
-        worker=new RadarWorker(store,config,ai,client,null,mapper,Clock.systemUTC());
+            var input = mapper.readTree(e.getRequestBody());
+            String prompt = input.has("messages")
+                    ? input.path("messages").path(0).path("content").asText()
+                    : input.path("prompt").asText();
+            String output = prompt.startsWith("TASK: score")
+                    ? scoring.apply(prompt)
+                    : prompt.startsWith("TASK: dedup")
+                            ? "{\"match\":\"distinct\"}"
+                            : prompt.startsWith("TASK: route") ? "{\"profile\":\"tech-news\"}" : blocksResponse;
+            if (prompt.startsWith("TASK: blocks")) onBlocks.run();
+            Object envelope = input.has("messages")
+                    ? e.getRequestURI().getPath().endsWith("messages")
+                            ? Map.of(
+                                    "content",
+                                    List.of(Map.of("type", "text", "text", output)),
+                                    "stop_reason",
+                                    "end_turn")
+                            : Map.of(
+                                    "choices",
+                                    List.of(Map.of("message", Map.of("content", output), "finish_reason", "stop")))
+                    : Map.of("response", output);
+            byte[] body = mapper.writeValueAsBytes(envelope);
+            e.sendResponseHeaders(200, body.length);
+            try (var out = e.getResponseBody()) {
+                out.write(body);
+            }
+        });
+        server.start();
+        ai.save(new AiConfig("http://127.0.0.1:" + server.getAddress().getPort(), "fake", true));
+        var client = new OllamaClient(ai, mapper);
+        service = new RadarService(store, config, profiles, ai, () -> Map.of("/a", "AI"));
+        worker = new RadarWorker(store, config, ai, client, null, mapper, Clock.systemUTC());
     }
+
     public void save(String link) throws Exception {
-        store.saveItems("/a",List.of(new FeedItem("Technical event "+link,link,"Concrete evidence and engineering details. ".repeat(20),null,null,List.of())));
+        store.saveItems(
+                "/a",
+                List.of(new FeedItem(
+                        "Technical event " + link,
+                        link,
+                        "Concrete evidence and engineering details. ".repeat(20),
+                        null,
+                        null,
+                        List.of())));
     }
-    @Override public void close() throws Exception { worker.close(); server.stop(0); store.close(); }
+
+    @Override
+    public void close() throws Exception {
+        worker.close();
+        server.stop(0);
+        store.close();
+    }
 }

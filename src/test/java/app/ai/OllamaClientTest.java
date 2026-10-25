@@ -11,6 +11,7 @@ import java.nio.file.Path;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -38,14 +39,14 @@ class OllamaClientTest {
             config.save(new AiConfig(host, "first", true));
             var client = new OllamaClient(config, new ObjectMapper());
             var result = executor.submit(() -> client.generateWithMetadata("test"));
-            org.junit.jupiter.api.Assertions.assertTrue(entered.await(5, TimeUnit.SECONDS));
+            Assertions.assertTrue(entered.await(5, TimeUnit.SECONDS));
             config.save(new AiConfig(host, "second", true));
             release.countDown();
             var generated = result.get(5, TimeUnit.SECONDS);
             assertEquals("摘要", generated.text());
             assertEquals("first", generated.model());
             assertEquals(null, generated.metrics().inputTokens());
-            org.junit.jupiter.api.Assertions.assertTrue(generated.metrics().elapsedMillis() >= 0);
+            Assertions.assertTrue(generated.metrics().elapsedMillis() >= 0);
             config.save(new AiConfig(host, "second", false));
             assertThrows(IllegalStateException.class, () -> client.generateWithMetadata("disabled"));
         } finally {

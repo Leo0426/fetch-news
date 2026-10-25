@@ -46,7 +46,7 @@ class ArticleExtractorTest {
             });
             assertEquals(original, extractor.extract(item()));
             assertEquals(original, extractor.extract(item()));
-            assertEquals(original, store.loadExtract(item().link()));
+            assertEquals(original, store.aiCache().loadExtract(item().link()));
             assertEquals(1, fetches.get());
             assertEquals("html", extractionModel(database));
         }
@@ -60,7 +60,7 @@ class ArticleExtractorTest {
             var extractor = new ArticleExtractor(null, store, url -> "<article>" + original + "</article>");
             String content = extractor.extract(item());
             assertEquals("𠀀".repeat(4000), content);
-            assertEquals(content, store.loadExtract(item().link()));
+            assertEquals(content, store.aiCache().loadExtract(item().link()));
         }
     }
 
@@ -77,7 +77,7 @@ class ArticleExtractorTest {
 
             String text = extractor.extract(item());
             assertEquals(first + "\n\n" + second, text);
-            assertEquals(text, store.loadExtract(item().link()));
+            assertEquals(text, store.aiCache().loadExtract(item().link()));
         }
     }
 
@@ -129,7 +129,7 @@ class ArticleExtractorTest {
             });
             try {
                 assertThrows(InterruptedException.class, () -> extractor.extract(item()));
-                assertNull(store.loadExtract(item().link()));
+                assertNull(store.aiCache().loadExtract(item().link()));
             } finally { Thread.interrupted(); }
         }
         assertThrows(IllegalStateException.class, () -> new ArticleExtractor(null, null,
@@ -156,8 +156,8 @@ class ArticleExtractorTest {
             service.request(item().link());
             service.processNext();
             assertEquals("success", service.progress(item().link()).state());
-            assertEquals("基于原文的摘要", store.loadSummary(item().link()));
-            assertEquals(original, store.loadExtract(item().link()));
+            assertEquals("基于原文的摘要", store.aiCache().loadSummary(item().link()));
+            assertEquals(original, store.aiCache().loadExtract(item().link()));
             assertEquals(1, prompts.size());
             assertTrue(prompts.getFirst().contains("2-3 句摘要"));
             assertTrue(prompts.getFirst().contains(original));

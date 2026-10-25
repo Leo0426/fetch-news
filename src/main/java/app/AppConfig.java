@@ -3,22 +3,34 @@ package app;
 import app.ai.AiConfigStore;
 import app.ai.ArticleExtractor;
 import app.ai.ArticleSummarizer;
+import app.ai.ArticleTriage;
 import app.ai.OllamaClient;
+import app.auth.AuthFilter;
+import app.auth.AuthService;
+import app.core.RouteConfig;
+import app.core.Topic;
 import app.feishu.FeishuConfigStore;
 import app.feishu.FeishuPusher;
-import app.store.FeedStore;
-import app.radar.ProfileStore;
-import app.radar.RadarConfigStore;
-import app.radar.RadarService;
+import app.radar.BuiltInProfiles;
+import app.radar.RadarConfig;
 import app.radar.RadarScheduler;
+import app.radar.RadarService;
 import app.radar.RadarWorker;
+import app.store.FeedStore;
+import app.support.SourceLabels;
 import com.fasterxml.jackson.databind.ObjectMapper;
-
 import java.nio.file.Path;
 import java.sql.SQLException;
-
+import java.time.Clock;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.Ordered;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
@@ -42,7 +54,31 @@ public class AppConfig {
     @Bean(destroyMethod = "close")
     public FeedStore feedStore(ObjectMapper objectMapper) throws SQLException {
         Path dbPath = Path.of(System.getProperty("fetch-news.db", "feed-store.db"));
-        return new FeedStore(dbPath, objectMapper);
+        FeedStore store = new FeedStore(dbPath, objectMapper);
+        int covers = store.backfillCoverImages();
+        if (covers > 0) LoggerFactory.getLogger(AppConfig.class).info("covers backfilled for {} stored items", covers);
+        return store;
+    }
+
+    /**
+     * Token authentication. Enabled unless {@code fetch-news.auth.enabled=false}
+     * ({@code FETCH_NEWS_AUTH_ENABLED=false}); {@code FETCH_NEWS_ADMIN_TOKEN} pins the admin token.
+     */
+    @Bean
+    public AuthService authService(FeedStore feedStore,
+                                   @Value("${fetch-news.auth.enabled:true}") boolean enabled,
+                                   @Value("${fetch-news.admin-token:}") String adminToken) throws SQLException {
+        AuthService service = new AuthService(feedStore, enabled);
+        service.bootstrap(adminToken);
+        return service;
+    }
+
+    @Bean
+    public FilterRegistrationBean<AuthFilter> authFilter(AuthService authService) {
+        FilterRegistrationBean<AuthFilter> registration = new FilterRegistrationBean<>(new AuthFilter(authService));
+        registration.setOrder(Ordered.HIGHEST_PRECEDENCE + 10);
+        registration.addUrlPatterns("/*");
+        return registration;
     }
 
     /**
@@ -50,7 +86,7 @@ public class AppConfig {
      */
     @Bean
     public AiConfigStore aiConfigStore(ObjectMapper objectMapper) {
-        java.nio.file.Path path = java.nio.file.Path.of(
+        Path path = Path.of(
                 System.getProperty("fetch-news.ai-config", "ai-config.json"));
         return new AiConfigStore(path, objectMapper);
     }
@@ -82,12 +118,32 @@ public class AppConfig {
     }
 
     /**
+     * Article triage — picks each category's must-know and worthwhile articles in the background.
+     */
+    @Bean(initMethod = "start", destroyMethod = "close")
+    public ArticleTriage articleTriage(OllamaClient ollamaClient, FeedStore feedStore, AiConfigStore config,
+                                       AppRuntime runtime, ObjectMapper objectMapper) {
+        return new ArticleTriage(ollamaClient, feedStore, config, new ArticleTriage.Routes() {
+            @Override public String category(String routePath) {
+                return runtime.categoryOf(routePath);
+            }
+
+            @Override public String sourceLabel(String routePath) {
+                RouteConfig route = runtime.routeConfigStore().get(routePath);
+                return route.alias() != null ? route.alias() : SourceLabels.shortName(routePath);
+            }
+        }, objectMapper);
+    }
+
+    /**
      * Feishu config store — persists webhook URL and settings to {@code feishu-config.json}.
      */
     @Bean
     public FeishuConfigStore feishuConfigStore(ObjectMapper objectMapper) {
         Path path = Path.of(System.getProperty("fetch-news.feishu-config", "feishu-config.json"));
-        return new FeishuConfigStore(path, objectMapper);
+        var renamed = new HashMap<String, List<String>>();
+        Topic.RENAMED.forEach((name, topics) -> renamed.put(name, topics.stream().map(Topic::label).toList()));
+        return new FeishuConfigStore(path, objectMapper, renamed);
     }
 
     /**
@@ -98,51 +154,31 @@ public class AppConfig {
         return new FeishuPusher(feishuConfigStore, objectMapper);
     }
     @Bean
-    public RadarConfigStore radarConfigStore(ObjectMapper mapper) throws java.io.IOException {
-        return new RadarConfigStore(Path.of(System.getProperty("fetch-news.radar-config", "radar-config.json")), mapper);
+    public RadarConfig radarConfig() {
+        return RadarConfig.BUILT_IN;
     }
 
     @Bean
-    public ProfileStore profileStore(ObjectMapper mapper) throws java.io.IOException {
-        return new ProfileStore(Path.of(System.getProperty("fetch-news.radar-profiles", "radar-profiles")), mapper);
-    }
-
-    @Bean
-    public RadarService radarService(FeedStore store, RadarConfigStore config, ProfileStore profiles,
-                                     AiConfigStore ai, AppRuntime runtime) {
-        return new RadarService(store, config, profiles, ai, () -> {
-            java.util.Map<String,String> categories = new java.util.HashMap<>();
-            var registered = runtime.routeRegistry().categories();
+    public RadarService radarService(FeedStore store, RadarConfig config, AiConfigStore ai, AppRuntime runtime,
+                                     ObjectMapper mapper) {
+        return new RadarService(store, config, new BuiltInProfiles(mapper), ai, () -> {
+            Map<String,String> categories = new HashMap<>();
             for (var route : runtime.routeConfigStore().list(runtime.routeRegistry().paths())) {
-                String source = route.sourcePath() == null ? route.path() : route.sourcePath();
-                for (var entry : registered.entrySet()) {
-                    String pattern = entry.getKey().replaceAll(":[^/]+", "[^/]+");
-                    if (source.matches(pattern)) { categories.put(route.path(), entry.getValue()); break; }
-                }
+                categories.put(route.path(), runtime.categoryOf(route));
             }
             return categories;
         });
     }
 
     @Bean(initMethod = "start", destroyMethod = "close")
-    public RadarWorker radarWorker(FeedStore store, RadarConfigStore config, AiConfigStore ai,
+    public RadarWorker radarWorker(FeedStore store, RadarConfig config, AiConfigStore ai,
                                    OllamaClient client, ArticleExtractor extractor, ObjectMapper mapper) throws SQLException {
-        return new RadarWorker(store, config, ai, client, extractor, mapper, java.time.Clock.systemUTC());
+        return new RadarWorker(store, config, ai, client, extractor, mapper, Clock.systemUTC());
     }
 
     @Bean
-    public RadarScheduler radarScheduler(RadarConfigStore config, RadarService service) {
-        return new RadarScheduler(config, service, java.time.Clock.systemUTC());
-    }
-
-    @Bean(initMethod = "start", destroyMethod = "close")
-    public app.radar.eval.EvaluationService evaluationService(FeedStore store, AiConfigStore ai, OllamaClient client, ObjectMapper mapper) throws Exception {
-        return new app.radar.eval.EvaluationService(store, ai, client, mapper);
-    }
-
-    @Bean(initMethod = "start", destroyMethod = "close")
-    public app.feishu.RadarDeliveryService radarDeliveryService(FeedStore store, FeishuConfigStore config, ObjectMapper mapper) throws Exception {
-        return new app.feishu.RadarDeliveryService(store, config, mapper);
+    public RadarScheduler radarScheduler(RadarConfig config, RadarService service) {
+        return new RadarScheduler(config, service, Clock.systemUTC());
     }
 
     @Bean(initMethod = "start", destroyMethod = "close")

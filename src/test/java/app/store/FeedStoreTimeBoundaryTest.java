@@ -100,8 +100,8 @@ class FeedStoreTimeBoundaryTest {
 
     private static List<String> loadLinksSince(FeedStore store, boolean multipleRoutes, String since) throws Exception {
         List<StoredItem> items = multipleRoutes
-                ? store.loadNewItemsSinceForRoutes(List.of(ROUTE, "/missing"), Instant.parse(since))
-                : store.loadNewItemsSince(ROUTE, Instant.parse(since));
+                ? store.items().loadNewItemsSinceForRoutes(List.of(ROUTE, "/missing"), Instant.parse(since))
+                : store.items().loadNewItemsSince(ROUTE, Instant.parse(since));
         return items.stream().map(StoredItem::link).toList();
     }
 

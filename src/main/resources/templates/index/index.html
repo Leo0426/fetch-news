@@ -6,14 +6,18 @@
   <title>路由控制台</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/admin.css">
+  <link rel="stylesheet" href="/admin-controls.css">
+  <link rel="stylesheet" href="/admin-views.css">
+  <link rel="stylesheet" href="/reader.css">
+  <link rel="stylesheet" href="/briefing.css">
   <script src="/htmx.min.js"></script>
   <script defer src="/ui.js"></script>
   <script defer src="/admin.js"></script>
+  <script defer src="/ai-settings.js"></script>
   <script defer src="/alpine.min.js"></script>
-  <link rel="stylesheet" href="/radar-admin.css">
   <link rel="stylesheet" href="/ui-controls.css">
 </head>
-<body x-data="appShell()">
+<body x-data="appShell()" th:attr="data-feed-key=${viewer != null ? viewer.feedKey() : null}">
   <a class="skip-link" href="#main-content">跳至主要内容</a>
 
   <div class="app" id="app-shell">
@@ -65,10 +69,13 @@
           <svg th:replace="~{shared/icons :: icon('ai')}"></svg>
           AI 设置
         </a>
-      <a class="nav-item" href="/index#radar" @click="navigate($event,'radar')" :class="{active:activePage==='radar'}" :aria-current="activePage === 'radar' ? 'page' : null"><svg th:replace="~{shared/icons :: icon('radar')}"></svg>新闻雷达配置</a>
-      <a class="nav-item" href="/index#radar-tasks" @click="navigate($event,'radar-tasks')" :class="{active:activePage==='radar-tasks'}" :aria-current="activePage === 'radar-tasks' ? 'page' : null"><svg th:replace="~{shared/icons :: icon('tasks')}"></svg>AI 任务</a>
-      <a class="nav-item" href="/index#radar-evaluation" @click="navigate($event,'radar-evaluation')" :class="{active:activePage==='radar-evaluation'}" :aria-current="activePage === 'radar-evaluation' ? 'page' : null"><svg th:replace="~{shared/icons :: icon('chart')}"></svg>模型评测</a>
-      <a class="nav-item" href="/index#radar-delivery" @click="navigate($event,'radar-delivery')" :class="{active:activePage==='radar-delivery'}" :aria-current="activePage === 'radar-delivery' ? 'page' : null"><svg th:replace="~{shared/icons :: icon('send')}"></svg>日报投递</a>
+        <a class="nav-item" :class="{ active: activePage === 'users' }"
+           :aria-current="activePage === 'users' ? 'page' : null"
+           @click="navigate($event, 'users')"
+           href="/index#users">
+          <svg th:replace="~{shared/icons :: icon('user')}"></svg>
+          访问令牌
+        </a>
         <a class="nav-item" :class="{ active: activePage === 'credentials' }"
            :aria-current="activePage === 'credentials' ? 'page' : null"
            @click="navigate($event, 'credentials')"
@@ -150,6 +157,7 @@
         </div>
         <div class="topbar-actions">
           <a class="topbar-reader-link" href="/reader">开始阅读 <span aria-hidden="true">↗</span></a>
+          <a class="topbar-reader-link" href="/account" th:if="${viewer != null}" th:text="${viewer.name()}">账户</a>
           <span class="ver-tag" th:text="'v' + ${version}">v0.1.0</span>
         </div>
       </header>

@@ -82,7 +82,8 @@ public final class FeedParser {
                 desc,
                 DateParser.parseDateOrNull(pubDate),
                 author,
-                cats);
+                cats,
+                CoverImages.fromFeedEntry(item, baseUrl));
     }
 
     // ── Atom ─────────────────────────────────────────────────────────────────
@@ -125,7 +126,8 @@ public final class FeedParser {
                 desc,
                 DateParser.parseInstantOrNull(published),
                 author,
-                cats);
+                cats,
+                CoverImages.fromFeedEntry(entry, baseUrl));
     }
 
     // ── helpers ──────────────────────────────────────────────────────────────

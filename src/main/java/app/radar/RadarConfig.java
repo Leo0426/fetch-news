@@ -7,6 +7,10 @@ import java.util.Map;
 import java.util.Set;
 import org.springframework.scheduling.support.CronExpression;
 
+/**
+ * How a radar report is produced. Reports always use {@link #BUILT_IN}; the record stays a full value because every
+ * run stores a snapshot of the configuration it used.
+ */
 public record RadarConfig(boolean enabled, String zoneId, String scheduleCron, String defaultProfile,
                           int candidateLimit, int maxItems, int maxModelCalls, int runTimeoutMinutes,
                           Map<String, ProfileSettings> profileSettings, Map<String, SourceBinding> sources,
@@ -37,9 +41,10 @@ public record RadarConfig(boolean enabled, String zoneId, String scheduleCron, S
         }
     }
 
-    public static RadarConfig defaults() {
-        return new RadarConfig(false, null, null, null, 0, 0, 0, 0, null, null, null, 0);
-    }
+    /** Runs whenever AI is enabled: every source scored by the tech-news Profile, daily at 08:00 for the day before. */
+    public static final RadarConfig BUILT_IN = new RadarConfig(
+            true, "Asia/Shanghai", "0 0 8 * * *", "tech-news", 200, 20, 500, 60,
+            Map.of("tech-news", new ProfileSettings(7.0, true)), Map.of(), Map.of(), 0);
 
     public ProfileSettings settings(String profile) {
         return profileSettings.getOrDefault(profile, new ProfileSettings(7.0, true));

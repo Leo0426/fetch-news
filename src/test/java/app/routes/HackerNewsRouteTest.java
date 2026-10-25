@@ -1,14 +1,13 @@
 package app.routes;
 
+import static org.junit.jupiter.api.Assertions.*;
+
 import app.core.Feed;
 import app.core.RouteContext;
 import app.core.RouteError;
 import app.core.RouteException;
-import org.junit.jupiter.api.Test;
-
 import java.util.Map;
-
-import static org.junit.jupiter.api.Assertions.*;
+import org.junit.jupiter.api.Test;
 
 class HackerNewsRouteTest {
 

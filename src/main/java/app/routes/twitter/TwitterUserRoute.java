@@ -1,7 +1,7 @@
 package app.routes.twitter;
 
-import app.CredentialConfigStore;
 import app.core.CacheService;
+import app.core.CredentialConfigStore;
 import app.core.Feed;
 import app.core.FeedItem;
 import app.core.FetchClient;
@@ -11,6 +11,7 @@ import app.core.RouteException;
 import app.core.RouteHandler;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -112,7 +113,7 @@ public class TwitterUserRoute implements RouteHandler {
         if (isRetweet) {
             JsonNode rtUser = rtTweet.path("core").path("user_results").path("result").path("legacy");
             if (!rtUser.isMissingNode()) {
-                ((com.fasterxml.jackson.databind.node.ObjectNode) rtLegacy).set("user", rtUser);
+                ((ObjectNode) rtLegacy).set("user", rtUser);
             }
         }
 

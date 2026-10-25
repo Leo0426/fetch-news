@@ -2,7 +2,9 @@ package app.ai;
 
 import app.core.FeedItem;
 import app.store.FeedStore;
+import app.store.SummaryQueue;
 import app.store.SummaryStatus;
+import java.io.IOException;
 import java.sql.SQLException;
 import java.time.Instant;
 import java.util.List;
@@ -33,7 +35,7 @@ public class ArticleSummarizer implements AutoCloseable {
         this.store = store;
         this.extractor = extractor;
         this.config = config;
-        if (store != null) store.recoverInterruptedSummaries(Instant.now());
+        if (store != null) store.summaryQueue().recoverInterrupted(Instant.now());
     }
 
     public synchronized void start() {
@@ -45,17 +47,21 @@ public class ArticleSummarizer implements AutoCloseable {
     public synchronized SummaryProgress request(String link) throws SQLException {
         checkAvailable();
         if (store.loadItem(link) == null) throw new NoSuchElementException("Article not found");
-        store.enqueueSummary(link, Instant.now(), true);
+        store.summaryQueue().enqueue(link, Instant.now(), true, SummaryQueue.Priority.INTERACTIVE);
         return progress(link);
     }
 
-    public synchronized int enqueue(List<FeedItem> items) throws SQLException {
+    public int enqueue(List<FeedItem> items) throws SQLException {
+        return enqueueLinks(items.stream().map(FeedItem::link).toList());
+    }
+
+    /** Queues background summaries; they wait behind interactive requests and expire after a day. */
+    public synchronized int enqueueLinks(List<String> links) throws SQLException {
         checkAvailable();
         int accepted = 0;
-        for (FeedItem item : items) {
+        for (String link : links) {
             if (closed || !config.get().enabled()) break;
-            if (item.link() != null && !item.link().isBlank()
-                    && store.enqueueSummary(item.link(), Instant.now(), false)) accepted++;
+            if (link != null && !link.isBlank() && store.summaryQueue().enqueue(link, Instant.now(), false)) accepted++;
         }
         return accepted;
     }
@@ -63,13 +69,13 @@ public class ArticleSummarizer implements AutoCloseable {
     public SummaryProgress progress(String link) throws SQLException {
         if (store == null) throw new IllegalStateException("Article storage unavailable");
         if (store.loadItem(link) == null) throw new NoSuchElementException("Article not found");
-        String summary = store.loadSummary(link);
+        String summary = store.aiCache().loadSummary(link);
         if (summary != null && !summary.isBlank()) return new SummaryProgress("success", summary, null);
-        SummaryStatus status = store.loadSummaryStatuses(List.of(link)).get(link);
+        SummaryStatus status = store.summaryQueue().statuses(List.of(link)).get(link);
         if (status == null) return new SummaryProgress("none", null, null);
         // Completion may commit after the first cache read and before the status read.
         if (status.success()) {
-            summary = store.loadSummary(link);
+            summary = store.aiCache().loadSummary(link);
             if (summary == null || summary.isBlank()) throw new SQLException("Completed summary is missing");
             return new SummaryProgress("success", summary, null);
         }
@@ -97,8 +103,16 @@ public class ArticleSummarizer implements AutoCloseable {
     private void processClaimedItem() throws Exception {
         Instant startedAt = Instant.now();
         String model = ollama.model();
-        FeedItem item = store.claimNextSummary(startedAt, model);
-        if (item == null) return;
+        SummaryQueue.Claim claim = store.summaryQueue().claimNext(startedAt, model);
+        if (claim == null) return;
+        // A reader's request keeps its priority over background AI work for every model call it makes.
+        try (OllamaClient.Scope scope = claim.priority() == SummaryQueue.Priority.INTERACTIVE
+                ? ollama.interactive() : () -> {}) {
+            summarize(claim.item(), startedAt, model);
+        }
+    }
+
+    private void summarize(FeedItem item, Instant startedAt, String model) throws Exception {
         try {
             checkInterrupted();
             String description = item.description() == null ? "" : Jsoup.parse(item.description()).text().strip();
@@ -112,15 +126,25 @@ public class ArticleSummarizer implements AutoCloseable {
             checkInterrupted();
             String summary = generation.text() == null ? "" : generation.text().strip();
             if (summary.isEmpty()) throw new IllegalStateException("Ollama returned an empty summary");
-            store.saveSummary(item.link(), summary, model);
-            store.markSummaryFinished(item.link(), startedAt, Instant.now(), model, null);
+            store.aiCache().saveSummary(item.link(), summary, model);
+            store.summaryQueue().markFinished(item.link(), startedAt, Instant.now(), model, null);
         } catch (Exception e) {
             if (e instanceof InterruptedException) Thread.currentThread().interrupt();
+            else if (isTransient(e) && store.summaryQueue().retryOnce(item.link(), Instant.now())) {
+                log.info("summary retry queued after transient failure: {}", e.toString());
+                return;
+            }
             String error = e.getMessage();
             if (error == null || error.isBlank()) error = e.getClass().getSimpleName();
-            store.markSummaryFinished(item.link(), startedAt, Instant.now(), model, error);
+            store.summaryQueue().markFinished(item.link(), startedAt, Instant.now(), model, error);
             log.warn("summary failed: {}", e.toString());
         }
+    }
+
+    private static boolean isTransient(Exception e) {
+        // IOException covers refused connections and timeouts from the AI endpoint; 5xx is a busy server.
+        return e instanceof IOException
+                || (e.getMessage() != null && e.getMessage().matches(".* returned HTTP 5\\d\\d"));
     }
 
     private void checkInterrupted() throws InterruptedException {

@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.support.CronExpression;
@@ -89,7 +90,7 @@ public class FeishuPusher {
             Instant until = Instant.now();
             Instant since = lastPushTime.getOrDefault(routePath,
                     until.minus(DEFAULT_LOOKBACK));
-            List<StoredItem> items = feedStore.loadNewItemsSince(routePath, since).stream()
+            List<StoredItem> items = feedStore.items().loadNewItemsSince(routePath, since).stream()
                     .filter(item -> item.firstSeenAt().isBefore(until))
                     .toList();
             if (items.isEmpty()) return;
@@ -126,7 +127,7 @@ public class FeishuPusher {
         Map<String, List<RouteConfig>> digestRoutes = new LinkedHashMap<>();
         for (RouteConfig r : allRoutes) {
             if (r.path().contains(":")) continue;   // skip parameterized patterns
-            String cat = categoryByPath.get(r.sourcePath());
+            String cat = categoryByPath.get(r.path());
             if (cat == null) continue;
             FeishuCategoryConfig catCfg = cfg.getCategory(cat);
             if (!catCfg.enabled() || !catCfg.isDigest()) continue;
@@ -143,7 +144,7 @@ public class FeishuPusher {
                 if (!isDigestDue(catCfg, cat, now)) continue;
                 Instant since = lastDigestTime.getOrDefault(cat, now.minus(DEFAULT_LOOKBACK));
                 List<String> paths = routes.stream().map(RouteConfig::path).toList();
-                List<StoredItem> items = feedStore.loadNewItemsSinceForRoutes(paths, since).stream()
+                List<StoredItem> items = feedStore.items().loadNewItemsSinceForRoutes(paths, since).stream()
                         .filter(item -> item.firstSeenAt().isBefore(now))
                         .toList();
                 if (items.isEmpty()) {
@@ -157,17 +158,17 @@ public class FeishuPusher {
 
                 // Build source breakdown: "TechCrunch (5) · Wired (3)"
                 Map<String, String> pathToName = routes.stream()
-                        .collect(java.util.stream.Collectors.toMap(
+                        .collect(Collectors.toMap(
                                 RouteConfig::path, RouteConfig::displayName, (a, b) -> a));
                 Map<String, Long> countByPath = items.stream()
-                        .collect(java.util.stream.Collectors.groupingBy(
-                                StoredItem::routePath, java.util.stream.Collectors.counting()));
+                        .collect(Collectors.groupingBy(
+                                StoredItem::routePath, Collectors.counting()));
                 String sources = countByPath.entrySet().stream()
                         .sorted(Map.Entry.<String, Long>comparingByValue().reversed())
                         .limit(6)
                         .map(e -> "**" + pathToName.getOrDefault(e.getKey(), e.getKey())
                                 + "** (" + e.getValue() + ")")
-                        .collect(java.util.stream.Collectors.joining(" · "));
+                        .collect(Collectors.joining(" · "));
 
                 if (doSend("📰 " + cat + " 摘要", cat, sources, items, webhook, max)) {
                     lastDigestTime.put(cat, now);
@@ -352,12 +353,12 @@ public class FeishuPusher {
     private static String categoryColor(String category) {
         if (category == null) return "blue";
         return switch (category) {
-            case "技术博客", "编程" -> "blue";
-            case "英文媒体"        -> "green";
-            case "中文媒体"        -> "orange";
-            case "学术"           -> "violet";
-            case "社区", "视频"    -> "turquoise";
-            default               -> "blue";
+            case "时事要闻"                 -> "orange";
+            case "财经商业"                 -> "green";
+            case "科学", "健康医学"          -> "violet";
+            case "人文社会", "设计艺术", "游戏" -> "turquoise";
+            case "关注动态"                 -> "turquoise";
+            default                       -> "blue";
         };
     }
 }

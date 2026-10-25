@@ -1,10 +1,11 @@
 package app.routes.twitter;
 
-import app.CredentialConfigStore;
 import app.core.CacheService;
+import app.core.CredentialConfigStore;
 import app.core.FetchClient;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -175,7 +176,7 @@ class TwitterHelper {
             // Hydrate user into legacy
             JsonNode userLegacy = tweet.path("core").path("user_results").path("result").path("legacy");
             if (!userLegacy.isMissingNode()) {
-                ((com.fasterxml.jackson.databind.node.ObjectNode) legacy).set("user", userLegacy);
+                ((ObjectNode) legacy).set("user", userLegacy);
             }
             // Hydrate quoted tweet
             JsonNode quoted = tweet.path("quoted_status_result").path("result");
@@ -185,14 +186,14 @@ class TwitterHelper {
                 JsonNode qUser    = qTweet.path("core").path("user_results").path("result").path("legacy");
                 if (!qLegacy.isMissingNode()) {
                     if (!qUser.isMissingNode()) {
-                        ((com.fasterxml.jackson.databind.node.ObjectNode) qLegacy).set("user", qUser);
+                        ((ObjectNode) qLegacy).set("user", qUser);
                     }
-                    ((com.fasterxml.jackson.databind.node.ObjectNode) legacy).set("quoted_status", qLegacy);
+                    ((ObjectNode) legacy).set("quoted_status", qLegacy);
                 }
             }
             // Set id_str from rest_id
             if (legacy.path("id_str").asText("").isBlank() && !tweet.path("rest_id").asText("").isBlank()) {
-                ((com.fasterxml.jackson.databind.node.ObjectNode) legacy)
+                ((ObjectNode) legacy)
                         .put("id_str", tweet.path("rest_id").asText());
             }
             tweets.add(legacy);

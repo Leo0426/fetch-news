@@ -3,13 +3,16 @@ package app.radar;
 import app.ai.AiConfig;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
 public final class RadarTypes {
     private RadarTypes() {}
 
-    public record RunRequest(String date, String zoneId, String idempotencyKey, AiConfig ai, Map<String,String> categories) {
+    public record RunRequest(
+            String date, String zoneId, String idempotencyKey, AiConfig ai, Map<String, String> categories) {
         public RunRequest {
             LocalDate.parse(date);
             ZoneId.of(zoneId);
@@ -20,36 +23,112 @@ public final class RadarTypes {
             categories = Map.copyOf(categories);
         }
     }
-    public record Candidate(String link, String title, String description, String author, String pubDate,
-                            long firstSeenAt, List<String> sources) {
-        public Candidate { sources = List.copyOf(sources); }
-    }
-    public record Analysis(String link, String profile, String category, Double score, String reason, String summary,
-                           List<String> tags, boolean limitedInput, String cacheKey, String error) {
-        public Analysis { tags = List.copyOf(tags); }
-    }
-    public record Event(String id, Analysis primary, List<Analysis> related) {
-        public Event { related = List.copyOf(related); }
-    }
-    public record Decision(String link, String reason, String eventId) {}
-    public record Selection(List<Event> selected, List<Decision> decisions) {
-        public Selection { selected = List.copyOf(selected); decisions = List.copyOf(decisions); }
-    }
-    public record ReportStory(Event event, Map<String,List<String>> blocks, String error) {
-        public ReportStory { blocks = java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(blocks)); }
-    }
-    public record Report(String runId, String date, String zoneId, List<ReportStory> stories, List<Decision> decisions,
-                         int totalCandidates, int omitted, int failures, Map<String,String> diagnostics, Map<String,String> titles) {
-        public Report(String runId,String date,String zoneId,List<ReportStory> stories,List<Decision> decisions,
-                      int totalCandidates,int omitted,int failures,Map<String,String> diagnostics) {
-            this(runId,date,zoneId,stories,decisions,totalCandidates,omitted,failures,diagnostics,Map.of());
+
+    public record Candidate(
+            String link,
+            String title,
+            String description,
+            String author,
+            String pubDate,
+            long firstSeenAt,
+            List<String> sources) {
+        public Candidate {
+            sources = List.copyOf(sources);
         }
-        public Report { titles = titles == null ? Map.of() : Map.copyOf(titles); stories = List.copyOf(stories); decisions = List.copyOf(decisions); diagnostics = Map.copyOf(diagnostics); }
     }
-    public record RunStatus(String runId, String date, int version, String state, String stage,
-                            int totalCandidates, int omitted, int calls, String error) {}
-    public record RunSnapshot(RunStatus status, RunRequest request, RadarConfig config, Map<String,Profile> profiles,
-                              List<Candidate> candidates, long createdAt, Map<String,String> checkpoints) {
-        public RunSnapshot { profiles = Map.copyOf(profiles); candidates = List.copyOf(candidates); checkpoints = Map.copyOf(checkpoints); }
+
+    public record Analysis(
+            String link,
+            String profile,
+            String category,
+            Double score,
+            String reason,
+            String summary,
+            List<String> tags,
+            boolean limitedInput,
+            String cacheKey,
+            String error) {
+        public Analysis {
+            tags = List.copyOf(tags);
+        }
+    }
+
+    public record Event(String id, Analysis primary, List<Analysis> related) {
+        public Event {
+            related = List.copyOf(related);
+        }
+    }
+
+    public record Decision(String link, String reason, String eventId) {}
+
+    public record Selection(List<Event> selected, List<Decision> decisions) {
+        public Selection {
+            selected = List.copyOf(selected);
+            decisions = List.copyOf(decisions);
+        }
+    }
+
+    public record ReportStory(Event event, Map<String, List<String>> blocks, String error) {
+        public ReportStory {
+            blocks = Collections.unmodifiableMap(new LinkedHashMap<>(blocks));
+        }
+    }
+
+    public record Report(
+            String runId,
+            String date,
+            String zoneId,
+            List<ReportStory> stories,
+            List<Decision> decisions,
+            int totalCandidates,
+            int omitted,
+            int failures,
+            Map<String, String> diagnostics,
+            Map<String, String> titles) {
+        public Report(
+                String runId,
+                String date,
+                String zoneId,
+                List<ReportStory> stories,
+                List<Decision> decisions,
+                int totalCandidates,
+                int omitted,
+                int failures,
+                Map<String, String> diagnostics) {
+            this(runId, date, zoneId, stories, decisions, totalCandidates, omitted, failures, diagnostics, Map.of());
+        }
+
+        public Report {
+            titles = titles == null ? Map.of() : Map.copyOf(titles);
+            stories = List.copyOf(stories);
+            decisions = List.copyOf(decisions);
+            diagnostics = Map.copyOf(diagnostics);
+        }
+    }
+
+    public record RunStatus(
+            String runId,
+            String date,
+            int version,
+            String state,
+            String stage,
+            int totalCandidates,
+            int omitted,
+            int calls,
+            String error) {}
+
+    public record RunSnapshot(
+            RunStatus status,
+            RunRequest request,
+            RadarConfig config,
+            Map<String, Profile> profiles,
+            List<Candidate> candidates,
+            long createdAt,
+            Map<String, String> checkpoints) {
+        public RunSnapshot {
+            profiles = Map.copyOf(profiles);
+            candidates = List.copyOf(candidates);
+            checkpoints = Map.copyOf(checkpoints);
+        }
     }
 }

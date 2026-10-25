@@ -2,14 +2,6 @@
 .gradle/
 build/
 
-#Maven
-target/
-pom.xml.tag
-pom.xml.releaseBackup
-pom.xml.versionsBackup
-release.properties
-.flattened-pom.xml
-
 # Eclipse
 .project
 .classpath
@@ -52,12 +44,11 @@ nb-configuration.xml
 route-config.json
 feishu-config.json
 ai-config.json
+credential-config.json
 
 # Temporary build artifact (created by build.sh, cleaned up after docker build)
 app.jar
 
-# Plugin directory
-/.quarkus/cli/plugins/
 # TLS Certificates
 .certs/
 

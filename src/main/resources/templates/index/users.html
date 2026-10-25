@@ -1,0 +1,101 @@
+<!-- 访问令牌 section, loaded into #main-content via HTMX -->
+<div id="users-view" class="users-view" style="display:grid;gap:16px;">
+
+  <div th:unless="${authEnabled}" class="card" style="padding:14px 18px;color:var(--warn);background:var(--warn-bg);">
+    认证未启用（<code>FETCH_NEWS_AUTH_ENABLED=false</code>），任何能访问此地址的人都可以使用全部功能。暴露到公网前请移除该设置。
+  </div>
+
+  <div th:if="${message != null}" class="form-msg ok" role="status" th:text="${message}">已保存</div>
+  <div th:if="${error != null}" class="form-msg err" role="alert" tabindex="-1" th:text="${error}">失败</div>
+
+  <div th:if="${issued != null}" class="card" style="padding:16px 18px;background:var(--accent-bg);display:grid;gap:10px;"
+       x-data="{ copied: false }">
+    <strong style="color:var(--accent-dk);"
+            th:text="'“' + ${issued.user().name()} + '”的登录令牌（只显示这一次，请立即复制并交给对方）'">登录令牌</strong>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+      <code x-ref="token" style="user-select:all;flex:1 1 280px;font-family:var(--font-mono);font-size:12px;background:var(--surface);
+                   padding:8px 10px;border-radius:6px;word-break:break-all;" th:text="${issued.token()}">fn_xxx</code>
+      <button class="btn" type="button"
+              @click="FetchNewsUI.copyText($refs.token.textContent.trim()).then(() => { copied = true; setTimeout(() => copied = false, 1500) }, () => FetchNewsUI.notify('复制失败，请手动选中令牌复制', 'error'))"
+              x-text="copied ? '已复制' : '复制令牌'">复制令牌</button>
+    </div>
+    <span style="font-size:12px;color:var(--muted);">对方在 <code>/login</code> 输入此令牌即可登录；RSS 订阅地址可在其“账户”页获取。</span>
+  </div>
+
+  <form class="card" style="padding:16px 18px;display:flex;gap:12px;align-items:end;flex-wrap:wrap;"
+        hx-post="/index/users" hx-target="#main-content" hx-swap="innerHTML" hx-disabled-elt="find button">
+    <label class="field" style="flex:1 1 200px;display:grid;">
+      <span>名称</span>
+      <input class="ui-control" name="name" required maxlength="40" placeholder="例如：小王 / iPad / 家人">
+    </label>
+    <label class="field" style="flex:0 1 160px;display:grid;">
+      <span>权限</span>
+      <select class="ui-control" name="role">
+        <option value="MEMBER" selected>成员：阅读与订阅</option>
+        <option value="ADMIN">管理员：全部功能</option>
+      </select>
+    </label>
+    <button class="btn primary" type="submit"><svg th:replace="~{shared/icons :: icon('plus')}"></svg>创建令牌</button>
+  </form>
+
+  <section class="card" style="padding:0;overflow-x:auto;">
+    <div class="card-head">
+      <span class="card-title">账户</span>
+      <span style="font-size:11px;color:var(--subtle);">每个账户的收藏和已读记录相互独立 · 时间为 UTC</span>
+    </div>
+    <table class="rtable" style="margin:0;white-space:nowrap;">
+      <thead>
+        <tr>
+          <th style="padding-left:20px;">名称</th>
+          <th>权限</th>
+          <th>状态</th>
+          <th>创建时间</th>
+          <th>最近使用</th>
+          <th style="padding-right:20px;">操作</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr th:each="u : ${users}">
+          <td style="padding-left:20px;">
+            <span th:text="${u.name()}">admin</span>
+            <span th:if="${u.id() == currentUserId}" style="font-size:11px;color:var(--subtle);">（当前）</span>
+          </td>
+          <td th:text="${u.role().label()}">成员</td>
+          <td>
+            <span th:if="${u.disabled()}" class="pill off">已停用</span>
+            <span th:if="${!u.disabled() and !u.hasToken()}" class="pill sched">未设置令牌</span>
+            <span th:if="${!u.disabled() and u.hasToken()}" class="pill on">可用</span>
+          </td>
+          <td class="stats-time" th:text="${u.createdAt() == null ? '—' : #strings.substring(u.createdAt().toString(), 0, 16).replace('T', ' ')}">—</td>
+          <td class="stats-time" th:text="${u.lastSeenAt() == null ? '从未' : #strings.substring(u.lastSeenAt().toString(), 0, 16).replace('T', ' ')}">—</td>
+          <td style="padding-right:20px;">
+            <div style="display:flex;gap:6px;flex-wrap:wrap;">
+              <button class="btn-small" type="button" th:attr="hx-post='/index/users/' + ${u.id()} + '/token'"
+                      hx-target="#main-content" hx-swap="innerHTML"
+                      th:hx-confirm="'为“' + ${u.name()} + '”生成新令牌？旧令牌和已登录的浏览器会立即失效。'">重置令牌</button>
+              <button class="btn-small" type="button" th:attr="hx-post='/index/users/' + ${u.id()} + '/feed-key'"
+                      hx-target="#main-content" hx-swap="innerHTML"
+                      th:hx-confirm="'重置“' + ${u.name()} + '”的订阅密钥？其 RSS 阅读器中的旧地址会失效。'">重置订阅密钥</button>
+              <button th:if="${u.id() != currentUserId}" class="btn-small" type="button"
+                      th:attr="hx-post='/index/users/' + ${u.id()} + '/disabled',hx-vals='{&quot;disabled&quot;:' + ${!u.disabled()} + '}'"
+                      hx-target="#main-content" hx-swap="innerHTML"
+                      th:text="${u.disabled()} ? '启用' : '停用'">停用</button>
+              <button th:if="${u.id() != currentUserId and u.id() != 1}" class="btn-small" type="button"
+                      th:attr="hx-delete='/index/users/' + ${u.id()}"
+                      hx-target="#main-content" hx-swap="innerHTML"
+                      th:hx-confirm="'删除“' + ${u.name()} + '”及其收藏、已读记录？此操作不可撤销。'">删除</button>
+            </div>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="card" style="padding:16px 18px;font-size:12px;color:var(--muted);line-height:1.8;">
+    <strong style="color:var(--text);">使用说明</strong><br>
+    · <b>登录令牌</b>：用于网页登录和 API（<code>Authorization: Bearer &lt;令牌&gt;</code>），只在创建或重置时显示一次，服务器只保存其哈希。<br>
+    · <b>订阅密钥</b>：附在 RSS 地址后（<code>?key=…</code>），只能读取订阅源，不能登录网页；每人可在“账户”页复制地址或下载 OPML。<br>
+    · <b>成员</b>可以阅读、收藏、标记已读和订阅 RSS；<b>管理员</b>额外可以管理来源、AI、推送和令牌。<br>
+    · 忘记管理员令牌：以环境变量 <code>FETCH_NEWS_ADMIN_TOKEN=&lt;新令牌&gt;</code> 重启服务即可重置。
+  </section>
+</div>

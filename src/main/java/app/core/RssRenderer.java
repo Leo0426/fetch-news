@@ -30,7 +30,7 @@ public class RssRenderer implements FeedRenderer {
     public String render(Feed feed) {
         StringBuilder xml = new StringBuilder();
         xml.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
-        xml.append("<rss version=\"2.0\">\n<channel>\n");
+        xml.append("<rss version=\"2.0\" xmlns:media=\"http://search.yahoo.com/mrss/\">\n<channel>\n");
         element(xml, "title", feed.title());
         element(xml, "link", feed.link());
         element(xml, "description", feed.description());
@@ -53,6 +53,10 @@ public class RssRenderer implements FeedRenderer {
             }
             for (String category : item.categories()) {
                 element(xml, "category", category);
+            }
+            if (item.image() != null) {
+                xml.append("<media:content medium=\"image\" url=\"")
+                        .append(XmlEscaper.escape(item.image())).append("\"/>\n");
             }
             xml.append("</item>\n");
         }

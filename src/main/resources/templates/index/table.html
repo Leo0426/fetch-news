@@ -72,7 +72,7 @@
                   <div class="info-pop">
                     <div th:if="${abouts[route.sourcePath] != null}"
                          class="about-body" style="padding:0 0 4px;"
-                         th:utext="${abouts[route.sourcePath]}"></div>
+                         th:insert="~{index/route-about :: content(${abouts[route.sourcePath]})}"></div>
                     <div th:if="${abouts[route.sourcePath] == null and descriptions[route.path] != null}">
                       <div class="info-pop-label">简介</div>
                       <div class="info-pop-text" th:text="${descriptions[route.path]}"></div>
@@ -88,7 +88,10 @@
             </div>
           </td>
           <td>
-            <button type="button"
+            <span th:if="${templateRoutes.contains(route.path)}"
+                  style="color:var(--subtle);font-size:12px;" title="模板路由，在实例上开关">—</span>
+            <button th:unless="${templateRoutes.contains(route.path)}"
+                    type="button"
                     th:class="${route.enabled} ? 'pill on' : 'pill off'"
                     th:text="${route.enabled} ? '开' : '关'"
                     style="cursor:pointer;border:none;"
@@ -112,23 +115,23 @@
           <td>
             <div class="acts">
               <!-- Add Instance: parameterized routes and generic RSS route -->
-              <button th:if="${#strings.contains(route.path, ':') or strategies[route.path] == '通用 RSS'}"
+              <button th:if="${templateRoutes.contains(route.path)}"
                       type="button" class="act" title="添加实例" aria-label="添加实例"
                       hx-get="/index/routes/instance"
                       hx-target="#modal-inner"
                       hx-swap="innerHTML"
                       th:hx-vals="${'{&quot;source&quot;:&quot;' + route.path + '&quot;}'}"><svg th:replace="~{shared/icons :: icon('plus')}"></svg></button>
               <!-- RSS: concrete non-parameterized routes, excluding generic /rss template -->
-              <a th:if="${!#strings.contains(route.path, ':') and strategies[route.path] != '通用 RSS'}"
+              <a th:if="${!templateRoutes.contains(route.path)}"
                  class="act" title="RSS" aria-label="RSS"
                  th:href="${route.path}" target="_blank" rel="noopener"><svg th:replace="~{shared/icons :: icon('rss')}"></svg></a>
-              <button th:if="${!#strings.contains(route.path, ':') and strategies[route.path] != '通用 RSS'}"
+              <button th:if="${!templateRoutes.contains(route.path)}"
                       type="button" class="act" title="编辑设置" aria-label="编辑设置"
                       hx-get="/index/routes/edit"
                       hx-target="#modal-inner"
                       hx-swap="innerHTML"
                       th:hx-vals="${'{&quot;path&quot;:&quot;' + route.path + '&quot;}'}"><svg th:replace="~{shared/icons :: icon('edit')}"></svg></button>
-              <button th:if="${!#strings.contains(route.path, ':') and strategies[route.path] != '通用 RSS'}"
+              <button th:if="${!templateRoutes.contains(route.path)}"
                       type="button" class="act" title="浏览数据" aria-label="浏览数据"
                       hx-get="/index/items"
                       hx-target="#main-content"

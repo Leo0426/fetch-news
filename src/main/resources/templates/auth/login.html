@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>登录 · fetch-news</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/admin.css">
+  <link rel="stylesheet" href="/admin-controls.css">
+  <link rel="stylesheet" href="/admin-views.css">
+  <link rel="stylesheet" href="/reader.css">
+  <link rel="stylesheet" href="/briefing.css">
+  <link rel="stylesheet" href="/ui-controls.css">
+  <style>
+    .auth-shell { min-height: 100vh; display: grid; place-items: center; padding: 24px 16px; }
+    .auth-card { width: min(420px, 100%); background: var(--surface); border: 1px solid var(--line);
+                 border-radius: 14px; padding: 32px 28px; box-shadow: var(--sh); display: grid; gap: 18px; }
+    .auth-brand { display: flex; align-items: center; gap: 12px; }
+    .auth-brand h1 { font-family: var(--font-display); font-size: 22px; font-weight: 600; }
+    .auth-brand p { color: var(--muted); font-size: 12px; margin-top: 2px; }
+    .auth-card .field { display: grid; }
+    .auth-card .btn { width: 100%; justify-content: center; height: 40px; }
+    .auth-hint { color: var(--subtle); font-size: 12px; line-height: 1.7; }
+    .auth-error { color: var(--warn); background: var(--warn-bg); border-radius: 8px; padding: 9px 12px; font-size: 13px; }
+  </style>
+</head>
+<body>
+<main class="auth-shell">
+  <form class="auth-card" method="post" action="/login">
+    <div class="auth-brand">
+      <img src="/favicon.svg" width="40" height="40" alt="">
+      <div>
+        <h1>fetch-news</h1>
+        <p>请输入访问令牌以继续</p>
+      </div>
+    </div>
+    <div th:if="${error != null}" class="auth-error" role="alert" th:text="${error}">令牌无效</div>
+    <input type="hidden" name="next" th:value="${next}">
+    <label class="field">
+      <span>访问令牌</span>
+      <input class="ui-control" type="password" name="token" required autofocus
+             autocomplete="current-password" spellcheck="false" placeholder="fn_…">
+    </label>
+    <button class="btn primary" type="submit">登录</button>
+    <p class="auth-hint">令牌由管理员在“控制台 → 访问令牌”中创建。登录状态会在此浏览器中保留 180 天，可随时在“账户”页退出。</p>
+  </form>
+</main>
+</body>
+</html>

@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import app.auth.UserAccount;
 import app.core.FeedItem;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.file.Path;
@@ -29,7 +30,7 @@ class SearchIndexInitializationTest {
             store.saveItems("/articles", List.of(new FeedItem(
                     "Vector notes", link, "Embedding 本地模型", Instant.parse("2026-10-05T00:00:00Z"),
                     "Author", List.of("Research"))));
-            store.saveSummary(link, "Inference summary", "fixture");
+            store.aiCache().saveSummary(link, "Inference summary", "fixture");
         }
         try (Connection connection = DriverManager.getConnection("jdbc:sqlite:" + database);
              Statement statement = connection.createStatement()) {
@@ -45,7 +46,7 @@ class SearchIndexInitializationTest {
 
         try (FeedStore store = new FeedStore(database, new ObjectMapper())) {
             for (String query : List.of("Vector", "Embedding", "Inference", "模型 Embedding")) {
-                assertEquals(List.of(link), store.search(query, 10).stream().map(StoredItem::link).toList());
+                assertEquals(List.of(link), store.searchIndex().search(query, 10).stream().map(StoredItem::link).toList());
             }
         }
         assertEquals(2, value(database, """
@@ -63,7 +64,7 @@ class SearchIndexInitializationTest {
             for (String query : List.of("Canonical", "winnerword", "cachedsummary", "模型 winnerword")) {
                 assertEquals(List.of("https://example.test/one"), matches(store, query));
             }
-            assertEquals("Cachedsummary 模型摘要", store.loadSummary("https://example.test/one"));
+            assertEquals("Cachedsummary 模型摘要", store.aiCache().loadSummary("https://example.test/one"));
         }
         assertEquals(1, value(database, "SELECT version FROM search_index_state WHERE id = 1"));
     }
@@ -80,8 +81,8 @@ class SearchIndexInitializationTest {
         try (FeedStore store = new FeedStore(database, new ObjectMapper())) {
             assertEquals(List.of("https://example.test/article"), matches(store, "renewed 模型"));
             assertEquals(List.of("https://example.test/article"), matches(store, "freshsummary 推理"));
-            assertTrue(store.search("obsolete", 10).isEmpty());
-            assertTrue(store.search("oldsummary", 10).isEmpty());
+            assertTrue(store.searchIndex().search("obsolete", 10).isEmpty());
+            assertTrue(store.searchIndex().search("oldsummary", 10).isEmpty());
         }
         assertEquals(1, value(database, "SELECT version FROM search_index_state WHERE id = 1"));
     }
@@ -117,13 +118,13 @@ class SearchIndexInitializationTest {
                 "INSERT INTO search_index_state VALUES (1, 1)");
 
         try (FeedStore store = new FeedStore(database, new ObjectMapper())) {
-            StoredArticle article = store.loadArticle("https://example.test/one");
+            StoredArticle article = store.loadArticle(UserAccount.OWNER_ID, "https://example.test/one");
             assertEquals("/first", article.routePath());
             assertEquals("Canonical title", article.item().title());
             assertEquals(Instant.parse("2026-10-01T00:00:00Z"), article.firstSeenAt());
             assertEquals(List.of("https://example.test/one"), matches(store, "winnerword cachedsummary"));
             assertEquals(List.of("https://example.test/two"), matches(store, "otherword"));
-            assertTrue(store.search("discardword", 10).isEmpty());
+            assertTrue(store.searchIndex().search("discardword", 10).isEmpty());
         }
         assertEquals(2, value(database, "SELECT COUNT(*) FROM feed_search_fts"));
         assertEquals(0, value(database, """
@@ -161,7 +162,7 @@ class SearchIndexInitializationTest {
         try (FeedStore store = new FeedStore(database, new ObjectMapper())) {
             assertEquals(List.of("https://example.test/article"), matches(store, "renewed 模型"));
             assertEquals(List.of("https://example.test/article"), matches(store, "oldsummary"));
-            assertTrue(store.search("obsolete", 10).isEmpty());
+            assertTrue(store.searchIndex().search("obsolete", 10).isEmpty());
         }
         assertEquals(1, value(database, "SELECT version FROM search_index_state WHERE id = 1"));
     }
@@ -170,7 +171,7 @@ class SearchIndexInitializationTest {
         try (FeedStore store = new FeedStore(database, new ObjectMapper())) {
             store.saveItems("/articles", List.of(new FeedItem(
                     "Article title", "https://example.test/article", "obsolete 模型", null, null, List.of())));
-            store.saveSummary("https://example.test/article", "oldsummary", "fixture");
+            store.aiCache().saveSummary("https://example.test/article", "oldsummary", "fixture");
         }
     }
 
@@ -227,6 +228,6 @@ class SearchIndexInitializationTest {
     }
 
     private static List<String> matches(FeedStore store, String query) throws SQLException {
-        return store.search(query, 10).stream().map(StoredItem::link).toList();
+        return store.searchIndex().search(query, 10).stream().map(StoredItem::link).toList();
     }
 }

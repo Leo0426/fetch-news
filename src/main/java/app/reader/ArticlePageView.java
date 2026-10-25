@@ -22,7 +22,7 @@ public record ArticlePageView(ReaderItem item, String author, List<String> categ
         else if ("success".equals(resolved.state()))
             resolved = new SummaryProgress("unknown", null, "摘要状态暂时不可用，请重新查看状态。");
         var readerItem = new ReaderItem(article.routePath(), item.title(), item.link(), item.pubDate(),
-                article.firstSeenAt(), summary, null);
+                article.firstSeenAt(), summary, null, item.image(), null);
         return new ArticlePageView(readerItem, item.author(), item.categories() == null ? List.of() : item.categories(),
                 ArticleContent.from(item.description(), article.extract(), item.link()), article.read(),
                 article.bookmarked(), ArticleNavigation.returnUrl(returnUrl), null,

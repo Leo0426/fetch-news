@@ -3,8 +3,6 @@ package app.store;
 import app.support.SourceLabels;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
 
 /**
  * One row from the bookmarks table, enriched with display helpers.
@@ -14,13 +12,6 @@ public record BookmarkedItem(
         String title,
         String routePath,
         Instant bookmarkedAt) {
-
-    private static final DateTimeFormatter FMT =
-            DateTimeFormatter.ofPattern("MM-dd HH:mm").withZone(ZoneId.systemDefault());
-
-    public String formattedDate() {
-        return bookmarkedAt != null ? FMT.format(bookmarkedAt) : "—";
-    }
 
     public String formattedAge() {
         if (bookmarkedAt == null) return "—";

@@ -42,9 +42,26 @@
     schedule();
   }
 
+  // navigator.clipboard only exists in secure contexts, so plain-http LAN access needs the legacy path.
+  function copyText(text) {
+    if (window.isSecureContext && navigator.clipboard) return navigator.clipboard.writeText(text);
+    const area = document.createElement('textarea');
+    area.value = text;
+    area.setAttribute('readonly', '');
+    area.style.position = 'fixed';
+    area.style.opacity = '0';
+    document.body.appendChild(area);
+    area.select();
+    let copied = false;
+    try { copied = document.execCommand('copy'); } catch (_) {}
+    area.remove();
+    return copied ? Promise.resolve() : Promise.reject(new Error('copy failed'));
+  }
+
   window.FetchNewsUI = {
     storage,
     notify,
+    copyText,
     motionBehavior: () => reducedMotion.matches ? 'auto' : 'smooth'
   };
 

@@ -80,6 +80,28 @@ public class RouteRegistry {
      *
      * @return path → category, insertion-ordered
      */
+    /** Returns the category of the registered route that serves {@code sourcePath}, or "其他". */
+    public String categoryOf(String sourcePath) {
+        if (sourcePath == null) return "其他";
+        Map<String, String> categories = categories();
+        String direct = categories.get(sourcePath);
+        if (direct != null) return direct;
+        for (var entry : categories.entrySet()) {
+            if (pathMatchesPattern(sourcePath, entry.getKey())) return entry.getValue();
+        }
+        return "其他";
+    }
+
+    private static boolean pathMatchesPattern(String path, String pattern) {
+        String[] pp = path.split("/");
+        String[] pt = pattern.split("/");
+        if (pp.length != pt.length) return false;
+        for (int i = 0; i < pt.length; i++) {
+            if (!pt[i].startsWith(":") && !pt[i].equals(pp[i])) return false;
+        }
+        return true;
+    }
+
     public Map<String, String> categories() {
         Map<String, String> map = new LinkedHashMap<>();
         for (Route route : routes) {

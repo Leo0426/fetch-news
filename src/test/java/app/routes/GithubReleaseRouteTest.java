@@ -1,15 +1,15 @@
 package app.routes;
 
-import app.routes.github.GithubReleaseRoute;
+import static org.junit.jupiter.api.Assertions.*;
+
 import app.core.Feed;
 import app.core.RouteContext;
 import app.core.RouteError;
 import app.core.RouteException;
+import app.routes.github.GithubReleaseRoute;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
-
-import static org.junit.jupiter.api.Assertions.*;
 
 class GithubReleaseRouteTest {
     private static final ObjectMapper MAPPER = new ObjectMapper();

@@ -5,6 +5,8 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -18,12 +20,24 @@ public class FeishuConfigStore {
 
     private final Path filePath;
     private final ObjectMapper mapper;
+    private final Map<String, List<String>> renamedCategories;
     private volatile FeishuConfig current;
 
     public FeishuConfigStore(Path filePath, ObjectMapper mapper) {
+        this(filePath, mapper, Map.of());
+    }
+
+    /**
+     * @param renamedCategories old category name → categories that took over its sources; rules saved
+     *                          under an old name are copied to each new one that has no rule yet
+     */
+    public FeishuConfigStore(Path filePath, ObjectMapper mapper, Map<String, List<String>> renamedCategories) {
         this.filePath = filePath;
         this.mapper = mapper;
-        this.current = load();
+        this.renamedCategories = renamedCategories;
+        FeishuConfig loaded = load();
+        FeishuConfig migrated = migrateRenamedCategories(loaded);
+        this.current = migrated == loaded ? loaded : save(migrated);
     }
 
     public FeishuConfig get() {
@@ -39,6 +53,20 @@ public class FeishuConfigStore {
             log.warn("failed to save Feishu config to {}: {}", filePath, e.getMessage());
         }
         return config;
+    }
+
+    private FeishuConfig migrateRenamedCategories(FeishuConfig config) {
+        var categories = new LinkedHashMap<>(config.categories());
+        boolean changed = false;
+        for (var renamed : renamedCategories.entrySet()) {
+            FeishuCategoryConfig rule = categories.remove(renamed.getKey());
+            if (rule == null) continue;
+            changed = true;
+            for (String target : renamed.getValue()) categories.putIfAbsent(target, rule);
+            log.info("Feishu rule for category {} moved to {}", renamed.getKey(), renamed.getValue());
+        }
+        return changed ? new FeishuConfig(config.webhookUrl(), config.enabled(), config.maxItemsPerPush(), categories)
+                : config;
     }
 
     private FeishuConfig load() {

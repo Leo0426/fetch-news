@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
   <title th:text="'精选日报 · ' + ${page.date()}">精选日报</title>
-  <link rel="icon" href="/favicon.svg"><link rel="stylesheet" href="/admin.css"><link rel="stylesheet" href="/radar.css">
+  <link rel="icon" href="/favicon.svg"><link rel="stylesheet" href="/admin.css"><link rel="stylesheet" href="/admin-controls.css"><link rel="stylesheet" href="/admin-views.css"><link rel="stylesheet" href="/reader.css"><link rel="stylesheet" href="/briefing.css"><link rel="stylesheet" href="/radar.css">
   <script defer src="/radar.js"></script><script defer src="/radar-community.js"></script>
   <link rel="stylesheet" href="/ui-controls.css">
 </head>
@@ -12,15 +12,16 @@
 <main class="radar-wrap" id="radar-content">
   <nav class="reader-nav" aria-label="阅读导航"><a href="/reader"><svg th:replace="~{shared/icons :: icon('book')}"></svg><span>速览</span></a><a href="/reader/unread"><svg th:replace="~{shared/icons :: icon('inbox')}"></svg><span>待读</span></a><a href="/reader/briefing"><svg th:replace="~{shared/icons :: icon('news')}"></svg><span>原始日报</span></a><a href="/reader/radar" aria-current="page"><svg th:replace="~{shared/icons :: icon('radar')}"></svg><span>精选日报</span></a><a href="/reader/bookmarks"><svg th:replace="~{shared/icons :: icon('bookmark')}"></svg><span>收藏</span></a>
     <a href="/reader/search"><svg th:replace="~{shared/icons :: icon('search')}"></svg><span>搜索</span></a>
-    <a href="/index#subscriptions"><svg th:replace="~{shared/icons :: icon('rss')}"></svg><span>订阅来源</span></a>
-    <a href="/index" class="reader-nav-admin"><svg th:replace="~{shared/icons :: icon('settings')}"></svg><span>管理</span></a>
+    <a th:if="${viewer == null or viewer.admin()}" href="/index#subscriptions"><svg th:replace="~{shared/icons :: icon('rss')}"></svg><span>订阅来源</span></a>
+    <a th:if="${viewer == null or viewer.admin()}" href="/index" class="reader-nav-admin"><svg th:replace="~{shared/icons :: icon('settings')}"></svg><span>管理</span></a>
+    <a href="/account" class="reader-nav-account" th:if="${viewer != null}" th:classappend="${!viewer.admin()} ? ' reader-nav-admin'"><svg th:replace="~{shared/icons :: icon('user')}"></svg><span th:text="${viewer.name()}">账户</span></a>
   </nav>
   <header class="rd-head"><div><p class="page-eyebrow">按你的规则，留下值得读的内容</p><h1 class="rd-title">精选日报</h1></div></header>
   <form action="/reader/radar" method="get" class="radar-controls">
     <label><span>日期</span><input class="ui-control" type="date" name="date" th:value="${page.date()}" required></label>
     <label><span>时区</span><input class="ui-control" name="zoneId" th:value="${page.zoneId()}" required maxlength="80"></label><button type="submit"><svg th:replace="~{shared/icons :: icon('search')}"></svg>查看</button>
   </form>
-  <p th:if="${!page.enabled()}" class="radar-notice">精选日报尚未启用。可继续阅读历史日报；启用方式见项目文档。</p>
+  <p th:if="${!page.enabled()}" class="radar-notice">精选日报需要先在后台「AI 设置」中启用 AI；启用后每天 8 点自动生成前一天的日报。历史日报可继续阅读。</p>
   <form th:if="${page.enabled()}" id="radar-generate" action="/reader/radar/runs" method="post" class="radar-controls">
     <input type="hidden" name="date" th:value="${page.date()}"><input type="hidden" name="zoneId" th:value="${page.zoneId()}">
     <input type="hidden" name="requestKey" th:value="${page.requestKey()}"><button type="submit"><svg th:replace="~{shared/icons :: icon('plus')}"></svg>生成新版本</button>

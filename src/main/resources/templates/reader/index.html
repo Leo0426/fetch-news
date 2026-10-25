@@ -6,6 +6,10 @@
   <title th:text="${hours <= 24 ? '今日速览' : hours <= 48 ? '近 48 小时' : hours <= 72 ? '近 3 天' : '近 7 天'}">今日速览</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/admin.css">
+  <link rel="stylesheet" href="/admin-controls.css">
+  <link rel="stylesheet" href="/admin-views.css">
+  <link rel="stylesheet" href="/reader.css">
+  <link rel="stylesheet" href="/briefing.css">
   <link rel="stylesheet" href="/article.css">
   <script th:inline="javascript">
     const _fnBookmarks = /*[[${bookmarkedLinks}]]*/ [];
@@ -14,6 +18,7 @@
   <script defer src="/ui.js"></script>
   <script defer src="/article.js"></script>
   <script defer src="/reader.js"></script>
+  <script defer src="/reader-page.js"></script>
   <script defer src="/alpine.min.js"></script>
   <link rel="stylesheet" href="/ui-controls.css">
 </head>
@@ -28,8 +33,9 @@
     <a href="/reader/radar"><svg th:replace="~{shared/icons :: icon('radar')}"></svg><span>精选日报</span></a>
     <a href="/reader/bookmarks"><svg th:replace="~{shared/icons :: icon('bookmark')}"></svg><span>收藏</span></a>
     <a href="/reader/search"><svg th:replace="~{shared/icons :: icon('search')}"></svg><span>搜索</span></a>
-    <a href="/index#subscriptions"><svg th:replace="~{shared/icons :: icon('rss')}"></svg><span>订阅来源</span></a>
-    <a href="/index" class="reader-nav-admin"><svg th:replace="~{shared/icons :: icon('settings')}"></svg><span>管理</span></a>
+    <a th:if="${viewer == null or viewer.admin()}" href="/index#subscriptions"><svg th:replace="~{shared/icons :: icon('rss')}"></svg><span>订阅来源</span></a>
+    <a th:if="${viewer == null or viewer.admin()}" href="/index" class="reader-nav-admin"><svg th:replace="~{shared/icons :: icon('settings')}"></svg><span>管理</span></a>
+    <a href="/account" class="reader-nav-account" th:if="${viewer != null}" th:classappend="${!viewer.admin()} ? ' reader-nav-admin'"><svg th:replace="~{shared/icons :: icon('user')}"></svg><span th:text="${viewer.name()}">账户</span></a>
   </nav>
   <header class="rd-head reader-digest-head">
     <div class="reader-heading-copy">
@@ -61,6 +67,14 @@
       <button type="button" class="rd-filter-btn" :class="filter === 'unread' && 'active'" :aria-pressed="filter === 'unread'" @click="setFilter('unread')">未读 <span x-text="unreadCount()"></span></button>
       <button type="button" class="rd-filter-btn" :class="filter === 'read' && 'active'" :aria-pressed="filter === 'read'" @click="setFilter('read')">已读</button>
       <button type="button" class="rd-filter-btn" :class="filter === 'bookmarked' && 'active'" :aria-pressed="filter === 'bookmarked'" @click="setFilter('bookmarked')">收藏 <span x-text="bookmarkCount()"></span></button>
+    </div>
+    <div class="rd-filter rd-filter--picks" th:if="${!picks.isEmpty()}" role="group" aria-label="AI 筛选">
+      <button type="button" class="rd-filter-btn" :class="pickFilter === 'all' && 'active'" :aria-pressed="pickFilter === 'all'" @click="pickFilter = 'all'">全部文章</button>
+      <button type="button" class="rd-filter-btn" :class="pickFilter === 'must' && 'active'" :aria-pressed="pickFilter === 'must'" @click="pickFilter = 'must'" title="AI 判断的重大、影响面广的新闻">必知</button>
+      <button type="button" class="rd-filter-btn" :class="pickFilter === 'quality' && 'active'" :aria-pressed="pickFilter === 'quality'" @click="pickFilter = 'quality'" title="AI 判断有深度、值得完整阅读的内容">精选</button>
+      <span class="reader-pick-accuracy" th:if="${picks.feedbackCount() > 0}"
+            th:text="'近 30 天你反馈 ' + ${picks.feedbackCount()} + ' 条，准确 ' + ${picks.accuracyPercent()} + '%'"
+            title="点标签旁的「准 / 不准」反馈，AI 之后挑选时会参考">近 30 天准确率</span>
     </div>
     <details class="reader-refinements">
       <summary>
@@ -98,7 +112,7 @@
     </details>
     <div class="reader-result-line" th:if="${totalCount > 0}">
       <span role="status" aria-live="polite" aria-atomic="true">显示 <strong x-text="visibleCount()" th:text="${totalCount}">0</strong> / <span th:text="${totalCount}">0</span> 条</span>
-      <button type="button" class="rd-mark-all" @click="resetFilters()" x-show="filter !== 'all' || activeTag !== 'all' || searchQuery" x-cloak>重置筛选</button>
+      <button type="button" class="rd-mark-all" @click="resetFilters()" x-show="filter !== 'all' || activeTag !== 'all' || pickFilter !== 'all' || searchQuery" x-cloak>重置筛选</button>
       <details class="reader-shortcuts"><summary id="reader-shortcuts">键盘快捷键 <kbd>?</kbd></summary><p><kbd>j</kbd> / <kbd>k</kbd> 上下移动 · <kbd>o</kbd> 打开 · <kbd>b</kbd> 收藏 · <kbd>r</kbd> 已读</p></details>
     </div>
   </section>
@@ -106,7 +120,7 @@
   <div th:if="${groups.isEmpty()}" class="rd-empty" id="rd-main" tabindex="-1">
     <strong>阅读从一个订阅开始</strong>
     <p>选择感兴趣的来源并开启自动更新，新内容会整理在这里。</p>
-    <a href="/index#subscriptions" class="reader-empty-action">选择订阅来源 →</a>
+    <a th:if="${viewer == null or viewer.admin()}" href="/index#subscriptions" class="reader-empty-action">选择订阅来源 →</a>
   </div>
   <div th:if="${!groups.isEmpty()}" class="rd-empty" x-show="visibleCount() === 0" x-cloak>
     <strong x-text="filter === 'unread' && activeTag === 'all' && !searchQuery.trim() ? '这段时间的内容已读完' : '没有符合筛选条件的内容'"></strong>

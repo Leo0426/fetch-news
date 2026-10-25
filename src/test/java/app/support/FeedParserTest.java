@@ -1,6 +1,7 @@
 package app.support;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 import org.junit.jupiter.api.Test;
 
@@ -66,5 +67,48 @@ class FeedParserTest {
                 """, "https://example.com/feed").items().getFirst();
 
         assertEquals("<div xmlns=\"http://www.w3.org/1999/xhtml\"><p>Body <em>text</em>.</p></div>", item.description());
+    }
+
+    @Test
+    void readsCoverFromMediaTagsAndImageEnclosures() {
+        var items = FeedParser.parse("""
+                <rss xmlns:media="http://search.yahoo.com/mrss/">
+                  <channel><title>News</title>
+                    <item><title>Media</title><link>https://example.com/a</link>
+                      <media:content url="https://cdn.example.com/video.mp4" medium="video"/>
+                      <media:thumbnail url="/thumb.jpg"/></item>
+                    <item><title>Enclosure</title><link>https://example.com/b</link>
+                      <enclosure url="https://cdn.example.com/b.png" type="image/png" length="0"/></item>
+                    <item><title>Podcast</title><link>https://example.com/c</link>
+                      <enclosure url="https://cdn.example.com/c.mp3" type="audio/mpeg" length="0"/></item>
+                  </channel>
+                </rss>
+                """, "https://example.com/feed").items();
+
+        assertEquals("https://example.com/thumb.jpg", items.get(0).image());
+        assertEquals("https://cdn.example.com/b.png", items.get(1).image());
+        assertNull(items.get(2).image());
+    }
+
+    @Test
+    void fallsBackToFirstRealImageInDescription() {
+        var feed = CoverImages.withFallbackCovers(FeedParser.parse("""
+                <rss><channel><title>News</title>
+                  <item><title>Story</title><link>https://example.com/posts/1</link>
+                    <description><![CDATA[<img src="https://t.example.com/p.gif" width="1" height="1">
+                      <p>Text</p><img data-src="img/cover.jpg" src="data:image/gif;base64,AAAA"></img>]]></description>
+                  </item>
+                  <item><title>Video</title><link>https://example.com/posts/3</link>
+                    <description><![CDATA[<video src="v.m3u8" poster="https://cdn.example.com/poster.jpg"></video>]]></description>
+                  </item>
+                  <item><title>Unsafe</title><link>https://example.com/posts/2</link>
+                    <description><![CDATA[<img src="javascript:alert(1)">]]></description>
+                  </item>
+                </channel></rss>
+                """, "https://example.com/feed"));
+
+        assertEquals("https://example.com/posts/img/cover.jpg", feed.items().get(0).image());
+        assertEquals("https://cdn.example.com/poster.jpg", feed.items().get(1).image());
+        assertNull(feed.items().get(2).image());
     }
 }

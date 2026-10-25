@@ -9,7 +9,7 @@
 
     <details th:if="${about != null}" class="about-section">
       <summary>关于此来源</summary>
-      <div class="about-body" th:utext="${about}"></div>
+      <div class="about-body" th:insert="~{index/route-about :: content(${about})}"></div>
     </details>
 
     <form hx-post="/index/routes"
@@ -105,10 +105,27 @@
                th:value="${isNew or selected.alias() == null} ? '' : ${selected.alias()}">
       </div>
 
+      <div class="field" th:if="${!isNew}">
+        <label class="field-label" for="modal-category">分类</label>
+        <select class="ui-control" id="modal-category" name="category">
+          <option value="" th:text="'继承来源（' + ${inheritedCategory} + '）'"
+                  th:selected="${selected.category() == null}">继承来源</option>
+          <option th:each="topic : ${topics}" th:value="${topic}" th:text="${topic}"
+                  th:selected="${topic == selected.category()}">主题</option>
+        </select>
+        <span class="field-hint">决定文章在阅读页、AI 必知/精选和飞书推送里归入哪个主题</span>
+      </div>
+
       <label class="toggle-row">
         <input name="enabled" type="checkbox" value="true"
                th:checked="${isNew or selected.enabled}">
         启用路由
+      </label>
+
+      <label class="toggle-row" th:if="${isNew or selected.isSchedulable()}">
+        <input name="autoSummary" type="checkbox" value="true"
+               th:checked="${!isNew and selected.autoSummary}">
+        定时抓取后自动生成 AI 摘要（每次最多 5 篇新文章）
       </label>
 
       <div class="form-acts">

@@ -21,20 +21,20 @@ public class ArticleExtractor {
 
     public String extract(FeedItem item) throws Exception {
         if (feedStore == null) throw new IllegalStateException("Article storage unavailable");
-        String cached = feedStore.loadExtract(item.link());
+        String cached = feedStore.aiCache().loadExtract(item.link());
         if (cached != null && !cached.isBlank()) return cached;
         ArticleText articleText = extractText(client.get(item.link()));
         String text = truncate(articleText.text(), 4000);
         if (text.isBlank()) throw new IllegalStateException("No article content available");
         if (Thread.currentThread().isInterrupted()) throw new InterruptedException("Article extraction interrupted");
         if (articleText.mainContent()) {
-            feedStore.saveExtract(item.link(), text, "html");
+            feedStore.aiCache().saveExtract(item.link(), text, "html");
             return text;
         }
         OllamaClient.Generation generation = ollama.generateWithMetadata(buildPrompt(item.title(), text));
         String extracted = generation.text() == null ? "" : generation.text().strip();
         if (extracted.isBlank()) throw new IllegalStateException("Ollama returned empty article content");
-        feedStore.saveExtract(item.link(), extracted, generation.model());
+        feedStore.aiCache().saveExtract(item.link(), extracted, generation.model());
         return extracted;
     }
 

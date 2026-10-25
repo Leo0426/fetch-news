@@ -13,7 +13,8 @@ public record StoredItem(
         String link,
         String author,
         Instant pubDate,
-        Instant firstSeenAt) {
+        Instant firstSeenAt,
+        String image) {
 
     private static final DateTimeFormatter SHORT =
             DateTimeFormatter.ofPattern("MM-dd HH:mm").withZone(ZoneId.systemDefault());

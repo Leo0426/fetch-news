@@ -4,9 +4,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import app.CredentialConfig;
-import app.CredentialConfigStore;
 import app.core.CacheService;
+import app.core.CredentialConfig;
+import app.core.CredentialConfigStore;
 import app.core.FetchClient;
 import app.core.RouteContext;
 import app.core.RouteError;

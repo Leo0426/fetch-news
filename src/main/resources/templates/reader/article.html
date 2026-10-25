@@ -6,6 +6,10 @@
   <title th:text="${page.item() != null} ? ${page.item().title()} + ' · 站内阅读' : '站内阅读'">站内阅读</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/admin.css">
+  <link rel="stylesheet" href="/admin-controls.css">
+  <link rel="stylesheet" href="/admin-views.css">
+  <link rel="stylesheet" href="/reader.css">
+  <link rel="stylesheet" href="/briefing.css">
   <link rel="stylesheet" href="/article.css">
   <script defer src="/ui.js"></script>
   <script defer src="/article.js"></script>
@@ -84,7 +88,7 @@
                 th:text="${summaryState == 'error'} ? '重试生成' : '生成摘要'">生成摘要</button>
         <button type="button" class="article-button" data-article-summary-check th:hidden="${summaryState != 'unknown'}">查看状态</button>
       </div>
-      <a href="/index#ai" class="article-text-link article-summary-settings" data-article-summary-settings
+      <a th:if="${viewer == null or viewer.admin()}" href="/index#ai" class="article-text-link article-summary-settings" data-article-summary-settings
          th:hidden="${summaryState == 'success' or (page.aiEnabled() and summaryState != 'error')}">配置 AI 摘要 <span aria-hidden="true">→</span></a>
       <noscript th:if="${!page.item().hasSummary()}"><p class="article-summary-message">启用 JavaScript 后可生成摘要并查看进度，正文仍可直接阅读。</p></noscript>
     </section>

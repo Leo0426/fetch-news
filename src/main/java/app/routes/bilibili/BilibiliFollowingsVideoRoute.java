@@ -1,7 +1,7 @@
 package app.routes.bilibili;
 
 import app.core.CacheService;
-import app.CredentialConfigStore;
+import app.core.CredentialConfigStore;
 import app.core.Feed;
 import app.core.FeedItem;
 import app.core.FetchClient;

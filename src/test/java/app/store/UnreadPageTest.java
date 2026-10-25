@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import app.auth.UserAccount;
 import app.core.FeedItem;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.file.Path;
@@ -38,9 +39,9 @@ class UnreadPageTest {
                  var statement = connection.createStatement()) {
                 statement.executeUpdate("UPDATE feed_items SET first_seen_at = '2020-01-01T00:00:00Z'");
             }
-            store.markRead(readLink);
+            store.reading().markRead(UserAccount.OWNER_ID, readLink);
 
-            UnreadPage page = store.loadUnreadPage(null, null, false, null, 50);
+            UnreadPage page = store.unread().loadUnreadPage(UserAccount.OWNER_ID, null, null, false, null, 50);
 
             assertEquals(List.of(unreadLink), page.items().stream().map(StoredItem::link).toList());
             assertEquals(1, page.totalCount());
@@ -56,18 +57,18 @@ class UnreadPageTest {
                     .mapToObj(i -> item("Article " + i, "https://example.com/article/" + i, "Body"))
                     .toList();
             store.saveItems("/articles", originals);
-            UnreadPage page = store.loadUnreadPage(null, null, false, null, 100);
+            UnreadPage page = store.unread().loadUnreadPage(UserAccount.OWNER_ID, null, null, false, null, 100);
             assertEquals(1_200, page.totalCount());
             assertEquals(1, page.items().stream().map(StoredItem::firstSeenAt).distinct().count());
             assertNotNull(page.nextCursor());
 
             List<String> visited = new ArrayList<>(page.items().stream().map(StoredItem::link).toList());
-            store.markAllRead(visited);
+            store.reading().markAllRead(UserAccount.OWNER_ID, visited);
             store.saveItems("/articles", List.of(item("New arrival", "https://example.com/new", "Body")));
             int pageCount = 1;
             while (page.nextCursor() != null) {
                 assertTrue(pageCount++ < 20, "The cursor must advance");
-                page = store.loadUnreadPage(null, null, false, page.nextCursor(), 100);
+                page = store.unread().loadUnreadPage(UserAccount.OWNER_ID, null, null, false, page.nextCursor(), 100);
                 assertEquals(1_101, page.totalCount());
                 visited.addAll(page.items().stream().map(StoredItem::link).toList());
             }
@@ -91,16 +92,16 @@ class UnreadPageTest {
                     item("本地模型", "https://example.com/read", "Body"),
                     item("本地模型", "https://example.com/not-bookmarked", "Body"),
                     item("Unrelated", "https://example.com/unrelated", "Body")));
-            store.saveSummary("https://example.com/summary", "可以使用本地模型总结文章", "test-model");
+            store.aiCache().saveSummary("https://example.com/summary", "可以使用本地模型总结文章", "test-model");
             store.saveItems("/b", List.of(item("本地模型", "https://example.com/other", "Body")));
             store.saveItems("/c", List.of(item("Other news", "https://example.com/source-c", "Body")));
             store.saveItems("/d", List.of(item("Read source", "https://example.com/source-d", "Body")));
             for (String suffix : List.of("title", "description", "summary", "read", "unrelated", "other")) {
-                store.saveBookmark("https://example.com/" + suffix, suffix, "/a");
+                store.reading().saveBookmark(UserAccount.OWNER_ID, "https://example.com/" + suffix, suffix, "/a");
             }
-            store.markAllRead(List.of("https://example.com/read", "https://example.com/source-d"));
+            store.reading().markAllRead(UserAccount.OWNER_ID, List.of("https://example.com/read", "https://example.com/source-d"));
 
-            UnreadPage first = store.loadUnreadPage(" /a ", " 本地模型 ", true, null, 2);
+            UnreadPage first = store.unread().loadUnreadPage(UserAccount.OWNER_ID, " /a ", " 本地模型 ", true, null, 2);
 
             assertEquals(List.of("https://example.com/summary", "https://example.com/description"), links(first));
             assertEquals(links(first), first.bookmarkedLinks());
@@ -108,13 +109,13 @@ class UnreadPageTest {
             assertEquals(List.of("/a", "/b", "/c"), first.sources());
             assertNotNull(first.nextCursor());
 
-            UnreadPage second = store.loadUnreadPage("/a", "本地模型", true, first.nextCursor(), 2);
+            UnreadPage second = store.unread().loadUnreadPage(UserAccount.OWNER_ID, "/a", "本地模型", true, first.nextCursor(), 2);
             assertEquals(List.of("https://example.com/title"), links(second));
             assertEquals(3, second.totalCount());
             assertEquals(links(second), second.bookmarkedLinks());
             assertNull(second.nextCursor());
 
-            UnreadPage noMatches = store.loadUnreadPage("/missing", "本地模型", true, null, 2);
+            UnreadPage noMatches = store.unread().loadUnreadPage(UserAccount.OWNER_ID, "/missing", "本地模型", true, null, 2);
             assertTrue(noMatches.items().isEmpty());
             assertEquals(0, noMatches.totalCount());
             assertEquals(List.of("/a", "/b", "/c"), noMatches.sources());
@@ -130,10 +131,10 @@ class UnreadPageTest {
                     item("HACKER News", "https://example.com/case", "Body")));
 
             assertEquals(List.of("https://example.com/literal"),
-                    links(store.loadUnreadPage(null, "%_", false, null, 10)));
+                    links(store.unread().loadUnreadPage(UserAccount.OWNER_ID, null, "%_", false, null, 10)));
             assertEquals(List.of("https://example.com/case"),
-                    links(store.loadUnreadPage(null, " hacker ", false, null, 10)));
-            assertTrue(store.loadUnreadPage(null, "' OR 1=1 --", false, null, 10).items().isEmpty());
+                    links(store.unread().loadUnreadPage(UserAccount.OWNER_ID, null, " hacker ", false, null, 10)));
+            assertTrue(store.unread().loadUnreadPage(UserAccount.OWNER_ID, null, "' OR 1=1 --", false, null, 10).items().isEmpty());
         }
     }
 
@@ -154,7 +155,7 @@ class UnreadPageTest {
                         """);
             }
 
-            UnreadPage page = store.loadUnreadPage("  ", "\t", false, null, 10);
+            UnreadPage page = store.unread().loadUnreadPage(UserAccount.OWNER_ID, "  ", "\t", false, null, 10);
 
             assertEquals(List.of("https://example.com/valid"), links(page));
             assertEquals(1, page.totalCount());
@@ -170,29 +171,29 @@ class UnreadPageTest {
                     item("Original", "https://example.com/shared", "Body"),
                     item("Read", "https://example.com/read", "Body")));
             store.saveItems("/second", List.of(item("Updated", "https://example.com/shared", "Updated body")));
-            store.saveBookmark("https://example.com/shared", "Updated", "/second");
-            store.markRead("https://example.com/read");
+            store.reading().saveBookmark(UserAccount.OWNER_ID, "https://example.com/shared", "Updated", "/second");
+            store.reading().markRead(UserAccount.OWNER_ID, "https://example.com/read");
         }
 
         try (FeedStore store = new FeedStore(database, new ObjectMapper())) {
-            UnreadPage page = store.loadUnreadPage("/first", null, true, null, 10);
+            UnreadPage page = store.unread().loadUnreadPage(UserAccount.OWNER_ID, "/first", null, true, null, 10);
             assertEquals(List.of("https://example.com/shared"), links(page));
             assertEquals(1, page.totalCount());
             assertEquals(links(page), page.bookmarkedLinks());
             assertEquals(List.of("/first"), page.sources());
-            assertTrue(store.loadUnreadPage("/second", null, false, null, 10).items().isEmpty());
+            assertTrue(store.unread().loadUnreadPage(UserAccount.OWNER_ID, "/second", null, false, null, 10).items().isEmpty());
         }
     }
 
     @Test
     void rejectsInvalidPageBoundariesAndSupportsAnEmptyDatabase() throws Exception {
         try (FeedStore store = new FeedStore(tempDir.resolve("feed.db"), new ObjectMapper())) {
-            assertThrows(IllegalArgumentException.class, () -> store.loadUnreadPage(null, null, false, null, 0));
-            assertThrows(IllegalArgumentException.class, () -> store.loadUnreadPage(null, null, false, null, 101));
-            assertThrows(IllegalArgumentException.class, () -> store.loadUnreadPage(null, null, false, 0L, 10));
-            assertThrows(IllegalArgumentException.class, () -> store.loadUnreadPage(null, null, false, -1L, 10));
+            assertThrows(IllegalArgumentException.class, () -> store.unread().loadUnreadPage(UserAccount.OWNER_ID, null, null, false, null, 0));
+            assertThrows(IllegalArgumentException.class, () -> store.unread().loadUnreadPage(UserAccount.OWNER_ID, null, null, false, null, 101));
+            assertThrows(IllegalArgumentException.class, () -> store.unread().loadUnreadPage(UserAccount.OWNER_ID, null, null, false, 0L, 10));
+            assertThrows(IllegalArgumentException.class, () -> store.unread().loadUnreadPage(UserAccount.OWNER_ID, null, null, false, -1L, 10));
             assertEquals(new UnreadPage(List.of(), List.of(), 0, null, List.of()),
-                    store.loadUnreadPage(null, null, false, null, 1));
+                    store.unread().loadUnreadPage(UserAccount.OWNER_ID, null, null, false, null, 1));
         }
     }
 
@@ -200,7 +201,7 @@ class UnreadPageTest {
     void batchReadFailureDoesNotCommitEarlierLinks() throws Exception {
         Path database = tempDir.resolve("feed.db");
         try (FeedStore store = new FeedStore(database, new ObjectMapper())) {
-            store.markRead("https://example.com/existing");
+            store.reading().markRead(UserAccount.OWNER_ID, "https://example.com/existing");
             try (var connection = DriverManager.getConnection("jdbc:sqlite:" + database);
                  var statement = connection.createStatement()) {
                 statement.execute("""
@@ -210,10 +211,10 @@ class UnreadPageTest {
                         """);
             }
 
-            assertThrows(SQLException.class, () -> store.markAllRead(List.of(
+            assertThrows(SQLException.class, () -> store.reading().markAllRead(UserAccount.OWNER_ID, List.of(
                     "https://example.com/first", "https://example.com/rejected", "https://example.com/last")));
 
-            assertEquals(List.of("https://example.com/existing"), store.loadReadLinks());
+            assertEquals(List.of("https://example.com/existing"), store.reading().loadReadLinks(UserAccount.OWNER_ID));
         }
     }
 
@@ -221,12 +222,12 @@ class UnreadPageTest {
     void batchReadSupportsFiveHundredLinksAndRepeatedLinks() throws Exception {
         try (FeedStore store = new FeedStore(tempDir.resolve("feed.db"), new ObjectMapper())) {
             List<String> links = IntStream.range(0, 500).mapToObj(i -> "https://example.com/" + i).toList();
-            store.markAllRead(links);
-            store.markAllRead(List.of(links.getFirst(), links.getFirst()));
-            store.markAllRead(List.of());
+            store.reading().markAllRead(UserAccount.OWNER_ID, links);
+            store.reading().markAllRead(UserAccount.OWNER_ID, List.of(links.getFirst(), links.getFirst()));
+            store.reading().markAllRead(UserAccount.OWNER_ID, List.of());
 
-            assertEquals(Set.copyOf(links), Set.copyOf(store.loadReadLinks()));
-            assertEquals(500, store.loadReadLinks().size());
+            assertEquals(Set.copyOf(links), Set.copyOf(store.reading().loadReadLinks(UserAccount.OWNER_ID)));
+            assertEquals(500, store.reading().loadReadLinks(UserAccount.OWNER_ID).size());
         }
     }
 

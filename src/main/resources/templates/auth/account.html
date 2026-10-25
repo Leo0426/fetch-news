@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>账户 · fetch-news</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/admin.css">
+  <link rel="stylesheet" href="/admin-controls.css">
+  <link rel="stylesheet" href="/admin-views.css">
+  <link rel="stylesheet" href="/reader.css">
+  <link rel="stylesheet" href="/briefing.css">
+  <link rel="stylesheet" href="/ui-controls.css">
+  <script defer src="/ui.js"></script>
+  <style>
+    .acct-section { background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+                    padding: 20px; margin-top: 18px; display: grid; gap: 12px; }
+    .acct-section h2 { font-family: var(--font-display); font-size: 18px; font-weight: 600; }
+    .acct-muted { color: var(--muted); font-size: 13px; line-height: 1.7; }
+    .acct-secret { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .acct-secret code, .acct-feed code { font-family: var(--font-mono); font-size: 12px; background: var(--surface2);
+                    border-radius: 6px; padding: 6px 8px; word-break: break-all; }
+    .acct-secret code { flex: 1 1 260px; user-select: all; }
+    .acct-banner { border-radius: 10px; padding: 12px 14px; font-size: 13px; line-height: 1.7; margin-top: 18px; }
+    .acct-banner.ok { background: var(--green-bg); color: var(--green); }
+    .acct-banner.token { background: var(--accent-bg); color: var(--accent-dk); display: grid; gap: 8px; }
+    .acct-feeds { display: grid; gap: 6px; max-height: 420px; overflow: auto; }
+    .acct-feed { display: grid; grid-template-columns: minmax(0, 180px) minmax(0, 1fr) auto; gap: 10px; align-items: center;
+                 font-size: 13px; padding: 6px 0; border-bottom: 1px solid var(--line); }
+    .acct-feed span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .acct-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+    @media (max-width: 640px) { .acct-feed { grid-template-columns: minmax(0, 1fr) auto; } .acct-feed code { display: none; } }
+  </style>
+</head>
+<body class="reader-page">
+<main class="bm-wrap">
+  <nav class="reader-nav" aria-label="阅读导航">
+    <a href="/reader"><svg th:replace="~{shared/icons :: icon('book')}"></svg><span>速览</span></a>
+    <a href="/reader/unread"><svg th:replace="~{shared/icons :: icon('inbox')}"></svg><span>待读</span></a>
+    <a href="/reader/briefing"><svg th:replace="~{shared/icons :: icon('news')}"></svg><span>每日简报</span></a>
+    <a href="/reader/bookmarks"><svg th:replace="~{shared/icons :: icon('bookmark')}"></svg><span>收藏</span></a>
+    <a href="/reader/search"><svg th:replace="~{shared/icons :: icon('search')}"></svg><span>搜索</span></a>
+    <a th:if="${viewer.admin()}" href="/index" class="reader-nav-admin"><svg th:replace="~{shared/icons :: icon('settings')}"></svg><span>管理</span></a>
+    <a href="/account" aria-current="page" th:classappend="${!viewer.admin()} ? 'reader-nav-admin'"><svg th:replace="~{shared/icons :: icon('user')}"></svg><span>账户</span></a>
+  </nav>
+
+  <header class="rd-head">
+    <div class="reader-heading-copy">
+      <div class="page-eyebrow">账户</div>
+      <h1 class="rd-title" th:text="${user.name()}">admin</h1>
+      <div class="rd-date" th:text="${user.role().label()} + (${authEnabled} ? '' : ' · 认证未启用')">管理员</div>
+    </div>
+  </header>
+
+  <div th:if="${message != null}" class="acct-banner ok" role="status" th:text="${message}">已保存</div>
+  <div th:if="${newToken != null}" class="acct-banner token" role="alert">
+    <strong>新的登录令牌（只显示这一次，请立即保存）</strong>
+    <div class="acct-secret"><code data-secret th:text="${newToken}">fn_xxx</code>
+      <button class="btn" type="button" data-copy-secret>复制</button></div>
+  </div>
+
+  <section class="acct-section" aria-labelledby="feeds-title">
+    <h2 id="feeds-title">在 RSS 阅读器中订阅</h2>
+    <p class="acct-muted" th:if="${authEnabled}">
+      下面的地址已附带你的专属<strong>订阅密钥</strong>，可直接粘贴到 Reeder、NetNewsWire、Feedly、Inoreader 等阅读器中。
+      订阅密钥只能读取 RSS，不能登录网页；若泄露，点击“重置订阅密钥”即可让旧地址失效。
+      阅读器若支持 HTTP 认证，也可以不带 <code>?key=</code>，改用用户名任意、密码填登录令牌的方式。
+    </p>
+    <p class="acct-muted" th:unless="${authEnabled}">认证未启用，订阅地址无需密钥。</p>
+    <div class="acct-secret" th:if="${feedKey != null}">
+      <code data-secret th:text="${feedKey}">fk_xxx</code>
+      <button class="btn" type="button" data-copy-secret>复制密钥</button>
+    </div>
+    <div class="acct-actions">
+      <a class="btn primary" href="/account/opml" download>下载 OPML（全部已启用来源）</a>
+    </div>
+    <div class="acct-feeds" th:attr="data-feed-key=${feedKey},data-feed-key-param=${feedKeyParam}">
+      <div class="acct-feed" th:each="feed : ${feeds}" th:attr="data-path=${feed.path()}">
+        <span th:text="${feed.name()}" th:title="${feed.path()}">来源</span>
+        <code data-feed-url th:text="${feed.path()}">/path</code>
+        <button class="btn-small" type="button" data-copy-feed>复制</button>
+      </div>
+      <p class="acct-muted" th:if="${#lists.isEmpty(feeds)}">暂无已启用的来源。</p>
+    </div>
+  </section>
+
+  <section class="acct-section" th:if="${authEnabled}" aria-labelledby="security-title">
+    <h2 id="security-title">安全</h2>
+    <p class="acct-muted">重置登录令牌后，其他设备需要用新令牌重新登录；重置订阅密钥后，需要在 RSS 阅读器中更新订阅地址。</p>
+    <div class="acct-actions">
+      <form method="post" action="/account/feed-key" onsubmit="return confirm('重置后旧的订阅地址会立即失效，确定继续？')">
+        <button class="btn" type="submit">重置订阅密钥</button>
+      </form>
+      <form method="post" action="/account/token" onsubmit="return confirm('重置后其他设备会被退出登录，确定继续？')">
+        <button class="btn" type="submit">重置登录令牌</button>
+      </form>
+      <form method="post" action="/logout">
+        <button class="btn" type="submit">退出登录</button>
+      </form>
+    </div>
+  </section>
+</main>
+<script>
+(() => {
+  const list = document.querySelector('.acct-feeds');
+  const key = list.dataset.feedKey;
+  const param = list.dataset.feedKeyParam;
+  const urlFor = path => location.origin + path + (key ? '?' + param + '=' + encodeURIComponent(key) : '');
+  list.querySelectorAll('.acct-feed').forEach(row => {
+    row.querySelector('[data-feed-url]').textContent = urlFor(row.dataset.path);
+  });
+  const copy = (button, text) => FetchNewsUI.copyText(text).then(() => {
+    const label = button.textContent;
+    button.textContent = '已复制';
+    setTimeout(() => { button.textContent = label; }, 1500);
+  }, () => FetchNewsUI.notify('复制失败，请手动选中复制', 'error'));
+  document.addEventListener('click', event => {
+    const feed = event.target.closest('[data-copy-feed]');
+    if (feed) copy(feed, urlFor(feed.closest('.acct-feed').dataset.path));
+    const secret = event.target.closest('[data-copy-secret]');
+    if (secret) copy(secret, secret.parentElement.querySelector('[data-secret]').textContent.trim());
+  });
+})();
+</script>
+</body>
+</html>

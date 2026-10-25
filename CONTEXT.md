@@ -51,9 +51,22 @@ The project is intentionally smaller than RSSHub. Core mechanics:
 | `/reader/bookmarks` | Saved bookmarks |
 | `/reader/search` | History search across saved titles, descriptions, and AI summaries |
 | `/reader/briefing` | Daily briefing grouped by category |
+| `/login` | Token sign-in; sets the HttpOnly `fn_auth` cookie |
+| `/account` | Own feed URLs with feed key, OPML export, feed-key/token rotation, sign-out |
+| `/index#users` | Admin: issue, rotate, disable, and delete access tokens |
 | `/<route-path>` | RSS 2.0 or JSON feed output |
 
-All pages are publicly accessible — there is no authentication layer.
+### Access control
+
+`AuthFilter` gates every request except `/login`, `/logout`, the favicon, and assets listed in `FrontendAssetResource.ASSETS`. It is on by default; `fetch-news.auth.enabled=false` (`FETCH_NEWS_AUTH_ENABLED=false`) attaches the owner account to every request instead.
+
+- **Account** (`users` table) — name, role, SHA-256 hash of the login token, plaintext feed key, last-seen time, disabled flag. Account id 1 is the owner; single-user bookmarks and read state migrate to it.
+- **Login token** (`fn_…`, 256-bit) — shown once at creation/rotation. Accepted from the `fn_auth` cookie (browser), `Authorization: Bearer`, or as the HTTP Basic password.
+- **Feed key** (`fk_…`) — read-only secret for RSS readers, accepted only on feed GETs via `?key=` or the Basic password. It never opens reader or admin pages, so a leaked feed URL exposes only feed output.
+- **Roles** — `ADMIN` reaches everything; `MEMBER` reaches `/reader/**`, `/account/**`, and feeds. `/index/**` and writes to `/reader/radar/runs/**` are admin-only. Members opening `/` or `/index` are redirected to `/reader`.
+- **Bootstrap** — without an owner token, startup generates one and logs it once. `FETCH_NEWS_ADMIN_TOKEN` (property `fetch-news.admin-token`, ≥16 cookie-safe characters) replaces the owner token on every start and is the recovery path.
+- **Hardening** — cookie-authenticated writes must come from the same host (`Origin`/`Referer` vs `Host`/`X-Forwarded-Host`); the cookie is `SameSite=Lax`, `HttpOnly`, and `Secure` behind HTTPS (`X-Forwarded-Proto`). Paths with matrix parameters, dot segments, or encoded separators are rejected so filter and handler mapping cannot disagree. Redirects are relative so they stay correct behind TLS-terminating tunnels. Feed responses are `Cache-Control: private`.
+- **Per-user state** — controllers read the caller with `CurrentUser.id()`; outside an HTTP request it resolves to the owner. `ReadingState` and the unread/article queries always take a user id; there is no implicit owner, so a caller cannot silently write someone else's state.
 
 ### UI behavior
 
@@ -82,7 +95,7 @@ All pages are publicly accessible — there is no authentication layer.
 
 **Feed** — normalised subscription feed returned by a route. Contains title, link, description, and a list of FeedItems.
 
-**FeedItem** — one article, post, release, or notification. Fields: title, link, description, pubDate, author, categories.
+**FeedItem** — one article, post, release, or notification. Fields: title, link, description, pubDate, author, categories, image. Route rules for filling them live in `AGENTS.md`.
 
 **Briefing story** — a presentation group of articles with matching, sufficiently specific headlines within one category of a daily briefing. It retains every article's original link and independent reading identity; headline agreement does not establish that the articles describe the same event.
 
@@ -90,15 +103,17 @@ All pages are publicly accessible — there is no authentication layer.
 
 **RouteHandler** — single-method interface that produces a Feed. One class per source. No annotations or framework magic.
 
-**RouteRegistry** — explicit registry mapping route path patterns to RouteHandlers. Registered manually in `AppRuntime`.
+**RouteRegistry** — explicit registry mapping route path patterns to RouteHandlers. Registered manually in `BuiltInRoutes` (the curated catalog in `CuratedRoutes`).
 
-**RouteConfig** — persisted per-route configuration: enabled flag, cache TTLs, schedule (minutes or cron), sourcePath alias, feedUrl. Stored in `route-config.json`.
+**RouteConfig** — persisted per-route configuration: enabled flag, cache TTLs, schedule (minutes or cron), sourcePath alias, feedUrl, alias, autoSummary and topic. Stored in `route-config.json`.
 
 **Subscription** — an enabled, concrete RouteConfig with an update schedule. “添加 RSS 订阅” collects a name and HTTP(S) RSS/Atom URL in a modal, validates them, and saves a disabled, unscheduled mount before showing its source card. The user then subscribes and fetches from that card. `SubscriptionService` applies a chosen interval (or the registered Route's structured recommendation) only when no schedule exists, preserves existing settings on resume, and uses FetchScheduler for initial refresh. Browsing sources never enables or fetches them. Pausing preserves the schedule and stored articles. Source templates with unresolved parameters remain in the advanced category configuration.
 
+**Template route** — a path pattern such as `/hn/:feed`, or the bare `/rss` route. It only serves as a source for mounts and is never enabled, fetched or browsed itself; `AppRuntime.isTemplate` decides, and the admin endpoints reject toggling or fetching one.
+
 **Mount alias** — a fixed path that delegates to a parameterised route. Example: `/my-hn` → sourcePath `/hn/top`. Created via the `/index` UI.
 
-**Curated social source** — a concrete, initially disabled subscription in `TG 科技` or `X 科技`. Telegram sources read the latest public `t.me/s/<channel>` preview through `FetchClient`, preserve post permalinks and source timestamps, and skip posts without readable text or link previews. `/telegram/channel/:channel` supports additional public channels through mounts. Fixed X sources share the existing `TwitterUserRoute` and credential store; their cards state that an X login Cookie is required. No new credentials, automatic subscriptions, or delivery settings are created by registering these sources.
+**Curated social source** — a concrete, initially disabled subscription (Telegram channels in `科技资讯`, X accounts in `AI` or `软件开发`). Telegram sources read the latest public `t.me/s/<channel>` preview through `FetchClient`, preserve post permalinks and source timestamps, and skip posts without readable text or link previews. `/telegram/channel/:channel` supports additional public channels through mounts. Fixed X sources share the existing `TwitterUserRoute` and credential store; their cards state that an X login Cookie is required. No new credentials, automatic subscriptions, or delivery settings are created by registering these sources.
 
 **Generic RSS route** — the `/rss` route accepts an HTTP(S) RSS 2.0 or Atom feed URL via `RouteConfig.feedUrl`. It keeps valid public response bodies and validators in SQLite, reuses them after a `304`, and persists failure backoff across restarts.
 
@@ -110,11 +125,11 @@ All pages are publicly accessible — there is no authentication layer.
 
 **FeedFetchCoordinator** — owned by `AppRuntime`; shares an in-progress fetch, including item persistence and logging, between HTTP and scheduler callers with the same handler and full route context. It does not cache completed results. Changed source URLs use independent fetches.
 
-**FetchScheduler** — checks per-route cron or minute-interval schedules every 60 seconds. Manual and scheduled fetches share an in-flight guard per route path. RSS retry deadlines take precedence over normal schedules, and manual refresh respects the same persisted backoff. Different paths can run concurrently; saved articles enter the shared summary queue after feed persistence and immediate delivery. Fetching does not wait for model inference.
+**FetchScheduler** — checks per-route cron or minute-interval schedules every 60 seconds. Manual and scheduled fetches share an in-flight guard per route path. RSS retry deadlines take precedence over normal schedules, and manual refresh respects the same persisted backoff. Different paths can run concurrently. Fetching never waits for model inference and queues summaries only for `autoSummary` routes.
 
 `FetchProgress` reserves each path before queuing work and records running, saved, failed, deferred, or unconfirmed outcomes. Success requires a new successful persistence log; a returned feed alone does not prove storage succeeded. Subscription cards poll only while running, use persistent logs and current-feed retry state after restart, and link saved content to the existing unread reader. Changing a source while its old fetch is running requires waiting for that fetch to end before refreshing the new source.
 
-**FeedStore** — SQLite persistence layer. Owns feed items, read state, bookmarks, AI caches and run status, fetch logs, HTTP feed snapshots, RSS refresh state, and the FTS5 index. General route health is derived from recent fetch logs; the RSS status table shows the current source's persisted refresh state.
+**FeedStore** — SQLite persistence: opening, transactions, and saving fetched articles. Everything else lives in modules reached through it that share its single connection and lock: `items()` article queries, `unread()` the unread inbox, `reading()` bookmarks and read state, `accounts()` users, `aiCache()` summaries and extracts, `summaryQueue()` the summary queue, `picks()` triage labels and feedback, `searchIndex()` FTS5 search, `fetchState()` fetch logs, health, HTTP snapshots and refresh state, and `radar()` radar runs and jobs. `FeedSchema` creates and migrates the core tables. Deleting an account clears its reading state in the same transaction.
 
 **FeishuPusher** — optionally sends items immediately per route or as scheduled category digests. Progress advances only after every page is confirmed by HTTP and business status. Partial failure can repeat already delivered pages on retry; cursors are in memory and restart uses a 24-hour lookback.
 
@@ -122,7 +137,13 @@ All pages are publicly accessible — there is no authentication layer.
 
 **ArticleExtractor** — used by background summary and radar generation when saved article content is insufficient. Reuses cached extracts; otherwise fetches HTML through the shared `FetchClient` and removes navigation and active content with JSoup. Specific article-body containers take precedence over broad article/main regions. A recognized container with more than 200 Unicode code points supplies text directly with paragraph breaks, capped at 4,000 code points and cached in SQLite with model marker `html`. Only when no qualifying container is found does the existing AI cleanup run; its output is cached with the generating model's identity.
 
-**ArticleSummarizer** — owns a single worker for reader, admin, batch, and scheduled requests. Only saved article URLs can enter the durable queue in `ai_summary_runs`; duplicate queued/running work and cached summaries are skipped. It reuses substantial saved descriptions, then cached/model-assisted extracts, before generating a 2–3 sentence Chinese summary. Each model request snapshots its current configuration; saved metadata identifies the model used for generation. Errors require explicit manual retry. Disabling AI pauses queued work. At startup queued tasks remain queued; interrupted running tasks become retryable errors unless a summary was already saved. This queue assumes one application instance.
+**ArticleSummarizer** — owns a single worker for the durable queue in `ai_summary_runs`. Summaries are on demand: a reader's click is *interactive* priority and runs before *background* work, which comes only from routes with `autoSummary` (at most 5 new items per scheduled fetch) or the admin batch action. Background tasks are dropped after 24 hours or once anyone reads the article. Only saved article URLs can enter the queue; duplicate queued/running work and cached summaries are skipped, and asking for a queued background task promotes it. It reuses substantial saved descriptions, then cached/model-assisted extracts, before generating a 2–3 sentence Chinese summary. Interactive tasks also run their model calls ahead of background AI work through `OllamaClient.interactive()`. Network errors and AI 5xx responses are retried once; other errors require manual retry. Disabling AI pauses queued work. At startup interrupted interactive tasks are requeued and interrupted background tasks become retryable errors. This queue assumes one application instance.
+
+**ArticleTriage** — labels at most three 必知 (must-know) and three 精选 (worth reading) articles per category over the last 24 hours. The model chooses within a batch of titles and excerpts rather than scoring articles one by one; categories over 30 articles run a tournament. A background pass runs every five minutes, at most once per 30 minutes per category, and only for categories with articles not yet triaged under their current category. Labels and reasons live in `item_picks`.
+
+**Pick feedback** — readers rate each label 准/不准 in `pick_feedback`, keyed by user. A category's recent verdicts are shown to the model as examples of the readers' taste, a label any reader rejected is never re-applied to that article, and the reader page shows the reader's 30-day agreement rate.
+
+**Topic (category)** — every route belongs to one `app.core.Topic` such as 时事要闻 or 软件开发; labels are what users see and config files store. A route or mount may set its own `category`; otherwise it inherits the category of the registered route serving it. `AppRuntime.categoryOf` is the only resolver, used by the reader, triage, Feishu and radar. `Topic.RENAMED` records the regrouping from language/platform categories to topics; Feishu rules saved under an old name move to its successors on load.
 
 ---
 
@@ -144,10 +165,11 @@ HTTP Request
 Background
   → FetchScheduler       — ticks every 60 s, triggers FeedFetcher per schedule
     → FeishuPusher       — immediate delivery after persistence
-    → ArticleSummarizer.enqueue — records saved URLs in the durable queue
-  → ArticleSummarizer worker — claims one queued article at a time
+    → ArticleSummarizer.enqueueLinks — only for autoSummary routes, at most 5 new items
+  → ArticleSummarizer worker — claims one queued article at a time, interactive first
     → saved description or ArticleExtractor cache/extraction
-    → Ollama summary → SQLite cache and terminal status
+    → model summary → SQLite cache and terminal status
+  → ArticleTriage        — every 5 min, labels 必知/精选 per topic → item_picks
   → FeishuPusher         — checks category digest schedules each tick
 ```
 
@@ -164,7 +186,8 @@ record FeedItem(
     String description,
     Instant pubDate,
     String author,
-    List<String> categories
+    List<String> categories,
+    String image          // cover URL; null when the source has none
 ) {}
 ```
 
@@ -191,6 +214,8 @@ record FeedItem(
 | `scheduleMinutes` | int | Background fetch interval in minutes; 0 = disabled |
 | `scheduleCron` | string | Spring 6-field cron expression (takes precedence over scheduleMinutes) |
 | `feedUrl` | string | External feed URL; only used when sourcePath is `/rss` |
+| `autoSummary` | boolean | Queue background summaries for up to 5 new items per scheduled fetch (default false) |
+| `category` | string | Topic override; absent inherits the source route's category |
 
 ---
 
@@ -213,7 +238,7 @@ record FeedItem(
 
 All data lives in a single SQLite file (default `feed-store.db`, overridable via `-Dfetch-news.db`).
 
-Tables: `feed_items`, `bookmarks`, `read_items`, `ai_extracts`, `ai_summaries`, `ai_summary_runs`, `fetch_log`, `http_feed_snapshots`, `feed_refresh_states`, `search_index_state`, and the `feed_search_fts` virtual table. General route health is computed from fetch logs.
+Tables: `users`, `feed_items` (including the `image` cover URL), `bookmarks`, `read_items`, `ai_extracts`, `ai_summaries`, `ai_summary_runs`, `item_picks`, `pick_feedback`, `fetch_log`, `http_feed_snapshots`, `feed_refresh_states`, `search_index_state`, and the `feed_search_fts` virtual table. General route health is computed from fetch logs.
 
 HTTP snapshots are keyed by feed URL. Refresh state is keyed by `(route_path, feed_url)`, so an older request finishing after a source change cannot erase the new source's backoff. It records check/success/change times, HTTP status, UTF-8 response-body size, duration, failures, error, and retry deadline. Response-body size is measured after text decoding, not wire traffic. A per-subscription SHA-256 fingerprint of the parsed feed tracks content changes independently of reusable HTTP snapshots, including sources that disallow caching and aliases sharing one feed URL.
 
@@ -231,34 +256,23 @@ The container is stateless; the file is host-mounted at `./data/feed-store.db` i
 
 ---
 
-## Route Implementation Policy
-
-A route is a single class implementing `RouteHandler`. Shape:
-
-1. Build upstream URL (using path params or feedUrl from context).
-2. Fetch via `FetchClient`.
-3. Parse with JSoup (HTML/XML) or Jackson (JSON).
-4. Map source entries to `FeedItem`.
-5. Return `Feed`.
-
-If a route fetches detail pages per item, use `CacheService` for the detail-page cache level. Never hold shared mutable state in a handler.
-
----
-
 ## System Properties
 
 | Property | Default | Purpose |
 |---|---|---|
 | `fetch-news.db` | `./feed-store.db` | SQLite database path |
 | `fetch-news.route-config` | `./route-config.json` | Route configuration file |
-| `fetch-news.ai-config` | `./ai-config.json` | Ollama host, model, enabled flag |
+| `fetch-news.ai-config` | `./ai-config.json` | AI platforms and the global AI switch |
 | `fetch-news.feishu-config` | `./feishu-config.json` | Feishu webhook and per-category delivery settings |
+| `fetch-news.credential-config` | `./data/credential-config.json` | Saved Bilibili / X cookies |
+| `fetch-news.auth.enabled` | `true` | Token authentication (`FETCH_NEWS_AUTH_ENABLED`) |
+| `fetch-news.admin-token` | — | Pins/resets the owner login token (`FETCH_NEWS_ADMIN_TOKEN`) |
 
 ---
 
 ## Non-Goals (current version)
 
-- Authentication or multi-user support
+- External identity providers, passwords, or self-registration — accounts are created by an admin
 - Distributed cache or external queue
 - Browser automation
 - Dynamic plugin loading or classpath scanning
@@ -267,8 +281,6 @@ If a route fetches detail pages per item, use `CacheService` for the detail-page
 
 ## Radar reports
 
-The optional `app.radar` pipeline snapshots saved articles, source provenance, Profiles, configuration and model identity, then routes, scores, deduplicates, selects and enriches articles into immutable reports. `/reader/radar` and Markdown exports only read saved output. A durable single-instance worker shares Ollama generation admission with existing summaries. See [radar operations](docs/radar.md) for configuration, budgets, recovery and quality limits.
+The `app.radar` pipeline (shown to readers as 精选日报) snapshots a day's saved articles, the Profile, configuration and model identity, then scores, deduplicates, selects and enriches articles into immutable reports. It is built in rather than configurable: `RadarConfig.BUILT_IN` scores every source with the shipped `tech-news` Profile (`BuiltInProfiles`, read from the jar), runs daily at 08:00 Asia/Shanghai for the previous day, and is available exactly when AI is enabled. Readers can also generate a report on demand at `/reader/radar`; page loads and Markdown exports only read saved output. A durable single-instance worker shares the AI generation permit with summaries. Every run keeps a snapshot of the `RadarConfig` it used, so the record keeps its full shape.
 
-Radar administration lives in separate resources: `/index#radar` edits Profiles and policy; `/index#radar-tasks` reads durable runs and observed generation metrics; `/index#radar-evaluation` submits a fixed five-call sample evaluation against a saved AI platform without activating it. Profile writes use versioned prompt files plus atomic manifests. `radar_jobs` persists evaluation, delivery and community jobs, recovering interrupted work to an explicit paused state.
-
-`RadarDeliveryService` sends immutable saved reports through the existing default Feishu webhook, with per-page receipts and explicit confirmation for uncertain retries. Automatic discovery is separately opt-in. `CommunityContextService` uses the runtime FetchClient for bounded Hacker News story/comment retrieval, validates the article URL association, and stores attributed plain-text context independently in `community_context`. Reader page loads do not initiate upstream requests; community retrieval is explicit. See [radar operations](docs/radar.md) for controls and limits.
+`CommunityContextService` fetches bounded Hacker News story/comment context on explicit request, validates the article URL association, and stores attributed plain-text context in `community_context`; its jobs persist in `radar_jobs`. See [精选日报](docs/radar.md) for behaviour, budgets and recovery.

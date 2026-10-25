@@ -1,0 +1,9 @@
+<th:block th:fragment="content(about)">
+  <p th:text="${about.intro()}"></p>
+  <table class="about-table">
+    <thead><tr><th th:each="column : ${about.columns()}" th:text="${column}"></th></tr></thead>
+    <tbody>
+      <tr th:each="row : ${about.rows()}"><td th:each="cell : ${row}" th:text="${cell}"></td></tr>
+    </tbody>
+  </table>
+</th:block>

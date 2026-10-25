@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -37,7 +38,7 @@ public class RouteConfigStore {
      * @return route configs visible to the admin API
      */
     public synchronized List<RouteConfig> list(List<String> routePaths) {
-        List<RouteConfig> result = new java.util.ArrayList<>();
+        List<RouteConfig> result = new ArrayList<>();
         for (String path : routePaths) {
             result.add(get(path));
             configs.values().stream()
@@ -122,7 +123,9 @@ public class RouteConfigStore {
                         value.path("scheduleMinutes").asInt(0),
                         scheduleCron,
                         feedUrl,
-                        alias));
+                        alias,
+                        value.path("autoSummary").asBoolean(false),
+                        value.path("category").isTextual() ? value.path("category").asText() : null));
             });
         } catch (IOException e) {
             throw new RouteException(RouteError.INVALID_PARAMETER, "failed to read route config: " + e.getMessage(), e);
@@ -157,6 +160,12 @@ public class RouteConfigStore {
                 }
                 if (config.alias() != null) {
                     node.put("alias", config.alias());
+                }
+                if (config.autoSummary()) {
+                    node.put("autoSummary", true);
+                }
+                if (config.category() != null) {
+                    node.put("category", config.category());
                 }
             }
             objectMapper.writerWithDefaultPrettyPrinter().writeValue(configFile.toFile(), root);

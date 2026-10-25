@@ -15,9 +15,9 @@ class RouteTest {
         List<Route> routes = List.of(
                 new Route("/news", HANDLER),
                 new Route("/news", HANDLER, "News"),
-                new Route("/news", HANDLER, "News", "Science"),
-                new Route("/news", HANDLER, "News", "Science", "RSS"),
-                new Route("/news", HANDLER, "News", "Science", "RSS", "Official feed"));
+                new Route("/news", HANDLER, "News", Topic.SCIENCE),
+                new Route("/news", HANDLER, "News", Topic.SCIENCE, "RSS"),
+                new Route("/news", HANDLER, "News", Topic.SCIENCE, "RSS", "Official feed"));
 
         routes.forEach(route -> assertEquals(0, route.recommendedScheduleMinutes()));
     }
@@ -25,6 +25,6 @@ class RouteTest {
     @Test
     void rejectsNegativeRecommendedSchedule() {
         assertThrows(IllegalArgumentException.class,
-                () -> new Route("/news", HANDLER, "News", "Science", "RSS", "Official feed", -1));
+                () -> new Route("/news", HANDLER, "News", Topic.SCIENCE, "RSS", "Official feed", -1));
     }
 }

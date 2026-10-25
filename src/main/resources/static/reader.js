@@ -15,6 +15,9 @@ function readerState() {
     queueBookmarkedOnly: queueMode && document.body.dataset.bookmarkedOnly === 'true',
     queueTotal: Number(document.body.dataset.queueTotal || 0),
     activeTag: 'all',
+    pickFilter: 'all',
+    pickVerdicts: {},
+    pickVotes: {},
     searchQuery: '',
     listView: !!ui.storage.get('fn-list-view'),
     readPending: {},
@@ -33,6 +36,8 @@ function readerState() {
         const link = card.dataset.link;
         this.aiStates[link] = card.dataset.summaryState || 'none';
         this.aiEnabled[link] = card.dataset.aiEnabled === 'true';
+        this.pickVerdicts[link + '|must'] = card.dataset.verdictMust || '';
+        this.pickVerdicts[link + '|quality'] = card.dataset.verdictQuality || '';
         if (this.aiStates[link] === 'error') this.aiErrors[link] = card.dataset.summaryError || '摘要未完成，可以重试。';
         if (['queued', 'running'].includes(this.aiStates[link])) this.scheduleSummaryCheck(link);
       });
@@ -49,7 +54,7 @@ function readerState() {
       window.addEventListener('pagehide', pauseSummaries);
       window.addEventListener('pageshow', resumeSummaries);
       this.$nextTick(() => this.buildToc());
-      ['filter', 'activeTag', 'searchQuery', 'reads', 'bookmarks', 'listView'].forEach(key => {
+      ['filter', 'activeTag', 'pickFilter', 'searchQuery', 'reads', 'bookmarks', 'listView'].forEach(key => {
         this.$watch(key, () => this.$nextTick(() => this.updateToc()));
       });
     },
@@ -68,6 +73,7 @@ function readerState() {
     resetFilters() {
       this.searchQuery = '';
       this.activeTag = 'all';
+      this.pickFilter = 'all';
       this.setFilter('all');
     },
     itemVisible(card) {
@@ -75,6 +81,8 @@ function readerState() {
       const query = this.searchQuery.trim().toLowerCase();
       const link = card.dataset.link;
       return (this.activeTag === 'all' || tag === this.activeTag)
+        && (this.pickFilter === 'all' || ((card.dataset.picks || '').split(' ').includes(this.pickFilter)
+          && this.pickVerdict(link, this.pickFilter) !== 'down'))
         && (!query || (card.dataset.title || '').toLowerCase().includes(query))
         && (!this.queueBookmarkedOnly || this.isBookmarked(link))
         && (this.filter === 'all'
@@ -209,6 +217,26 @@ function readerState() {
         this.bookmarkPending = {...this.bookmarkPending, [link]: false};
       }
     },
+    pickVerdict(link, kind) { return this.pickVerdicts[link + '|' + kind] || ''; },
+    pickVotePending(link, kind) { return !!this.pickVotes[link + '|' + kind]; },
+    async votePick(link, kind, verdict) {
+      const key = link + '|' + kind;
+      if (this.pickVotes[key]) return;
+      const previous = this.pickVerdict(link, kind);
+      const next = previous === verdict ? '' : verdict;
+      this.pickVotes = {...this.pickVotes, [key]: true};
+      this.pickVerdicts = {...this.pickVerdicts, [key]: next};
+      try {
+        const result = await this.save('/reader/picks/feedback', {link, kind, verdict: next || 'none'}, 'PUT');
+        if (result !== (next || 'none')) throw new Error('Unexpected response');
+        if (next === 'down') ui.notify('已记下，这篇不再标记，之后的挑选会参考你的反馈。');
+      } catch (error) {
+        this.pickVerdicts = {...this.pickVerdicts, [key]: previous};
+        ui.notify('反馈暂时无法保存，请重试。', 'error');
+      } finally {
+        this.pickVotes = {...this.pickVotes, [key]: false};
+      }
+    },
     summaryState(link) { return this.aiStates[link] || 'none'; },
     isSummarizing(link) {
       return !!this.summarizing[link] || ['queued', 'running'].includes(this.summaryState(link));
@@ -217,7 +245,8 @@ function readerState() {
     summaryError(link) { return this.aiErrors[link] || null; },
     summaryLabel(link) {
       if (this.aiUncertain[link]) return '状态暂时无法确认';
-      if (this.summarizing[link]) return '正在确认摘要状态…';
+      // Background polls of a pending job must keep the current label, or it flickers every 2s.
+      if (this.summarizing[link] && !['queued', 'running'].includes(this.summaryState(link))) return '正在确认摘要状态…';
       return {queued: '已加入队列 · 排队中', running: '正在生成摘要', success: 'AI 摘要', error: '摘要生成失败'}[this.summaryState(link)] || '';
     },
     scheduleSummaryCheck(link) {
@@ -360,116 +389,4 @@ function readerState() {
       this.updateActiveToc();
     }
   };
-}
-
-document.addEventListener('keydown', event => {
-  if (!document.body.hasAttribute('data-reader') || event.defaultPrevented || event.isComposing
-      || event.ctrlKey || event.metaKey || event.altKey
-      || event.target.closest('input, textarea, select, [contenteditable="true"], [role="dialog"]')) return;
-  if (event.key === '?') {
-    event.preventDefault();
-    document.getElementById('reader-shortcuts')?.click();
-    return;
-  }
-  const cards = [...document.querySelectorAll('.rd-card[data-link]')].filter(card => card.getClientRects().length);
-  let index = cards.findIndex(card => card.contains(document.activeElement));
-  if (index < 0) index = cards.findIndex(card => card.classList.contains('fn-focused'));
-  if (event.key === 'j' || event.key === 'k') {
-    if (!cards.length) return;
-    event.preventDefault();
-    const next = event.key === 'j' ? Math.min(index + 1, cards.length - 1) : Math.max(index - 1, 0);
-    cards.forEach(card => card.classList.remove('fn-focused'));
-    cards[next].classList.add('fn-focused');
-    cards[next].querySelector('.rd-card-title')?.focus({preventScroll: true});
-    cards[next].scrollIntoView({block: 'nearest', behavior: window.FetchNewsUI.motionBehavior()});
-  } else if (index >= 0 && ['o', 'b', 'r'].includes(event.key)) {
-    event.preventDefault();
-    const selector = {o: '.rd-card-title', b: '.rd-bookmark-btn', r: '.rd-read-dot'}[event.key];
-    cards[index].querySelector(selector)?.click();
-  }
-});
-
-const bookmarkGrid = document.querySelector('[data-bookmark-grid]');
-if (bookmarkGrid) {
-  const readRequests = new Set();
-  async function markBookmarkRead(card) {
-    const link = card.dataset.link;
-    if (!link || readRequests.has(link)) return;
-    readRequests.add(link);
-    const state = card.querySelector('[data-bookmark-read-state]');
-    const error = card.querySelector('[data-bookmark-read-error]');
-    const retry = card.querySelector('[data-bookmark-read-retry]');
-    const previousLabel = state.textContent;
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15000);
-    state.textContent = '保存已读中…';
-    state.setAttribute('aria-busy', 'true');
-    error.hidden = true;
-    retry.disabled = true;
-    try {
-      const response = await fetch('/reader/read-all', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-        body: new URLSearchParams({links: link}).toString(),
-        keepalive: true,
-        signal: controller.signal
-      });
-      if (!response.ok || await response.text() !== 'ok') throw new Error('Read state was not saved');
-      card.dataset.read = 'true';
-      state.textContent = '已读';
-    } catch (failure) {
-      state.textContent = previousLabel;
-      error.hidden = false;
-      window.FetchNewsUI.notify('暂时无法确认已读状态，请重试，或进入站内阅读后标记。', 'error');
-    } finally {
-      clearTimeout(timeout);
-      readRequests.delete(link);
-      retry.disabled = false;
-      state.removeAttribute('aria-busy');
-    }
-  }
-  bookmarkGrid.addEventListener('click', event => {
-    if (event.defaultPrevented || event.button !== 0) return;
-    const target = event.target.closest('.bm-card-title, [data-bookmark-read-retry]');
-    const card = target?.closest('.bm-card[data-link]');
-    if (card && bookmarkGrid.contains(card)) markBookmarkRead(card);
-  });
-  bookmarkGrid.addEventListener('auxclick', event => {
-    if (event.defaultPrevented || event.button !== 1) return;
-    const card = event.target.closest('.bm-card-title')?.closest('.bm-card[data-link]');
-    if (card && bookmarkGrid.contains(card)) markBookmarkRead(card);
-  });
-  const focusAfterRemoval = new WeakMap();
-  const reportedFailures = new WeakSet();
-  document.addEventListener('htmx:beforeRequest', event => {
-    const button = event.detail.elt;
-    if (!button?.matches('.bm-remove')) return;
-    reportedFailures.delete(button);
-    const card = button.closest('.bm-card');
-    const cards = [...bookmarkGrid.querySelectorAll('.bm-card')];
-    const index = cards.indexOf(card);
-    focusAfterRemoval.set(card, cards[index + 1]?.querySelector('.bm-remove')
-      || cards[index - 1]?.querySelector('.bm-remove')
-      || document.querySelector('#bookmark-empty a'));
-  });
-  ['htmx:responseError', 'htmx:sendError', 'htmx:timeout'].forEach(eventName => {
-    document.addEventListener(eventName, event => {
-      const button = event.detail.elt;
-      if (!button?.matches('.bm-remove') || reportedFailures.has(button)) return;
-      reportedFailures.add(button);
-      focusAfterRemoval.delete(button.closest('.bm-card'));
-      window.FetchNewsUI.notify('取消收藏失败，文章仍在收藏夹中，请重试。', 'error');
-    });
-  });
-  new MutationObserver(records => {
-    const count = bookmarkGrid.querySelectorAll('.bm-card').length;
-    document.getElementById('bookmark-count').textContent = count + ' 条收藏';
-    document.getElementById('bookmark-empty').hidden = count > 0;
-    bookmarkGrid.hidden = count === 0;
-    if (document.activeElement !== document.body) return;
-    const candidate = records.flatMap(record => [...record.removedNodes])
-      .map(card => focusAfterRemoval.get(card)).find(button => button?.isConnected);
-    const next = candidate || bookmarkGrid.querySelector('.bm-remove') || document.querySelector('#bookmark-empty a');
-    next?.focus();
-  }).observe(bookmarkGrid, {childList: true});
 }

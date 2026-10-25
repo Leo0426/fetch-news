@@ -154,4 +154,23 @@ class RouteConfigStoreTest {
         assertEquals("/example", reloaded.get("/short").sourcePath());
         assertEquals(120, reloaded.get("/short").routeCacheTtlSeconds());
     }
+
+    @Test
+    void keepsCategoryAndAutoSummaryThroughReloadAndToggles() {
+        Path file = tempDir.resolve("routes.json");
+        RouteConfigStore store = new RouteConfigStore(file, new ObjectMapper());
+        store.save(new RouteConfig("/my-feed", "/rss", true, 300, 1800, 0, null,
+                "https://example.com/feed.xml", null, true, " 科学 "));
+
+        RouteConfig reloaded = new RouteConfigStore(file, new ObjectMapper()).get("/my-feed");
+        RouteConfig toggled = reloaded.withEnabled(false).withScheduleMinutes(30);
+
+        assertEquals("科学", reloaded.category());
+        assertTrue(reloaded.autoSummary());
+        assertEquals("科学", toggled.category());
+        assertTrue(toggled.autoSummary());
+        assertFalse(toggled.enabled());
+        assertEquals(30, toggled.scheduleMinutes());
+        assertEquals(null, new RouteConfig("/x", "/x", true, 300, 1800, 0, null, null, null, false, " ").category());
+    }
 }

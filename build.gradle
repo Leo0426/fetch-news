@@ -5,7 +5,7 @@ plugins {
 }
 
 group = 'app'
-version = '0.4.0'
+version = '0.6.0'
 
 dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-web'
@@ -40,11 +40,12 @@ tasks.withType(Test).configureEach {
     systemProperty 'fetch-news.db', new File(testRuntimeDir, 'feed-store.db').absolutePath
     systemProperty 'fetch-news.ai-config', new File(testRuntimeDir, 'ai-config.json').absolutePath
     systemProperty 'fetch-news.feishu-config', new File(testRuntimeDir, 'feishu-config.json').absolutePath
-    systemProperty 'fetch-news.radar-config', new File(testRuntimeDir, 'radar-config.json').absolutePath
-    systemProperty 'fetch-news.radar-profiles', new File(testRuntimeDir, 'radar-profiles').absolutePath
+    // Existing endpoint tests run as the owner; auth tests opt back in via @SpringBootTest properties.
+    systemProperty 'fetch-news.auth.enabled', 'false'
     environment = environment.findAll { key, value ->
         key != 'OLLAMA_HOST' && key != 'TWITTER_COOKIE' &&
-                key != 'BILIBILI_COOKIE' && !key.startsWith('BILIBILI_COOKIE_')
+                key != 'BILIBILI_COOKIE' && !key.startsWith('BILIBILI_COOKIE_') &&
+                !key.startsWith('FETCH_NEWS_')
     }
     doFirst {
         if (testRuntimeDir.exists() && !testRuntimeDir.deleteDir()) {

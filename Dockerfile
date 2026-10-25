@@ -9,7 +9,9 @@ COPY app.jar app.jar
 # /data is the external mount point for all persistent files:
 #   feed-store.db       — SQLite database
 #   route-config.json   — route enable/disable and schedule settings
-#   ai-config.json      — Ollama host, model and enabled flag
+#   ai-config.json      — AI platforms and the enabled flag
+#   feishu-config.json  — Feishu webhook and per-topic delivery rules
+#   credential-config.json — saved Bilibili / X cookies
 RUN mkdir /data
 VOLUME /data
 
@@ -21,9 +23,10 @@ ENV JAVA_OPTS=""
 # Use exec so Java becomes PID 1 and receives OS signals cleanly
 ENTRYPOINT ["sh", "-c", \
   "exec java $JAVA_OPTS \
+   -Dserver.port=8080 \
    -Dfetch-news.db=/data/feed-store.db \
    -Dfetch-news.route-config=/data/route-config.json \
    -Dfetch-news.ai-config=/data/ai-config.json \
-   -Dfetch-news.radar-config=/data/radar-config.json \
-   -Dfetch-news.radar-profiles=/data/radar-profiles \
+   -Dfetch-news.feishu-config=/data/feishu-config.json \
+   -Dfetch-news.credential-config=/data/credential-config.json \
    -jar app.jar"]

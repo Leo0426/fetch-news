@@ -6,6 +6,10 @@
   <title>待读收件箱</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/admin.css">
+  <link rel="stylesheet" href="/admin-controls.css">
+  <link rel="stylesheet" href="/admin-views.css">
+  <link rel="stylesheet" href="/reader.css">
+  <link rel="stylesheet" href="/briefing.css">
   <link rel="stylesheet" href="/article.css">
   <link rel="stylesheet" href="/unread.css">
   <script th:inline="javascript">
@@ -15,6 +19,7 @@
   <script defer src="/ui.js"></script>
   <script defer src="/article.js"></script>
   <script defer src="/reader.js"></script>
+  <script defer src="/reader-page.js"></script>
   <script defer src="/alpine.min.js"></script>
   <link rel="stylesheet" href="/ui-controls.css">
 </head>
@@ -31,8 +36,9 @@
     <a href="/reader/radar"><svg th:replace="~{shared/icons :: icon('radar')}"></svg><span>精选日报</span></a>
     <a href="/reader/bookmarks"><svg th:replace="~{shared/icons :: icon('bookmark')}"></svg><span>收藏</span></a>
     <a href="/reader/search"><svg th:replace="~{shared/icons :: icon('search')}"></svg><span>搜索</span></a>
-    <a href="/index#subscriptions"><svg th:replace="~{shared/icons :: icon('rss')}"></svg><span>订阅来源</span></a>
-    <a href="/index" class="reader-nav-admin"><svg th:replace="~{shared/icons :: icon('settings')}"></svg><span>管理</span></a>
+    <a th:if="${viewer == null or viewer.admin()}" href="/index#subscriptions"><svg th:replace="~{shared/icons :: icon('rss')}"></svg><span>订阅来源</span></a>
+    <a th:if="${viewer == null or viewer.admin()}" href="/index" class="reader-nav-admin"><svg th:replace="~{shared/icons :: icon('settings')}"></svg><span>管理</span></a>
+    <a href="/account" class="reader-nav-account" th:if="${viewer != null}" th:classappend="${!viewer.admin()} ? ' reader-nav-admin'"><svg th:replace="~{shared/icons :: icon('user')}"></svg><span th:text="${viewer.name()}">账户</span></a>
   </nav>
 
   <header class="rd-head unread-head">
@@ -107,7 +113,7 @@
           <strong>暂时没有待读内容</strong>
           <p>订阅来源并开启自动更新后，新抓取的未读文章会整理在这里。</p>
           <div class="unread-empty-actions">
-            <a href="/index#subscriptions" class="reader-empty-action">选择订阅来源 →</a>
+            <a th:if="${viewer == null or viewer.admin()}" href="/index#subscriptions" class="reader-empty-action">选择订阅来源 →</a>
             <a th:href="${page.startUrl}" class="reader-empty-action">刷新待读</a>
             <a href="/reader" class="reader-empty-action">回到速览</a>
           </div>

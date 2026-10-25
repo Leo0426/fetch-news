@@ -1,5 +1,12 @@
 package app;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
+
 import app.ai.AiConfigStore;
 import app.core.CacheService;
 import app.core.DefaultFetchClient;
@@ -10,6 +17,8 @@ import app.core.RouteConfigStore;
 import app.core.RouteContext;
 import app.core.RouteMatch;
 import app.core.RouteRegistry;
+import app.fetch.FeedFetcher;
+import app.fetch.FetchScheduler;
 import app.routes.GenericRssRoute;
 import app.store.FeedStore;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -36,13 +45,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.http.ResponseEntity;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertSame;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
-
 class SharedFeedFetchIntegrationTest {
     @TempDir
     Path tempDir;
@@ -59,7 +61,7 @@ class SharedFeedFetchIntegrationTest {
 
             assertSame(failure, assertThrows(FetchDeferredException.class,
                     () -> fetcher.fetch(match, context, "/news")));
-            assertEquals(0, store.getRecentLogs("/news", 10).size());
+            assertEquals(0, store.fetchState().getRecentLogs("/news", 10).size());
         }
     }
 
@@ -95,8 +97,8 @@ class SharedFeedFetchIntegrationTest {
                 assertTrue(response.getBody().toString().contains("Slow article"));
                 assertEquals(1, upstream.slowCalls.get());
                 assertEquals(1, store.loadItems("/news").size());
-                assertEquals(1, store.getRecentLogs("/news", 10).size());
-                assertEquals("ok", store.getRecentLogs("/news", 10).getFirst().status());
+                assertEquals(1, store.fetchState().getRecentLogs("/news", 10).size());
+                assertEquals("ok", store.fetchState().getRecentLogs("/news", 10).getFirst().status());
             } finally {
                 upstream.release.countDown();
                 if (http != null) http.thread().join(5_000);
@@ -129,7 +131,7 @@ class SharedFeedFetchIntegrationTest {
                 assertEquals(200, oldRequest.result().get(5, TimeUnit.SECONDS).getStatusCode().value());
                 assertEquals(1, upstream.slowCalls.get());
                 assertEquals(2, store.loadItems("/news").size());
-                assertEquals(2, store.getRecentLogs("/news", 10).size());
+                assertEquals(2, store.fetchState().getRecentLogs("/news", 10).size());
             } finally {
                 upstream.release.countDown();
                 oldRequest.thread().join(5_000);

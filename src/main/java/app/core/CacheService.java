@@ -90,13 +90,6 @@ public class CacheService {
     }
 
     /**
-     * Returns the approximate combined number of entries across both caches.
-     */
-    public long totalSize() {
-        return routeCache.estimatedSize() + detailCache.estimatedSize();
-    }
-
-    /**
      * Reads a cache entry and atomically reloads missing or expired values for each key.
      *
      * @param cache target cache

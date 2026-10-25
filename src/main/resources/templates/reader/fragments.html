@@ -31,18 +31,45 @@
   </noscript>
 </div>
 
+<p th:fragment="pickLine(kind, label, reason)" class="rd-pick" th:attr="data-kind=${kind}"
+   :class="pickVerdict($el.closest('[data-link]').dataset.link, $el.dataset.kind) === 'down' && 'rd-pick--rejected'">
+  <span class="rd-pick-tag" th:classappend="${'rd-pick-tag--' + kind}" th:text="${label}">必知</span>
+  <span class="rd-pick-reason" th:text="${reason}">理由</span>
+  <span class="rd-pick-votes">
+    <button type="button" class="rd-pick-vote" title="判断准确"
+            :aria-pressed="pickVerdict($el.closest('[data-link]').dataset.link, $el.closest('[data-kind]').dataset.kind) === 'up'"
+            :disabled="pickVotePending($el.closest('[data-link]').dataset.link, $el.closest('[data-kind]').dataset.kind)"
+            @click.stop="votePick($el.closest('[data-link]').dataset.link, $el.closest('[data-kind]').dataset.kind, 'up')"
+            th:attr="aria-label=${label + '判断准确'}">准</button>
+    <button type="button" class="rd-pick-vote" title="判断不准，这篇不再标记"
+            :aria-pressed="pickVerdict($el.closest('[data-link]').dataset.link, $el.closest('[data-kind]').dataset.kind) === 'down'"
+            :disabled="pickVotePending($el.closest('[data-link]').dataset.link, $el.closest('[data-kind]').dataset.kind)"
+            @click.stop="votePick($el.closest('[data-link]').dataset.link, $el.closest('[data-kind]').dataset.kind, 'down')"
+            th:attr="aria-label=${label + '判断不准'}">不准</button>
+  </span>
+</p>
+
 <div th:fragment="articleCard(item, aiEnabled)"
      class="rd-card reveal"
-     th:with="status=${item.summaryStatus()}"
-     th:attr="data-link=${item.link()},data-title=${item.title()},data-route-path=${item.routePath()},data-summary-state=${item.hasSummary() ? 'success' : (status != null ? status.status() : 'none')},data-summary-error=${status != null and status.error() ? status.errorMessage() : ''},data-ai-enabled=${aiEnabled}"
+     th:with="status=${item.summaryStatus()},pick=${picks != null ? picks.label(item.link()) : null}"
+     th:attr="data-picks=${pick == null ? '' : (pick.mustKnow() ? 'must ' : '') + (pick.quality() ? 'quality' : '')},data-verdict-must=${pick == null ? '' : picks.verdict(item.link(), 'must')},data-verdict-quality=${pick == null ? '' : picks.verdict(item.link(), 'quality')},data-link=${item.link()},data-title=${item.title()},data-route-path=${item.routePath()},data-summary-state=${item.hasSummary() ? 'success' : (status != null ? status.status() : 'none')},data-summary-error=${status != null and status.error() ? status.errorMessage() : ''},data-ai-enabled=${aiEnabled}"
      :class="{'rd-card--read': isRead($el.dataset.link), 'rd-card--bookmarked': isBookmarked($el.dataset.link)}"
      x-show="itemVisible($el)">
 
+  <div th:if="${item.hasImage()}" class="rd-card-cover">
+    <img th:src="${item.image()}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer"
+         onerror="this.parentElement.remove()">
+  </div>
   <a class="rd-card-title"
      th:href="${item.link()}"
      th:text="${item.title()}"
      @click="markRead($el.closest('[data-link]').dataset.link)"
      target="_blank" rel="noopener noreferrer">标题</a>
+
+  <div th:if="${pick != null}" class="rd-picks">
+    <th:block th:if="${pick.mustKnow()}"><p th:replace="~{reader/fragments :: pickLine('must', '必知', ${pick.mustKnowReason()})}"></p></th:block>
+    <th:block th:if="${pick.quality()}"><p th:replace="~{reader/fragments :: pickLine('quality', '精选', ${pick.qualityReason()})}"></p></th:block>
+  </div>
 
   <th:block th:if="${item.hasSummary()}">
     <th:block th:replace="~{reader/fragments :: summaryStatus(${item})}"></th:block>
@@ -51,6 +78,10 @@
      class="rd-summary"
      th:text="${item.summary()}"></p>
 
+  <p th:if="${!item.hasSummary() and item.hasExcerpt()}"
+     class="rd-summary rd-excerpt"
+     x-show="!summary($el.closest('[data-link]').dataset.link)"
+     th:text="${item.excerpt()}"></p>
   <div th:if="${!item.hasSummary()}" class="rd-summarize-wrap"
        x-show="aiEnabled[$el.closest('[data-link]').dataset.link] || summaryState($el.closest('[data-link]').dataset.link) !== 'none' || aiUncertain[$el.closest('[data-link]').dataset.link]">
     <div class="reader-summary-status" role="status" aria-live="polite" aria-atomic="true"

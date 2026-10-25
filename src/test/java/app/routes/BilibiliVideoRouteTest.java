@@ -1,19 +1,19 @@
 package app.routes;
 
-import app.routes.bilibili.BilibiliVideoRoute;
-import app.CredentialConfig;
-import app.CredentialConfigStore;
+import static org.junit.jupiter.api.Assertions.*;
+
 import app.core.CacheService;
+import app.core.CredentialConfigStore;
 import app.core.Feed;
 import app.core.RouteContext;
 import app.core.RouteError;
 import app.core.RouteException;
+import app.routes.bilibili.BilibiliVideoRoute;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
-
-import static org.junit.jupiter.api.Assertions.*;
 
 class BilibiliVideoRouteTest {
     private static final ObjectMapper MAPPER = new ObjectMapper();
@@ -71,7 +71,7 @@ class BilibiliVideoRouteTest {
     private static BilibiliVideoRoute route(String videoJson) {
         CacheService cache = new CacheService(Duration.ofMinutes(5), Duration.ofMinutes(30));
         CredentialConfigStore creds = new CredentialConfigStore(
-                java.nio.file.Path.of("build/test-creds.json"), MAPPER);
+                Path.of("build/test-creds.json"), MAPPER);
         return new BilibiliVideoRoute(mockFetcher(videoJson), MAPPER, cache, creds);
     }
 

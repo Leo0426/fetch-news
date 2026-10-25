@@ -4,7 +4,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import app.core.CacheService;
 import app.core.Feed;
 import app.core.FeedItem;
 import app.core.Route;
@@ -13,7 +12,6 @@ import app.core.RouteConfigStore;
 import app.core.RouteError;
 import app.core.RouteException;
 import app.core.RouteHandler;
-import app.core.RouteRegistry;
 import app.store.FeedStore;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.file.Path;
@@ -106,7 +104,7 @@ class FeedDeliveryTest {
             RssLiteResource resource = new RssLiteResource(runtime, mapper, store);
 
             assertEquals(502, resource.get("feed", "json", null).getStatusCode().value());
-            assertFalse(store.loadRouteHealth().get("/feed").healthy());
+            assertFalse(store.fetchState().loadRouteHealth().get("/feed").healthy());
             assertEquals(200, resource.get("feed", "json", null).getStatusCode().value());
             assertEquals(2, calls.get());
         }
@@ -115,8 +113,7 @@ class FeedDeliveryTest {
     private AppRuntime runtime(RouteHandler handler) {
         RouteConfigStore configs = new RouteConfigStore(tempDir.resolve("routes.json"), mapper);
         configs.save(config(null));
-        return new AppRuntime(new CacheService(),
-                new RouteRegistry(List.of(new Route("/feed", handler))), configs);
+        return TestPages.runtime(configs, new Route("/feed", handler));
     }
 
     private RouteConfig config(String feedUrl) {

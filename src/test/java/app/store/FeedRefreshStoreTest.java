@@ -25,9 +25,9 @@ class FeedRefreshStoreTest {
     @Test
     void missingSnapshotAndRefreshStateReturnNull() throws Exception {
         try (FeedStore store = new FeedStore(tempDir.resolve("feed.db"), new ObjectMapper())) {
-            assertNull(store.loadHttpFeedSnapshot(FEED_URL));
-            assertNull(store.loadFeedRefreshState("/blog", FEED_URL));
-            assertTrue(store.loadFeedRefreshStates().isEmpty());
+            assertNull(store.fetchState().loadHttpFeedSnapshot(FEED_URL));
+            assertNull(store.fetchState().loadFeedRefreshState("/blog", FEED_URL));
+            assertTrue(store.fetchState().loadFeedRefreshStates().isEmpty());
         }
     }
 
@@ -42,26 +42,26 @@ class FeedRefreshStoreTest {
                 2, 503, 4_294_967_296L, 1250, "Service unavailable");
 
         try (FeedStore store = new FeedStore(database, new ObjectMapper())) {
-            store.saveHttpFeedSnapshot(snapshot);
-            store.saveFeedRefreshState(state);
+            store.fetchState().saveHttpFeedSnapshot(snapshot);
+            store.fetchState().saveFeedRefreshState(state);
         }
 
         try (FeedStore store = new FeedStore(database, new ObjectMapper())) {
-            assertEquals(snapshot, store.loadHttpFeedSnapshot(FEED_URL));
-            assertEquals(state, store.loadFeedRefreshState("/blog", FEED_URL));
-            assertEquals(List.of(state), store.loadFeedRefreshStates());
+            assertEquals(snapshot, store.fetchState().loadHttpFeedSnapshot(FEED_URL));
+            assertEquals(state, store.fetchState().loadFeedRefreshState("/blog", FEED_URL));
+            assertEquals(List.of(state), store.fetchState().loadFeedRefreshStates());
         }
     }
 
     @Test
     void updatingSnapshotReplacesBodyAndClearsMissingValidators() throws Exception {
         try (FeedStore store = new FeedStore(tempDir.resolve("feed.db"), new ObjectMapper())) {
-            store.saveHttpFeedSnapshot(new HttpFeedSnapshot(FEED_URL, "old body", "old-tag", "old-date"));
+            store.fetchState().saveHttpFeedSnapshot(new HttpFeedSnapshot(FEED_URL, "old body", "old-tag", "old-date"));
             HttpFeedSnapshot replacement = new HttpFeedSnapshot(FEED_URL, "new body", null, null);
 
-            store.saveHttpFeedSnapshot(replacement);
+            store.fetchState().saveHttpFeedSnapshot(replacement);
 
-            assertEquals(replacement, store.loadHttpFeedSnapshot(FEED_URL));
+            assertEquals(replacement, store.fetchState().loadHttpFeedSnapshot(FEED_URL));
         }
     }
 
@@ -69,12 +69,12 @@ class FeedRefreshStoreTest {
     void nullBodyCannotReplaceValidSnapshot() throws Exception {
         try (FeedStore store = new FeedStore(tempDir.resolve("feed.db"), new ObjectMapper())) {
             HttpFeedSnapshot snapshot = new HttpFeedSnapshot(FEED_URL, "valid body", "tag", null);
-            store.saveHttpFeedSnapshot(snapshot);
+            store.fetchState().saveHttpFeedSnapshot(snapshot);
 
-            assertThrows(SQLException.class, () -> store.saveHttpFeedSnapshot(
+            assertThrows(SQLException.class, () -> store.fetchState().saveHttpFeedSnapshot(
                     new HttpFeedSnapshot(FEED_URL, null, "invalid-tag", null)));
 
-            assertEquals(snapshot, store.loadHttpFeedSnapshot(FEED_URL));
+            assertEquals(snapshot, store.fetchState().loadHttpFeedSnapshot(FEED_URL));
         }
     }
 
@@ -84,16 +84,16 @@ class FeedRefreshStoreTest {
             HttpFeedSnapshot other = new HttpFeedSnapshot(FEED_URL + "?edition=other", "other body", null, null);
             FeedRefreshState state = new FeedRefreshState(
                     "/blog", FEED_URL, CHECKED_AT, CHECKED_AT, CHECKED_AT, null, 0, 200, 10, 20, null);
-            store.saveHttpFeedSnapshot(new HttpFeedSnapshot(FEED_URL, "body", "tag", null));
-            store.saveHttpFeedSnapshot(other);
-            store.saveFeedRefreshState(state);
+            store.fetchState().saveHttpFeedSnapshot(new HttpFeedSnapshot(FEED_URL, "body", "tag", null));
+            store.fetchState().saveHttpFeedSnapshot(other);
+            store.fetchState().saveFeedRefreshState(state);
 
-            store.deleteHttpFeedSnapshot(FEED_URL);
-            store.deleteHttpFeedSnapshot(FEED_URL);
+            store.fetchState().deleteHttpFeedSnapshot(FEED_URL);
+            store.fetchState().deleteHttpFeedSnapshot(FEED_URL);
 
-            assertNull(store.loadHttpFeedSnapshot(FEED_URL));
-            assertEquals(other, store.loadHttpFeedSnapshot(other.url()));
-            assertEquals(state, store.loadFeedRefreshState("/blog", FEED_URL));
+            assertNull(store.fetchState().loadHttpFeedSnapshot(FEED_URL));
+            assertEquals(other, store.fetchState().loadHttpFeedSnapshot(other.url()));
+            assertEquals(state, store.fetchState().loadFeedRefreshState("/blog", FEED_URL));
         }
     }
 
@@ -108,16 +108,16 @@ class FeedRefreshStoreTest {
                     "/blog", nextUrl, CHECKED_AT, CHECKED_AT, CHECKED_AT, null, 0, 200, 100, 50, null);
             FeedRefreshState otherPath = new FeedRefreshState(
                     "/other", FEED_URL, CHECKED_AT, CHECKED_AT, CHECKED_AT, null, 0, 304, 0, 5, null);
-            store.saveFeedRefreshState(original);
+            store.fetchState().saveFeedRefreshState(original);
 
-            assertNull(store.loadFeedRefreshState("/blog", nextUrl));
+            assertNull(store.fetchState().loadFeedRefreshState("/blog", nextUrl));
 
-            store.saveFeedRefreshState(replacement);
-            store.saveFeedRefreshState(otherPath);
+            store.fetchState().saveFeedRefreshState(replacement);
+            store.fetchState().saveFeedRefreshState(otherPath);
 
-            assertEquals(original, store.loadFeedRefreshState("/blog", FEED_URL));
-            assertEquals(replacement, store.loadFeedRefreshState("/blog", nextUrl));
-            List<FeedRefreshState> states = store.loadFeedRefreshStates();
+            assertEquals(original, store.fetchState().loadFeedRefreshState("/blog", FEED_URL));
+            assertEquals(replacement, store.fetchState().loadFeedRefreshState("/blog", nextUrl));
+            List<FeedRefreshState> states = store.fetchState().loadFeedRefreshStates();
             assertEquals(3, states.size());
             assertTrue(states.containsAll(List.of(original, replacement, otherPath)));
         }
@@ -129,15 +129,15 @@ class FeedRefreshStoreTest {
         FeedRefreshState state = new FeedRefreshState(
                 "/blog", FEED_URL, null, null, null, null, 0, 0, 0, 0, null);
         try (FeedStore store = new FeedStore(database, new ObjectMapper())) {
-            store.saveFeedRefreshState(new FeedRefreshState(
+            store.fetchState().saveFeedRefreshState(new FeedRefreshState(
                     "/blog", FEED_URL, CHECKED_AT, CHECKED_AT, CHECKED_AT, CHECKED_AT.plusSeconds(60),
                     1, 503, 128, 75, "Unavailable"));
-            store.saveFeedRefreshState(state);
+            store.fetchState().saveFeedRefreshState(state);
         }
 
         try (FeedStore store = new FeedStore(database, new ObjectMapper())) {
-            assertEquals(state, store.loadFeedRefreshState("/blog", FEED_URL));
-            assertEquals(List.of(state), store.loadFeedRefreshStates());
+            assertEquals(state, store.fetchState().loadFeedRefreshState("/blog", FEED_URL));
+            assertEquals(List.of(state), store.fetchState().loadFeedRefreshStates());
         }
     }
 
@@ -152,13 +152,13 @@ class FeedRefreshStoreTest {
                 "/blog", FEED_URL, CHECKED_AT.plusSeconds(10), CHECKED_AT.plusSeconds(10),
                 CHECKED_AT.plusSeconds(10), null, 0, 200, 100, 10_000, null);
         try (FeedStore store = new FeedStore(database, new ObjectMapper())) {
-            store.saveFeedRefreshState(nextSource);
-            store.saveFeedRefreshState(oldSource);
+            store.fetchState().saveFeedRefreshState(nextSource);
+            store.fetchState().saveFeedRefreshState(oldSource);
         }
 
         try (FeedStore store = new FeedStore(database, new ObjectMapper())) {
-            assertEquals(nextSource, store.loadFeedRefreshState("/blog", nextUrl));
-            assertEquals(oldSource, store.loadFeedRefreshState("/blog", FEED_URL));
+            assertEquals(nextSource, store.fetchState().loadFeedRefreshState("/blog", nextUrl));
+            assertEquals(oldSource, store.fetchState().loadFeedRefreshState("/blog", FEED_URL));
         }
     }
 
@@ -169,13 +169,13 @@ class FeedRefreshStoreTest {
                 "/blog", FEED_URL, CHECKED_AT, CHECKED_AT, CHECKED_AT, null,
                 0, 200, 128, 30, null, "feed-content-fingerprint");
         try (FeedStore store = new FeedStore(database, new ObjectMapper())) {
-            store.saveFeedRefreshState(state);
+            store.fetchState().saveFeedRefreshState(state);
         }
 
         try (FeedStore store = new FeedStore(database, new ObjectMapper())) {
-            assertNull(store.loadHttpFeedSnapshot(FEED_URL));
-            assertEquals("feed-content-fingerprint", store.loadFeedRefreshState("/blog", FEED_URL).contentFingerprint());
-            assertEquals(List.of(state), store.loadFeedRefreshStates());
+            assertNull(store.fetchState().loadHttpFeedSnapshot(FEED_URL));
+            assertEquals("feed-content-fingerprint", store.fetchState().loadFeedRefreshState("/blog", FEED_URL).contentFingerprint());
+            assertEquals(List.of(state), store.fetchState().loadFeedRefreshStates());
         }
     }
 
@@ -183,22 +183,22 @@ class FeedRefreshStoreTest {
     void updatingStateCanReplaceAndClearContentFingerprint() throws Exception {
         Path database = tempDir.resolve("feed.db");
         try (FeedStore store = new FeedStore(database, new ObjectMapper())) {
-            store.saveFeedRefreshState(new FeedRefreshState(
+            store.fetchState().saveFeedRefreshState(new FeedRefreshState(
                     "/blog", FEED_URL, CHECKED_AT, CHECKED_AT, CHECKED_AT, null,
                     0, 200, 128, 30, null, "first-fingerprint"));
-            store.saveFeedRefreshState(new FeedRefreshState(
+            store.fetchState().saveFeedRefreshState(new FeedRefreshState(
                     "/blog", FEED_URL, CHECKED_AT, CHECKED_AT, CHECKED_AT, null,
                     0, 200, 256, 40, null, "second-fingerprint"));
-            assertEquals("second-fingerprint", store.loadFeedRefreshState("/blog", FEED_URL).contentFingerprint());
+            assertEquals("second-fingerprint", store.fetchState().loadFeedRefreshState("/blog", FEED_URL).contentFingerprint());
 
-            store.saveFeedRefreshState(new FeedRefreshState(
+            store.fetchState().saveFeedRefreshState(new FeedRefreshState(
                     "/blog", FEED_URL, CHECKED_AT, CHECKED_AT, CHECKED_AT, null,
                     0, 200, 256, 40, null));
         }
 
         try (FeedStore store = new FeedStore(database, new ObjectMapper())) {
-            assertNull(store.loadFeedRefreshState("/blog", FEED_URL).contentFingerprint());
-            assertNull(store.loadFeedRefreshStates().getFirst().contentFingerprint());
+            assertNull(store.fetchState().loadFeedRefreshState("/blog", FEED_URL).contentFingerprint());
+            assertNull(store.fetchState().loadFeedRefreshStates().getFirst().contentFingerprint());
         }
     }
 
@@ -236,8 +236,8 @@ class FeedRefreshStoreTest {
                 "Existing article", "https://example.com/article", "Existing body",
                 Instant.parse("2026-10-03T09:00:00Z"), "Existing author", List.of("News"));
         try (FeedStore store = new FeedStore(database, new ObjectMapper())) {
-            store.saveHttpFeedSnapshot(new HttpFeedSnapshot(FEED_URL, "<rss/>", null, null));
-            store.saveFeedRefreshState(new FeedRefreshState(
+            store.fetchState().saveHttpFeedSnapshot(new HttpFeedSnapshot(FEED_URL, "<rss/>", null, null));
+            store.fetchState().saveFeedRefreshState(new FeedRefreshState(
                     "/blog", FEED_URL, CHECKED_AT, CHECKED_AT, CHECKED_AT, null, 0, 200, 6, 20, null));
 
             assertEquals(List.of(existingItem), store.loadItems("/blog"));
@@ -245,7 +245,7 @@ class FeedRefreshStoreTest {
 
         try (FeedStore store = new FeedStore(database, new ObjectMapper())) {
             assertEquals(List.of(existingItem), store.loadItems("/blog"));
-            assertEquals("<rss/>", store.loadHttpFeedSnapshot(FEED_URL).body());
+            assertEquals("<rss/>", store.fetchState().loadHttpFeedSnapshot(FEED_URL).body());
         }
     }
 }

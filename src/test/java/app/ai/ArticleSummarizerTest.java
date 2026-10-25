@@ -41,12 +41,12 @@ class ArticleSummarizerTest {
             assertEquals(0, service.enqueue(List.of(item)));
             service.processNext();
             service.processNext();
-            assertEquals("本地摘要", store.loadSummary(item.link()));
+            assertEquals("本地摘要", store.aiCache().loadSummary(item.link()));
             assertEquals(1, prompts.size());
             assertTrue(prompts.getFirst().contains("Saved title"));
             assertTrue(prompts.getFirst().contains("正文材料"));
             assertEquals(0, fetches.get());
-            assertEquals("actual-model", store.loadSummaryStatuses(List.of(item.link())).get(item.link()).model());
+            assertEquals("actual-model", store.summaryQueue().statuses(List.of(item.link())).get(item.link()).model());
             assertEquals("success", service.progress(item.link()).state());
         }
     }

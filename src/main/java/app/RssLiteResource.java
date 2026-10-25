@@ -11,6 +11,7 @@ import app.core.RouteError;
 import app.core.RouteException;
 import app.core.RouteMatch;
 import app.core.RssRenderer;
+import app.fetch.FeedFetcher;
 import app.store.FeedStore;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.net.URI;
@@ -22,6 +23,7 @@ import java.util.Map;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -47,7 +49,7 @@ public class RssLiteResource {
     /**
      * Creates the public feed resource with persistence support.
      */
-    @org.springframework.beans.factory.annotation.Autowired
+    @Autowired
     public RssLiteResource(AppRuntime runtime, ObjectMapper objectMapper, FeedStore feedStore) {
         this.runtime = runtime;
         this.cacheService = runtime.cacheService();
@@ -117,7 +119,7 @@ public class RssLiteResource {
             feed = applyLimit(feed, itemLimit);
             if (feedStore != null) {
                 try {
-                    List<FeedItem> merged = feedStore.mergeExtracts(feed.items());
+                    List<FeedItem> merged = feedStore.aiCache().mergeExtracts(feed.items());
                     if (merged != feed.items()) {
                         feed = new Feed(feed.title(), feed.link(), feed.description(), merged);
                     }
@@ -161,8 +163,9 @@ public class RssLiteResource {
         try {
             return ResponseEntity.ok()
                     .contentType(MediaType.parseMediaType(renderer.contentType()))
+                    // Feeds require a token, so shared caches must not reuse them across users.
                     .header(HttpHeaders.CACHE_CONTROL,
-                            "public, max-age=" + cacheTtlSeconds + ", stale-while-revalidate=60")
+                            "private, max-age=" + cacheTtlSeconds + ", stale-while-revalidate=60")
                     .body(renderer.render(feed));
         } catch (RouteException e) {
             throw e;
