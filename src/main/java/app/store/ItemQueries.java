@@ -88,10 +88,10 @@ public final class ItemQueries {
      * Capped at 500 rows so the reader stays fast regardless of volume.
      */
     public List<StoredItem> loadRecentItems(Duration window) throws SQLException {
-        synchronized (store) {
+        return store.read(conn -> {
             String since = Instant.now().minus(window).toString();
             List<StoredItem> result = new ArrayList<>();
-            try (PreparedStatement ps = store.conn.prepareStatement(FeedStore.selectItems("""
+            try (PreparedStatement ps = conn.prepareStatement(FeedStore.selectItems("""
                     FROM feed_items
                     WHERE first_seen_at >= ?
                     ORDER BY first_seen_at DESC
@@ -103,7 +103,7 @@ public final class ItemQueries {
                 }
             }
             return result;
-        }
+        });
     }
 
     /**
@@ -111,12 +111,12 @@ public final class ItemQueries {
      * (system default timezone), ordered newest-first.
      */
     public List<StoredItem> loadItemsForDate(LocalDate date) throws SQLException {
-        synchronized (store) {
+        return store.read(conn -> {
             ZoneId tz = ZoneId.systemDefault();
             String from = date.atStartOfDay(tz).toInstant().toString();
             String to   = date.plusDays(1).atStartOfDay(tz).toInstant().toString();
             List<StoredItem> result = new ArrayList<>();
-            try (PreparedStatement ps = store.conn.prepareStatement(FeedStore.selectItems("""
+            try (PreparedStatement ps = conn.prepareStatement(FeedStore.selectItems("""
                     FROM feed_items
                     WHERE first_seen_at >= ? AND first_seen_at < ?
                     ORDER BY first_seen_at DESC
@@ -129,7 +129,7 @@ public final class ItemQueries {
                 }
             }
             return result;
-        }
+        });
     }
 
     /**
@@ -186,11 +186,11 @@ public final class ItemQueries {
     /** Returns plain-text descriptions of at least {@code minLength} code points, cut to {@code maxLength}. */
     public Map<String, String> loadDescriptionTexts(List<String> links, int minLength,
                                                                           int maxLength) throws SQLException {
-        synchronized (store) {
+        return store.read(conn -> {
             Map<String, String> result = new HashMap<>();
             if (links.isEmpty()) return result;
             String placeholders = String.join(",", Collections.nCopies(links.size(), "?"));
-            try (PreparedStatement ps = store.conn.prepareStatement(
+            try (PreparedStatement ps = conn.prepareStatement(
                     "SELECT item_link, description FROM feed_items WHERE item_link IN (" + placeholders + ")"
                             + " AND length(description) >= " + minLength)) {
                 for (int i = 0; i < links.size(); i++) ps.setString(i + 1, links.get(i));
@@ -205,6 +205,6 @@ public final class ItemQueries {
                 }
             }
             return result;
-        }
+        });
     }
 }

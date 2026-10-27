@@ -154,6 +154,7 @@ X 和 B 站的接口可能因登录过期、限流或风控而失效。Telegram 
 | `OLLAMA_HOST` | 覆盖已保存的 Ollama 地址；Docker 内访问宿主机用 `http://host.docker.internal:11434` |
 | `BILIBILI_COOKIE`、`TWITTER_COOKIE` | 见上方「需要凭据的来源」 |
 | `JAVA_OPTS` | JVM 参数，默认 `-Xms128m -Xmx512m` |
+| `TZ` | 时区，影响显示时间、「今日」统计和定时任务；镜像默认 `Asia/Shanghai` |
 
 AI 平台、飞书推送、来源设置都在后台 `/index` 中修改。所有可用的系统属性见 [CONTEXT.md](CONTEXT.md#system-properties)。
 

@@ -2,14 +2,21 @@ package app.core;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
+import com.github.benmanes.caffeine.cache.Expiry;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.concurrent.Callable;
 
 /**
  * Provides small TTL caches for final route feeds and fetched detail pages.
+ *
+ * <p>Both are bounded by an estimate of their text size, not entry count: detail pages are whole upstream
+ * HTML or JSON documents, and a few thousand of them would not fit the heap.
  */
 public class CacheService {
+    static final int ROUTE_CACHE_MAX_CHARS = 16 << 20;
+    static final int DETAIL_CACHE_MAX_CHARS = 32 << 20;
+
     private final Cache<String, CacheEntry> routeCache;
     private final Cache<String, CacheEntry> detailCache;
     private final Duration defaultRouteTtl;
@@ -31,8 +38,40 @@ public class CacheService {
     public CacheService(Duration routeTtl, Duration detailTtl) {
         this.defaultRouteTtl = routeTtl;
         this.defaultDetailTtl = detailTtl;
-        this.routeCache = Caffeine.newBuilder().maximumSize(500).build();
-        this.detailCache = Caffeine.newBuilder().maximumSize(2000).build();
+        this.routeCache = boundedCache(ROUTE_CACHE_MAX_CHARS);
+        this.detailCache = boundedCache(DETAIL_CACHE_MAX_CHARS);
+    }
+
+    private static Cache<String, CacheEntry> boundedCache(int maxChars) {
+        return Caffeine.newBuilder()
+                .maximumWeight(maxChars)
+                .weigher((String key, CacheEntry entry) -> key.length() + estimatedChars(entry.value()))
+                // Entries carry their own TTL; expire them then instead of keeping them until evicted.
+                .expireAfter(Expiry.writing((String key, CacheEntry entry) -> remaining(entry)))
+                // Evict on the calling thread so a burst of large pages cannot outrun the size bound.
+                .executor(Runnable::run)
+                .build();
+    }
+
+    private static Duration remaining(CacheEntry entry) {
+        Duration left = Duration.between(Instant.now(), entry.expiresAt());
+        return left.isNegative() ? Duration.ZERO : left;
+    }
+
+    static int estimatedChars(Object value) {
+        if (value instanceof String text) return text.length();
+        if (value instanceof Feed feed) {
+            long chars = 0;
+            for (FeedItem item : feed.items()) {
+                chars += 256 + length(item.title()) + length(item.description());
+            }
+            return (int) Math.min(Integer.MAX_VALUE, chars);
+        }
+        return 1024;
+    }
+
+    private static int length(String text) {
+        return text == null ? 0 : text.length();
     }
 
     /**

@@ -19,6 +19,8 @@ EXPOSE 8080
 
 # JAVA_OPTS: pass extra JVM flags at runtime (e.g. -Xmx512m)
 ENV JAVA_OPTS=""
+# Display times, "today" and cron schedules (routes, Feishu digests) use this zone
+ENV TZ=Asia/Shanghai
 
 # Use exec so Java becomes PID 1 and receives OS signals cleanly
 ENTRYPOINT ["sh", "-c", \

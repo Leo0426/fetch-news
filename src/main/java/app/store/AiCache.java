@@ -88,11 +88,11 @@ public final class AiCache {
      * Returns a map of {@code itemLink -> summary} for links that have a cached summary.
      */
     public Map<String, String> loadSummaries(List<String> links) throws SQLException {
-        synchronized (store) {
+        return store.read(conn -> {
             Map<String, String> result = new HashMap<>();
             if (links.isEmpty()) return result;
             String placeholders = String.join(",", Collections.nCopies(links.size(), "?"));
-            try (PreparedStatement ps = store.conn.prepareStatement(
+            try (PreparedStatement ps = conn.prepareStatement(
                     "SELECT item_link, summary FROM ai_summaries WHERE item_link IN (" + placeholders + ")")) {
                 for (int i = 0; i < links.size(); i++) ps.setString(i + 1, links.get(i));
                 try (ResultSet rs = ps.executeQuery()) {
@@ -100,7 +100,7 @@ public final class AiCache {
                 }
             }
             return result;
-        }
+        });
     }
 
     /** Upserts an AI-generated summary for an article URL. */

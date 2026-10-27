@@ -69,6 +69,9 @@ public final class FeedSchema {
                     CREATE INDEX IF NOT EXISTS idx_fetch_log_route
                         ON fetch_log(route_path, fetched_at DESC)""");
             s.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_fetch_log_time
+                        ON fetch_log(fetched_at DESC)""");
+            s.execute("""
                     CREATE TABLE IF NOT EXISTS http_feed_snapshots (
                         url           TEXT PRIMARY KEY NOT NULL,
                         body          TEXT NOT NULL,

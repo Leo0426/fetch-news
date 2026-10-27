@@ -107,8 +107,8 @@ class SearchIndexLifecycleTest {
     private static void failIndexInsert(Path database, String slug) throws SQLException {
         // SQLite virtual tables cannot have triggers; inject the failure at their storage boundary.
         execute(database, """
-                CREATE TRIGGER fail_index_insert BEFORE INSERT ON feed_search_fts_content
-                WHEN NEW.c0 = '%s'
+                CREATE TRIGGER fail_index_insert BEFORE INSERT ON feed_search_fts_docsize
+                WHEN NEW.id = (SELECT id FROM feed_items WHERE item_link = '%s')
                 BEGIN SELECT RAISE(ABORT, 'index unavailable'); END
                 """.formatted(link(slug)));
     }

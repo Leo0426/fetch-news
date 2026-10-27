@@ -1,5 +1,6 @@
 package app.store;
 
+import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -26,7 +27,7 @@ public final class UnreadInbox {
     public UnreadPage loadUnreadPage(
             long userId, String source, String query, boolean bookmarkedOnly, Long beforeId, int limit)
             throws SQLException {
-        synchronized (store) {
+        return store.read(conn -> {
             if (limit < 1 || limit > 100) {
                 throw new IllegalArgumentException("Unread page limit must be between 1 and 100");
             }
@@ -42,13 +43,10 @@ public final class UnreadInbox {
                 parameters.add(normalizedSource);
             }
             if (!normalizedQuery.isEmpty()) {
-                where.append("""
-                         AND (instr(lower(fi.title), lower(?)) > 0
-                              OR instr(lower(fi.description), lower(?)) > 0
-                              OR EXISTS (SELECT 1 FROM ai_summaries s
-                                         WHERE s.item_link = fi.item_link
-                                           AND instr(lower(s.summary), lower(?)) > 0))
-                        """);
+                where.append(" AND (" + SearchIndex.containsTerm("fi.title", normalizedQuery)
+                        + " OR " + SearchIndex.containsTerm("fi.description", normalizedQuery)
+                        + " OR EXISTS (SELECT 1 FROM ai_summaries s WHERE s.item_link = fi.item_link AND "
+                        + SearchIndex.containsTerm("s.summary", normalizedQuery) + "))\n");
                 parameters.add(normalizedQuery);
                 parameters.add(normalizedQuery);
                 parameters.add(normalizedQuery);
@@ -58,14 +56,14 @@ public final class UnreadInbox {
                         + " AND b.item_link = fi.item_link)");
             }
 
-            long totalCount = countUnreadItems(where.toString(), parameters);
-            List<String> sources = loadUnreadSources(userId);
+            long totalCount = countUnreadItems(conn, where.toString(), parameters);
+            List<String> sources = loadUnreadSources(conn, userId);
             String cursorClause = beforeId == null ? "" : " AND fi.id < ?";
             List<StoredItem> items = new ArrayList<>();
             List<String> bookmarkedLinks = new ArrayList<>();
             Long lastId = null;
             boolean hasMore = false;
-            try (PreparedStatement ps = store.conn.prepareStatement("""
+            try (PreparedStatement ps = conn.prepareStatement("""
                     SELECT fi.id, %s,
                            EXISTS (SELECT 1 FROM bookmarks b WHERE b.user_id = ? AND b.item_link = fi.item_link)
                                AS bookmarked
@@ -88,11 +86,12 @@ public final class UnreadInbox {
                 }
             }
             return new UnreadPage(items, bookmarkedLinks, totalCount, hasMore ? lastId : null, sources);
-        }
+        });
     }
 
-    private long countUnreadItems(String where, List<String> parameters) throws SQLException {
-        try (PreparedStatement ps = store.conn.prepareStatement("SELECT COUNT(*) FROM feed_items fi WHERE " + where)) {
+    private static long countUnreadItems(Connection conn, String where, List<String> parameters)
+            throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement("SELECT COUNT(*) FROM feed_items fi WHERE " + where)) {
             bindUnreadParameters(ps, parameters, 1);
             try (ResultSet rs = ps.executeQuery()) {
                 return rs.next() ? rs.getLong(1) : 0;
@@ -100,9 +99,9 @@ public final class UnreadInbox {
         }
     }
 
-    private List<String> loadUnreadSources(long userId) throws SQLException {
+    private static List<String> loadUnreadSources(Connection conn, long userId) throws SQLException {
         List<String> sources = new ArrayList<>();
-        try (Statement statement = store.conn.createStatement();
+        try (Statement statement = conn.createStatement();
              ResultSet rs = statement.executeQuery("SELECT DISTINCT fi.route_path FROM feed_items fi WHERE "
                      + UNREAD_CONDITION.formatted(userId) + " ORDER BY fi.route_path")) {
             while (rs.next()) sources.add(rs.getString("route_path"));

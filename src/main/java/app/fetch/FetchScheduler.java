@@ -41,6 +41,7 @@ import org.springframework.stereotype.Component;
 public class FetchScheduler {
     private static final Logger log = LoggerFactory.getLogger(FetchScheduler.class);
     private static final int AUTO_SUMMARY_LIMIT = 5;
+    private static final int BACKOFF_STEPS = 6;
 
     private final AppRuntime runtime;
     private final FeedStore feedStore;
@@ -137,7 +138,14 @@ public class FetchScheduler {
                 }
                 last = refresh == null ? null : refresh.lastCheckedAt();
             } else {
-                last = feedStore != null ? feedStore.fetchState().lastFetchedAt(config.path()) : null;
+                List<FetchLogEntry> recent = feedStore == null ? List.of()
+                        : feedStore.fetchState().getRecentLogs(config.path(), BACKOFF_STEPS + 1);
+                int failures = leadingFailures(recent);
+                if (failures > 0) {
+                    // Without this a failing route is due again on every tick, since it has no recent success.
+                    return !now.isBefore(recent.getFirst().fetchedAt().plus(retryDelay(failures)));
+                }
+                last = recent.isEmpty() ? null : recent.getFirst().fetchedAt();
             }
             if (config.scheduleCron() != null) {
                 ZonedDateTime lastZdt = (last != null ? last : Instant.EPOCH)
@@ -150,6 +158,17 @@ public class FetchScheduler {
             log.warn("[sched] failed to check isDue for {}: {}", config.path(), e.getMessage());
             return false;
         }
+    }
+
+    private static int leadingFailures(List<FetchLogEntry> newestFirst) {
+        int failures = 0;
+        while (failures < newestFirst.size() && !newestFirst.get(failures).isOk()) failures++;
+        return failures;
+    }
+
+    /** The RSS refresh schedule (GenericRssRoute): 1, 2, 4 … minutes, at most an hour. */
+    static Duration retryDelay(int failures) {
+        return Duration.ofMinutes(Math.min(60, 1L << Math.min(failures - 1, BACKOFF_STEPS)));
     }
 
     /** Fetches on the caller's thread unless the route is already being fetched. */

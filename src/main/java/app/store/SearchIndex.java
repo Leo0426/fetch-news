@@ -20,19 +20,18 @@ public final class SearchIndex {
         this.store = store;
     }
 
-    private static final int SEARCH_INDEX_VERSION = 1;
+    // 2: contentless; rowid is feed_items.id and the article text is not stored a second time.
+    private static final int SEARCH_INDEX_VERSION = 2;
 
     /**
      * Full-text search across item titles, descriptions, and AI summaries.
      */
     public List<StoredItem> search(String query, int limit) throws SQLException {
-        synchronized (store) {
-            return searchHits(query, limit).stream().map(SearchHit::item).toList();
-        }
+        return searchHits(query, limit).stream().map(SearchHit::item).toList();
     }
 
     public List<SearchHit> searchHits(String query, int limit) throws SQLException {
-        synchronized (store) {
+        return store.read(conn -> {
             if (query == null || query.isBlank()) return List.of();
             if (limit < 1) return List.of();
             if (query.codePointCount(0, query.length()) > 200) {
@@ -48,7 +47,7 @@ public final class SearchIndex {
             if (!words.isEmpty()) {
                 sql.append("""
                     WITH word_matches AS (
-                        SELECT rowid, bm25(feed_search_fts, 0, 8, 1, 3) AS rank
+                        SELECT rowid, bm25(feed_search_fts, 8, 1, 3) AS rank
                         FROM feed_search_fts
                         WHERE feed_search_fts MATCH ?
                     )
@@ -60,7 +59,7 @@ public final class SearchIndex {
                            (0
                     """.formatted(FeedStore.itemColumns("fi.")));
             for (String term : literals) {
-                sql.append(" + (instr(lower(coalesce(fi.title, '')), lower(?)) > 0)");
+                sql.append(" + (" + containsTerm("coalesce(fi.title, '')", term) + ")");
                 parameters.add(term);
             }
             sql.append(") AS title_matches FROM feed_items fi ");
@@ -71,18 +70,16 @@ public final class SearchIndex {
                       AND trim(fi.item_link, char(9, 10, 11, 12, 13, 32)) <> ''
                     """);
             for (String term : literals) {
-                sql.append("""
-                        AND (instr(lower(coalesce(fi.title, '')), lower(?)) > 0
-                          OR instr(lower(coalesce(fi.description, '')), lower(?)) > 0
-                          OR instr(lower(coalesce(s.summary, '')), lower(?)) > 0)
-                        """);
+                sql.append(" AND (" + containsTerm("coalesce(fi.title, '')", term)
+                        + " OR " + containsTerm("coalesce(fi.description, '')", term)
+                        + " OR " + containsTerm("coalesce(s.summary, '')", term) + ")\n");
                 parameters.addAll(List.of(term, term, term));
             }
             sql.append("ORDER BY title_matches DESC, ");
             if (!words.isEmpty()) sql.append("m.rank, ");
             sql.append("fi.id DESC LIMIT ?");
             List<SearchHit> result = new ArrayList<>();
-            try (PreparedStatement ps = store.conn.prepareStatement(sql.toString())) {
+            try (PreparedStatement ps = conn.prepareStatement(sql.toString())) {
                 int index = 1;
                 for (String parameter : parameters) ps.setString(index++, parameter);
                 ps.setInt(index, limit);
@@ -93,7 +90,17 @@ public final class SearchIndex {
                 }
             }
             return result;
-        }
+        });
+    }
+
+    /**
+     * SQL testing whether {@code column} contains the bound term. SQLite's lower() folds only ASCII, so a
+     * term without ASCII letters (Chinese, digits) skips copying and folding every scanned text.
+     */
+    static String containsTerm(String column, String term) {
+        return term.chars().anyMatch(c -> c < 128 && Character.isLetter(c))
+                ? "instr(lower(" + column + "), lower(?)) > 0"
+                : "instr(" + column + ", ?) > 0";
     }
 
     private static boolean isLiteralSearchTerm(String term) {
@@ -128,7 +135,7 @@ public final class SearchIndex {
             statement.execute("DROP TABLE IF EXISTS feed_search_fts");
             statement.execute("""
                     CREATE VIRTUAL TABLE feed_search_fts
-                    USING fts5(item_link UNINDEXED, title, description, summary)
+                    USING fts5(title, description, summary, content='', contentless_delete=1)
                     """);
         }
         rebuildSearchIndex();
@@ -143,10 +150,10 @@ public final class SearchIndex {
 
     void rebuildSearchIndex() throws SQLException {
         try (Statement s = store.conn.createStatement()) {
-            s.execute("DELETE FROM feed_search_fts");
+            s.execute("INSERT INTO feed_search_fts(feed_search_fts) VALUES('delete-all')");
             s.execute("""
-                    INSERT INTO feed_search_fts(rowid, item_link, title, description, summary)
-                    SELECT fi.id, fi.item_link, fi.title, fi.description, s.summary
+                    INSERT INTO feed_search_fts(rowid, title, description, summary)
+                    SELECT fi.id, fi.title, fi.description, s.summary
                     FROM feed_items fi
                     LEFT JOIN ai_summaries s ON s.item_link = fi.item_link
                     """);
@@ -161,10 +168,11 @@ public final class SearchIndex {
         if (valid.isEmpty()) return;
         String placeholders = String.join(",", Collections.nCopies(valid.size(), "?"));
         try (PreparedStatement delete = store.conn.prepareStatement(
-                     "DELETE FROM feed_search_fts WHERE item_link IN (" + placeholders + ")");
+                     "DELETE FROM feed_search_fts WHERE rowid IN (SELECT id FROM feed_items WHERE item_link IN ("
+                             + placeholders + "))");
              PreparedStatement insert = store.conn.prepareStatement("""
-                     INSERT INTO feed_search_fts(rowid, item_link, title, description, summary)
-                     SELECT fi.id, fi.item_link, fi.title, fi.description, s.summary
+                     INSERT INTO feed_search_fts(rowid, title, description, summary)
+                     SELECT fi.id, fi.title, fi.description, s.summary
                      FROM feed_items fi
                      LEFT JOIN ai_summaries s ON s.item_link = fi.item_link
                      WHERE fi.item_link IN (%s)

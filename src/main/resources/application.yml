@@ -1,2 +1,6 @@
 server:
   port: 14001
+  compression:
+    enabled: true
+    min-response-size: 2KB
+    mime-types: text/html,text/css,text/javascript,text/markdown,text/plain,text/xml,application/json,application/xml,application/rss+xml,application/atom+xml,text/x-opml,image/svg+xml

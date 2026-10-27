@@ -1,6 +1,5 @@
 package app.core;
 
-import app.support.XmlEscaper;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;

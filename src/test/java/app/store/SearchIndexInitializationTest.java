@@ -35,11 +35,11 @@ class SearchIndexInitializationTest {
         try (Connection connection = DriverManager.getConnection("jdbc:sqlite:" + database);
              Statement statement = connection.createStatement()) {
             statement.execute("""
-                    CREATE TRIGGER reject_index_insert BEFORE INSERT ON feed_search_fts_content
+                    CREATE TRIGGER reject_index_insert BEFORE INSERT ON feed_search_fts_docsize
                     BEGIN SELECT RAISE(ABORT, 'index must be reused'); END
                     """);
             statement.execute("""
-                    CREATE TRIGGER reject_index_delete BEFORE DELETE ON feed_search_fts_content
+                    CREATE TRIGGER reject_index_delete BEFORE DELETE ON feed_search_fts_docsize
                     BEGIN SELECT RAISE(ABORT, 'index must be reused'); END
                     """);
         }
@@ -66,7 +66,7 @@ class SearchIndexInitializationTest {
             }
             assertEquals("Cachedsummary 模型摘要", store.aiCache().loadSummary("https://example.test/one"));
         }
-        assertEquals(1, value(database, "SELECT version FROM search_index_state WHERE id = 1"));
+        assertEquals(2, value(database, "SELECT version FROM search_index_state WHERE id = 1"));
     }
 
     @Test
@@ -84,7 +84,7 @@ class SearchIndexInitializationTest {
             assertTrue(store.searchIndex().search("obsolete", 10).isEmpty());
             assertTrue(store.searchIndex().search("oldsummary", 10).isEmpty());
         }
-        assertEquals(1, value(database, "SELECT version FROM search_index_state WHERE id = 1"));
+        assertEquals(2, value(database, "SELECT version FROM search_index_state WHERE id = 1"));
     }
 
     @Test
@@ -97,7 +97,7 @@ class SearchIndexInitializationTest {
             assertEquals(List.of("https://example.test/article"), matches(store, "obsolete 模型"));
             assertEquals(List.of("https://example.test/article"), matches(store, "oldsummary"));
         }
-        assertEquals(1, value(database, "SELECT version FROM search_index_state WHERE id = 1"));
+        assertEquals(2, value(database, "SELECT version FROM search_index_state WHERE id = 1"));
     }
 
     @Test
@@ -129,7 +129,7 @@ class SearchIndexInitializationTest {
         assertEquals(2, value(database, "SELECT COUNT(*) FROM feed_search_fts"));
         assertEquals(0, value(database, """
                 SELECT COUNT(*) FROM feed_search_fts f
-                LEFT JOIN feed_items i ON i.id = f.rowid AND i.item_link = f.item_link
+                LEFT JOIN feed_items i ON i.id = f.rowid
                 WHERE i.id IS NULL
                 """));
         assertEquals(1, value(database, """
@@ -164,7 +164,7 @@ class SearchIndexInitializationTest {
             assertEquals(List.of("https://example.test/article"), matches(store, "oldsummary"));
             assertTrue(store.searchIndex().search("obsolete", 10).isEmpty());
         }
-        assertEquals(1, value(database, "SELECT version FROM search_index_state WHERE id = 1"));
+        assertEquals(2, value(database, "SELECT version FROM search_index_state WHERE id = 1"));
     }
 
     private static void seedCurrentIndex(Path database) throws Exception {

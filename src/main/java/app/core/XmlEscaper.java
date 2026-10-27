@@ -1,4 +1,4 @@
-package app.support;
+package app.core;
 
 /**
  * Escapes text for safe inclusion in XML elements and attributes.

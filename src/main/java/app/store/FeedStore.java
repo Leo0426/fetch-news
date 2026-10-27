@@ -24,8 +24,10 @@ import java.util.Optional;
 /**
  * SQLite-backed store for feed items and fetch logs.
  *
- * <p>All database access is synchronized because statements on the shared connection
- * otherwise see in-progress transactions. WAL permits readers on separate connections.
+ * <p>Writes, and reads that must see them, are synchronized on this store because statements on the
+ * shared connection otherwise see in-progress transactions. Page queries that run outside any
+ * transaction use {@link #read} instead: WAL lets those separate connections read the last committed
+ * state without taking the lock.
  */
 public class FeedStore implements Closeable {
 
@@ -34,6 +36,7 @@ public class FeedStore implements Closeable {
     static final int EXCERPT_MAX_LENGTH = 300;
     final Connection conn;
     final ObjectMapper mapper;
+    private final ReadConnections reads;
 
     public FeedStore(Path dbPath, ObjectMapper mapper) throws SQLException {
         this.mapper = mapper;
@@ -44,6 +47,12 @@ public class FeedStore implements Closeable {
             closeAfterFailure(failure);
             throw failure;
         }
+        reads = new ReadConnections(dbPath);
+    }
+
+    /** Runs a query on a read-only connection without the store's lock; it sees only committed data. */
+    <T> T read(ReadConnections.Query<T> query) throws SQLException {
+        return reads.read(query);
     }
 
     private final SummaryQueue summaryQueue = new SummaryQueue(this);
@@ -135,6 +144,13 @@ public class FeedStore implements Closeable {
              ResultSet rs = s.executeQuery("PRAGMA journal_mode=WAL")) {
             // result is "wal" — no action needed, just consume it
         }
+        try (Statement s = conn.createStatement()) {
+            // NORMAL is corruption-safe in WAL mode and fsyncs only at checkpoints, not on every commit.
+            s.execute("PRAGMA synchronous=NORMAL");
+            // Without a limit the WAL file keeps its peak size after every checkpoint.
+            s.execute("PRAGMA journal_size_limit=" + (32L << 20));
+            s.execute("PRAGMA cache_size=-16384");
+        }
         inTransaction(() -> {
             schema().initializeSchema();
             schema().initializeSourceSchema();
@@ -186,8 +202,38 @@ public class FeedStore implements Closeable {
         }
     }
 
+    /** Refreshes the query planner's statistics; cheap when little has changed since the last run. */
+    public synchronized void optimize() throws SQLException {
+        try (Statement s = conn.createStatement()) {
+            s.execute("PRAGMA optimize");
+        }
+    }
+
+    /**
+     * Rewrites the file when at least {@code minFreeBytes} and a quarter of it are unused pages, which
+     * SQLite otherwise keeps forever (for example after the search index dropped its content copy).
+     */
+    public synchronized boolean vacuumIfFragmented(long minFreeBytes) throws SQLException {
+        long pages = pragma("page_count");
+        long free = pragma("freelist_count");
+        if (free * pragma("page_size") < minFreeBytes || free * 4 < pages) return false;
+        try (Statement s = conn.createStatement()) {
+            s.execute("VACUUM");
+            s.execute("PRAGMA wal_checkpoint(TRUNCATE)");
+        }
+        return true;
+    }
+
+    private long pragma(String name) throws SQLException {
+        try (Statement s = conn.createStatement();
+             ResultSet rs = s.executeQuery("PRAGMA " + name)) {
+            return rs.next() ? rs.getLong(1) : 0;
+        }
+    }
+
     @Override
     public synchronized void close() throws IOException {
+        reads.close();
         try {
             conn.close();
         } catch (SQLException e) {
@@ -367,31 +413,34 @@ public class FeedStore implements Closeable {
 
     // ── ai summaries ──────────────────────────────────────────────────────────
 
-    public synchronized StoredArticle loadArticle(long userId, String link) throws SQLException {
-        try (PreparedStatement ps = conn.prepareStatement("""
-                SELECT fi.*, s.summary, e.content AS extract,
-                       EXISTS (SELECT 1 FROM read_items r
-                               WHERE r.user_id = ? AND r.item_link = fi.item_link) AS is_read,
-                       EXISTS (SELECT 1 FROM bookmarks b
-                               WHERE b.user_id = ? AND b.item_link = fi.item_link) AS is_bookmarked
-                FROM feed_items fi
-                LEFT JOIN ai_summaries s ON s.item_link = fi.item_link
-                LEFT JOIN ai_extracts e ON e.item_link = fi.item_link
-                WHERE fi.item_link = ?
-                """)) {
-            ps.setLong(1, userId);
-            ps.setLong(2, userId);
-            ps.setString(3, link);
-            try (ResultSet rs = ps.executeQuery()) {
-                if (!rs.next()) return null;
-                FeedItem item = new FeedItem(rs.getString("title"), rs.getString("item_link"),
-                        rs.getString("description"), parseInstant(rs.getString("pub_date")),
-                        rs.getString("author"), fromJson(rs.getString("categories")), rs.getString("image"));
-                return new StoredArticle(item, rs.getString("route_path"), parseInstant(rs.getString("first_seen_at")),
-                        rs.getString("summary"), rs.getString("extract"), rs.getBoolean("is_read"),
-                        rs.getBoolean("is_bookmarked"));
+    public StoredArticle loadArticle(long userId, String link) throws SQLException {
+        return read(reader -> {
+            try (PreparedStatement ps = reader.prepareStatement("""
+                    SELECT fi.*, s.summary, e.content AS extract,
+                           EXISTS (SELECT 1 FROM read_items r
+                                   WHERE r.user_id = ? AND r.item_link = fi.item_link) AS is_read,
+                           EXISTS (SELECT 1 FROM bookmarks b
+                                   WHERE b.user_id = ? AND b.item_link = fi.item_link) AS is_bookmarked
+                    FROM feed_items fi
+                    LEFT JOIN ai_summaries s ON s.item_link = fi.item_link
+                    LEFT JOIN ai_extracts e ON e.item_link = fi.item_link
+                    WHERE fi.item_link = ?
+                    """)) {
+                ps.setLong(1, userId);
+                ps.setLong(2, userId);
+                ps.setString(3, link);
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (!rs.next()) return null;
+                    FeedItem item = new FeedItem(rs.getString("title"), rs.getString("item_link"),
+                            rs.getString("description"), parseInstant(rs.getString("pub_date")),
+                            rs.getString("author"), fromJson(rs.getString("categories")), rs.getString("image"));
+                    return new StoredArticle(item, rs.getString("route_path"),
+                            parseInstant(rs.getString("first_seen_at")),
+                            rs.getString("summary"), rs.getString("extract"), rs.getBoolean("is_read"),
+                            rs.getBoolean("is_bookmarked"));
+                }
             }
-        }
+        });
     }
 
     public synchronized FeedItem loadItem(String link) throws SQLException {

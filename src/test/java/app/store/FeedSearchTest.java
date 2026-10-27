@@ -35,6 +35,25 @@ class FeedSearchTest {
     }
 
     @Test
+    void literalTermsWithAsciiLettersStayCaseInsensitive() throws Exception {
+        try (FeedStore store = new FeedStore(tempDir.resolve("search.db"), new ObjectMapper())) {
+            store.saveItems("/articles", List.of(
+                    item("发布 gpt-5 模型", "mixed", "正文"),
+                    item("其他", "chinese", "关于大模型的笔记")));
+
+            assertEquals(List.of("https://example.com/mixed"), links(store, "GPT-5"));
+            assertEquals(List.of("https://example.com/chinese"), links(store, "大模型"));
+            assertEquals(List.of("https://example.com/mixed"),
+                    store.unread().loadUnreadPage(1, null, "GPT-5", false, null, 10).items().stream()
+                            .map(StoredItem::link).toList());
+        }
+    }
+
+    private static List<String> links(FeedStore store, String query) throws Exception {
+        return store.searchIndex().search(query, 10).stream().map(StoredItem::link).toList();
+    }
+
+    @Test
     void unicodeWhitespaceWithoutKeywordsDoesNotReturnEveryArticle() throws Exception {
         try (FeedStore store = new FeedStore(tempDir.resolve("search.db"), new ObjectMapper())) {
             store.saveItems("/articles", List.of(item("本地模型部署指南", "model", "部署笔记")));

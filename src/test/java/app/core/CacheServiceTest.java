@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import java.time.Duration;
+import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
@@ -49,6 +50,33 @@ class CacheServiceTest {
         assertEquals("value-1", first);
         assertEquals("value-2", second);
         assertEquals(2, calls.get());
+    }
+
+    @Test
+    void detailCacheEvictsByTextSizeRatherThanEntryCount() throws Exception {
+        CacheService cache = new CacheService(Duration.ofMinutes(5), Duration.ofMinutes(30));
+        AtomicInteger loads = new AtomicInteger();
+        int pageChars = 1 << 20;
+        int pages = CacheService.DETAIL_CACHE_MAX_CHARS / pageChars + 8;
+        for (int round = 0; round < 2; round++) {
+            for (int i = 0; i < pages; i++) {
+                cache.getDetailPage("page-" + i, () -> {
+                    loads.incrementAndGet();
+                    return "x".repeat(pageChars);
+                });
+            }
+        }
+
+        assertTrue(loads.get() > pages, "pages beyond the size limit must have been evicted and reloaded");
+    }
+
+    @Test
+    void estimatesFeedsByTheirItemText() {
+        Feed feed = new Feed("t", "https://example.com", "d", List.of(
+                new FeedItem("title", "https://example.com/1", "x".repeat(1000), null, null, List.of(), null)));
+
+        assertEquals(256 + 5 + 1000, CacheService.estimatedChars(feed));
+        assertEquals(3, CacheService.estimatedChars("abc"));
     }
 
     @Test

@@ -67,11 +67,11 @@ public final class PickStore {
 
     /** Returns picks for the given links; links evaluated without a pick are omitted. */
     public Map<String, ItemPick> labels(List<String> links) throws SQLException {
-        synchronized (store) {
+        return store.read(conn -> {
             Map<String, ItemPick> result = new HashMap<>();
             if (links.isEmpty()) return result;
             String placeholders = String.join(",", Collections.nCopies(links.size(), "?"));
-            try (PreparedStatement ps = store.conn.prepareStatement("""
+            try (PreparedStatement ps = conn.prepareStatement("""
                     SELECT item_link, must_know_reason, quality_reason FROM item_picks
                     WHERE (must_know_reason IS NOT NULL OR quality_reason IS NOT NULL) AND item_link IN (%s)
                     """.formatted(placeholders))) {
@@ -84,7 +84,7 @@ public final class PickStore {
                 }
             }
             return result;
-        }
+        });
     }
 
     /**
@@ -154,11 +154,11 @@ public final class PickStore {
     /** Returns one reader's verdicts on the given links, keyed by link. */
     public Map<String, PickFeedback> feedback(long userId, List<String> links)
             throws SQLException {
-        synchronized (store) {
+        return store.read(conn -> {
             Map<String, PickFeedback> result = new HashMap<>();
             if (links.isEmpty()) return result;
             String placeholders = String.join(",", Collections.nCopies(links.size(), "?"));
-            try (PreparedStatement ps = store.conn.prepareStatement(
+            try (PreparedStatement ps = conn.prepareStatement(
                     "SELECT item_link, kind, verdict FROM pick_feedback WHERE user_id = ? AND item_link IN (" + placeholders + ")")) {
                 ps.setLong(1, userId);
                 for (int i = 0; i < links.size(); i++) ps.setString(i + 2, links.get(i));
@@ -171,7 +171,7 @@ public final class PickStore {
                 }
             }
             return result;
-        }
+        });
     }
 
     /**
@@ -227,8 +227,8 @@ public final class PickStore {
 
     /** Counts one reader's verdicts since {@code since}: [agreed, disagreed]. */
     public int[] countFeedback(long userId, Instant since) throws SQLException {
-        synchronized (store) {
-            try (PreparedStatement ps = store.conn.prepareStatement("""
+        return store.read(conn -> {
+            try (PreparedStatement ps = conn.prepareStatement("""
                     SELECT coalesce(sum(verdict = 'up'), 0) AS up, coalesce(sum(verdict = 'down'), 0) AS down
                     FROM pick_feedback WHERE user_id = ? AND created_at >= ?
                     """)) {
@@ -239,6 +239,6 @@ public final class PickStore {
                     return new int[]{rs.getInt("up"), rs.getInt("down")};
                 }
             }
-        }
+        });
     }
 }

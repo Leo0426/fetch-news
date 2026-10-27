@@ -10,7 +10,7 @@ Domain vocabulary and data flow: `CONTEXT.md`. Decisions: `docs/adr/`. Radar rep
 app/                 entry point and wiring only: AppRuntime (registry, config, topics), AppConfig (beans),
                      BuiltInRoutes/CuratedRoutes (all routes), RssLiteResource (public feeds), FrontendAssetResource
 app/core/            Feed/FeedItem model, Route, Topic, RouteRegistry, RouteConfig(+Store), CredentialConfig(+Store),
-                     CacheService, FetchClient, RouteError/RouteException, RSS/JSON renderers
+                     CacheService, FetchClient, RouteError/RouteException, RSS/JSON renderers, XmlEscaper
 app/routes/          one RouteHandler per source; GenericRssRoute serves /rss mounts
 app/fetch/           FeedFetcher (fetch → persist → log), FetchScheduler (60 s tick), FeedFetchCoordinator
 app/store/           FeedStore (the only SQLite access) and the modules sharing its connection and lock:
@@ -24,7 +24,7 @@ app/auth/            AuthFilter, AuthService, login/account and user admin
 app/radar/           built-in daily reports (精选日报): RadarConfig.BUILT_IN, BuiltInProfiles, scoring pipeline
 app/feishu/          Feishu push
 app/subscriptions/   subscription catalogue behind /index#subscriptions
-app/support/         parsing, dates, URLs, cover images, XML escaping
+app/support/         parsing, dates, URLs, cover images (builds on app.core; core never imports it)
 templates/           index/ (admin, HTMX), reader/, auth/, shared/
 ```
 
@@ -34,6 +34,8 @@ templates/           index/ (admin, HTMX), reader/, auth/, shared/
 2. All outbound HTTP goes through the injected `FetchClient`; never build an `HttpClient` in a handler.
 3. `FeedFetcher` owns fetch → persist → log; never duplicate it in controllers, handlers or the scheduler.
 4. All database access goes through `app.store` — `FeedStore` and the modules it hands out. Tests may pass `null` for the store, so callers null-check.
+   Inside a store module, writes and reads that must see uncommitted writes use `synchronized (store)` with `store.conn`;
+   page queries outside transactions use `store.read(conn -> …)` and must only touch that `conn`.
 5. Keep controllers thin and handlers stateless — handler instances are singletons.
 6. Prefer source APIs and native RSS/Atom feeds; scrape HTML only when neither exists, after checking network traffic.
 

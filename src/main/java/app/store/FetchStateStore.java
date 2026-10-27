@@ -6,6 +6,7 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -237,7 +238,7 @@ public final class FetchStateStore {
      */
     public List<FetchLogEntry> getAllRecentLogs(String routeFilter, int offset, int limit)
             throws SQLException {
-        synchronized (store) {
+        return store.read(conn -> {
             boolean filtered = routeFilter != null && !routeFilter.isBlank();
             String sql = filtered
                     ? """
@@ -247,7 +248,7 @@ public final class FetchStateStore {
                       SELECT id,route_path,fetched_at,duration_ms,item_count,new_item_count,status,error_detail
                       FROM fetch_log ORDER BY fetched_at DESC LIMIT ? OFFSET ?""";
             List<FetchLogEntry> result = new ArrayList<>();
-            try (PreparedStatement ps = store.conn.prepareStatement(sql)) {
+            try (PreparedStatement ps = conn.prepareStatement(sql)) {
                 if (filtered) {
                     ps.setString(1, "%" + routeFilter.trim() + "%");
                     ps.setInt(2, limit);
@@ -271,49 +272,72 @@ public final class FetchStateStore {
                 }
             }
             return result;
-        }
+        });
     }
 
     /** Counts fetch log entries, optionally filtered by route path substring. */
     public int countLogs(String routeFilter) throws SQLException {
-        synchronized (store) {
+        return store.read(conn -> {
             boolean filtered = routeFilter != null && !routeFilter.isBlank();
             String sql = filtered
                     ? "SELECT COUNT(*) FROM fetch_log WHERE route_path LIKE ?"
                     : "SELECT COUNT(*) FROM fetch_log";
-            try (PreparedStatement ps = store.conn.prepareStatement(sql)) {
+            try (PreparedStatement ps = conn.prepareStatement(sql)) {
                 if (filtered) ps.setString(1, "%" + routeFilter.trim() + "%");
                 try (ResultSet rs = ps.executeQuery()) {
                     return rs.next() ? rs.getInt(1) : 0;
                 }
             }
-        }
+        });
     }
 
     /** Counts fetch log entries for today (local timezone). */
     public int countLogsToday() throws SQLException {
-        synchronized (store) {
-            String today = LocalDate.now().toString();
-            try (PreparedStatement ps = store.conn.prepareStatement(
+        return store.read(conn -> {
+            String today = startOfToday();
+            try (PreparedStatement ps = conn.prepareStatement(
                     "SELECT COUNT(*) FROM fetch_log WHERE fetched_at >= ?")) {
                 ps.setString(1, today);
                 try (ResultSet rs = ps.executeQuery()) {
                     return rs.next() ? rs.getInt(1) : 0;
                 }
             }
-        }
+        });
     }
 
     /** Counts fetch log error entries for today. */
     public int countErrorsToday() throws SQLException {
-        synchronized (store) {
-            String today = LocalDate.now().toString();
-            try (PreparedStatement ps = store.conn.prepareStatement(
+        return store.read(conn -> {
+            String today = startOfToday();
+            try (PreparedStatement ps = conn.prepareStatement(
                     "SELECT COUNT(*) FROM fetch_log WHERE status='error' AND fetched_at >= ?")) {
                 ps.setString(1, today);
                 try (ResultSet rs = ps.executeQuery()) {
                     return rs.next() ? rs.getInt(1) : 0;
                 }
+            }
+        });
+    }
+
+    /** fetched_at holds UTC instants, so "today" starts at local midnight expressed in UTC. */
+    private static String startOfToday() {
+        return LocalDate.now().atStartOfDay(ZoneId.systemDefault()).toInstant().toString();
+    }
+
+    /**
+     * Deletes fetch log entries older than {@code cutoff}, keeping each route's latest entry and latest
+     * successful entry: scheduling and fetch progress read them however old they are.
+     */
+    public int pruneFetchLog(Instant cutoff) throws SQLException {
+        synchronized (store) {
+            try (PreparedStatement ps = store.conn.prepareStatement("""
+                    DELETE FROM fetch_log
+                    WHERE fetched_at < ?
+                      AND id NOT IN (SELECT MAX(id) FROM fetch_log GROUP BY route_path)
+                      AND id NOT IN (SELECT MAX(id) FROM fetch_log WHERE status = 'ok' GROUP BY route_path)
+                    """)) {
+                ps.setString(1, cutoff.toString());
+                return ps.executeUpdate();
             }
         }
     }
@@ -343,9 +367,9 @@ public final class FetchStateStore {
      * Results are ordered by most-recently-fetched first.
      */
     public Map<String, RouteHealth> loadRouteHealth() throws SQLException {
-        synchronized (store) {
+        return store.read(conn -> {
             Map<String, RouteHealth> result = new LinkedHashMap<>();
-            try (Statement s = store.conn.createStatement();
+            try (Statement s = conn.createStatement();
                  ResultSet rs = s.executeQuery("""
                          WITH latest AS (
                              SELECT route_path, fetched_at, duration_ms, status, error_detail,
@@ -381,6 +405,6 @@ public final class FetchStateStore {
                 }
             }
             return result;
-        }
+        });
     }
 }

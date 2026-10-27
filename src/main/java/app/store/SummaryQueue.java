@@ -244,11 +244,11 @@ public final class SummaryQueue {
 
     /** Batch-loads latest AI summarization status for a list of links. */
     public Map<String, SummaryStatus> statuses(List<String> links) throws SQLException {
-        synchronized (store) {
+        return store.read(conn -> {
             Map<String, SummaryStatus> result = new LinkedHashMap<>();
             if (links.isEmpty()) return result;
             String placeholders = String.join(",", Collections.nCopies(links.size(), "?"));
-            try (PreparedStatement ps = store.conn.prepareStatement("""
+            try (PreparedStatement ps = conn.prepareStatement("""
                     SELECT item_link, status, started_at, completed_at, duration_ms, model, error_detail
                     FROM ai_summary_runs
                     WHERE item_link IN (%s)
@@ -278,7 +278,7 @@ public final class SummaryQueue {
                     .toList();
             if (!missing.isEmpty()) {
                 String missingPlaceholders = String.join(",", Collections.nCopies(missing.size(), "?"));
-                try (PreparedStatement ps = store.conn.prepareStatement("""
+                try (PreparedStatement ps = conn.prepareStatement("""
                         SELECT item_link, model, created_at
                         FROM ai_summaries
                         WHERE item_link IN (%s)
@@ -301,6 +301,6 @@ public final class SummaryQueue {
                 }
             }
             return result;
-        }
+        });
     }
 }

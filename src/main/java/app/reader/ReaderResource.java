@@ -26,6 +26,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.Set;
+import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.MediaType;
@@ -93,9 +95,10 @@ public class ReaderResource {
         List<String> bookmarkedLinks = List.of();
         List<String> readLinks = List.of();
         if (feedStore != null) {
-            try { bookmarkedLinks = feedStore.reading().loadBookmarkLinks(CurrentUser.id()); }
+            Set<String> pageLinks = cards.items().stream().map(ReaderItem::link).collect(Collectors.toSet());
+            try { bookmarkedLinks = onPage(feedStore.reading().loadBookmarkLinks(CurrentUser.id()), pageLinks); }
             catch (Exception e) { log.warn("failed to load bookmark links: {}", e.getMessage()); }
-            try { readLinks = feedStore.reading().loadReadLinks(CurrentUser.id()); }
+            try { readLinks = onPage(feedStore.reading().loadReadLinks(CurrentUser.id()), pageLinks); }
             catch (Exception e) { log.warn("failed to load read links: {}", e.getMessage()); }
         }
         return templates.readerPage(groups, date, stored.size(), safeHours, aiEnabled, bookmarkedLinks, readLinks, picks);
@@ -260,10 +263,16 @@ public class ReaderResource {
         if (feedStore != null) {
             try { items = feedStore.reading().loadBookmarks(CurrentUser.id()); }
             catch (Exception e) { log.warn("failed to load bookmarks: {}", e.getMessage()); }
-            try { readLinks = feedStore.reading().loadReadLinks(CurrentUser.id()); }
+            Set<String> pageLinks = items.stream().map(BookmarkedItem::link).collect(Collectors.toSet());
+            try { readLinks = onPage(feedStore.reading().loadReadLinks(CurrentUser.id()), pageLinks); }
             catch (Exception e) { log.warn("failed to load bookmark read states: {}", e.getMessage()); }
         }
         return templates.bookmarksPage(items, readLinks);
+    }
+
+    /** Read state is kept forever, so pages embed only the links they show. */
+    private static List<String> onPage(List<String> links, Set<String> pageLinks) {
+        return links.stream().filter(pageLinks::contains).toList();
     }
 
     /**

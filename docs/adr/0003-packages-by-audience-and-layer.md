@@ -27,4 +27,4 @@ Status: accepted (2026-10-24)
 - `PackageLayoutTest` 守住方向：领域包（core、routes、store、support、ai、radar、feishu）不得 import 根包、`app.fetch`、`app.admin` 或 `app.reader`。需要共享的类型下沉到 `app.core` 或领域包。
 - 新增 HTTP 接口时按 URL 前缀选包；AGENTS.md 的 Package map 与 Style 规则同步记录这一约定。
 - 测试随被测类迁移到对应包；`app.TestPages` 改为 public 供各包测试复用。
-- `app.core` 与 `app.support` 之间仍有双向依赖，本次未处理；若两者继续增长再考虑合并或拆出解析工具。
+- `app.core` 与 `app.support` 的双向依赖已消除（2026-10-27）：唯一的反向引用 `XmlEscaper` 移入 `app.core`，`PackageLayoutTest` 禁止 core 引用 support。

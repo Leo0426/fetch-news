@@ -13,11 +13,15 @@ import app.core.Route;
 import app.core.RouteConfig;
 import app.core.RouteConfigStore;
 import app.core.RouteContext;
+import app.core.RouteError;
+import app.core.RouteException;
 import app.routes.GenericRssRoute;
 import app.store.FeedRefreshState;
 import app.store.FeedStore;
+import app.store.FetchStateStore;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -148,6 +152,36 @@ class FetchSchedulerRetryTest {
             tickAndWait(runtime, store);
             assertEquals(3, calls.get(), "the refresh check time must control the next scheduled fetch");
         }
+    }
+
+    @Test
+    void failingHandlerRoutesBackOffInsteadOfRetryingEveryTick() throws Exception {
+        Map<String, AtomicInteger> calls = Map.of(
+                "/recent-failure", new AtomicInteger(), "/repeated-failures", new AtomicInteger(),
+                "/backoff-elapsed", new AtomicInteger());
+        AppRuntime runtime = runtime(calls.keySet().stream().map(path -> new Route(path, context -> {
+            calls.get(path).incrementAndGet();
+            throw new RouteException(RouteError.UPSTREAM_REQUEST_FAILED, "risk control");
+        })).toArray(Route[]::new));
+        try (FeedStore store = new FeedStore(tempDir.resolve("flaky.db"), objectMapper)) {
+            Instant now = Instant.now();
+            FetchStateStore logs = store.fetchState();
+            for (String path : calls.keySet()) logs.logFetch(path, now.minus(Duration.ofHours(2)), 1, 1, 1, null);
+            logs.logFetch("/recent-failure", now.minusSeconds(30), 1, 0, 0, "risk control");
+            for (int minutes : new int[] {4, 3, 2}) {
+                logs.logFetch("/repeated-failures", now.minus(Duration.ofMinutes(minutes)), 1, 0, 0, "risk control");
+                logs.logFetch("/backoff-elapsed", now.minus(Duration.ofMinutes(minutes + 3)), 1, 0, 0, "risk control");
+            }
+
+            tickAndWait(runtime, store);
+
+            assertEquals(0, calls.get("/recent-failure").get(), "one failure waits a minute despite the old success");
+            assertEquals(0, calls.get("/repeated-failures").get(), "three failures wait four minutes");
+            assertEquals(1, calls.get("/backoff-elapsed").get());
+        }
+        assertEquals(Duration.ofMinutes(1), FetchScheduler.retryDelay(1));
+        assertEquals(Duration.ofMinutes(32), FetchScheduler.retryDelay(6));
+        assertEquals(Duration.ofMinutes(60), FetchScheduler.retryDelay(50));
     }
 
     private void tickAndWait(AppRuntime runtime, FeedStore store) {

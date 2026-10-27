@@ -219,6 +219,22 @@ class RssLiteResourceTest {
     }
 
     @Test
+    void assetsRevalidateWithEtagAndArriveCompressed() {
+        String etag = given().when().get("/reader.css").then()
+                .statusCode(200)
+                .header("Cache-Control", "no-cache")
+                .extract().header("ETag");
+
+        given().header("If-None-Match", etag).when().get("/reader.css").then().statusCode(304);
+        given().header("Accept-Encoding", "gzip").when().get("/alpine.min.js").then()
+                .statusCode(200)
+                .header("Content-Encoding", "gzip");
+        given().header("Accept-Encoding", "gzip").when().get("/reader").then()
+                .statusCode(200)
+                .header("Content-Encoding", "gzip");
+    }
+
+    @Test
     void interactionScriptsAreServedBeforeFeedRoutes() {
         for (String[] asset : new String[][] {
                 {"ui.js", "FetchNewsUI"}, {"reader.js", "readerState"}, {"admin.js", "appShell"}}) {

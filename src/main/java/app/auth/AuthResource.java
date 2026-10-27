@@ -2,7 +2,7 @@ package app.auth;
 
 import app.AppRuntime;
 import app.core.RouteConfig;
-import app.support.XmlEscaper;
+import app.core.XmlEscaper;
 import jakarta.servlet.http.HttpServletRequest;
 import java.sql.SQLException;
 import java.time.Duration;

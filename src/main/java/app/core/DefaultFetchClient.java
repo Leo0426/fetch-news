@@ -1,16 +1,27 @@
 package app.core;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.URI;
 import java.net.http.HttpClient;
+import java.net.http.HttpHeaders;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.net.http.HttpTimeoutException;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.zip.GZIPInputStream;
 
 /**
  * Fetches upstream content with Java's built-in HTTP client.
@@ -18,6 +29,10 @@ import java.util.concurrent.Semaphore;
 public class DefaultFetchClient implements FetchClient {
     private static final int MAX_ATTEMPTS = 3;
     private static final int MAX_REDIRECTS = 5;
+    /** Upper bound for a response body, before and after gzip decoding. */
+    static final int MAX_BODY_BYTES = 16 << 20;
+    private static final HttpResponse.BodyHandler<byte[]> BODY =
+            HttpResponse.BodyHandlers.limiting(HttpResponse.BodyHandlers.ofByteArray(), MAX_BODY_BYTES);
     private final HttpClient client;
     private final Duration timeout;
     private final String userAgent;
@@ -81,7 +96,8 @@ public class DefaultFetchClient implements FetchClient {
     private FetchResponse send(URI uri, Map<String, String> extraHeaders) throws IOException, InterruptedException {
         HttpRequest.Builder builder = HttpRequest.newBuilder(uri)
                 .timeout(timeout)
-                .header("User-Agent", userAgent);
+                .header("User-Agent", userAgent)
+                .header("Accept-Encoding", "gzip");
         extraHeaders.forEach(builder::setHeader);
         HttpRequest request = builder.GET().build();
         String host = request.uri().getHost().toLowerCase(Locale.ROOT);
@@ -89,8 +105,8 @@ public class DefaultFetchClient implements FetchClient {
         try {
             permits.acquire();
             try {
-                HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-                return new FetchResponse(response.statusCode(), response.headers().map(), response.body());
+                HttpResponse<byte[]> response = await(client.sendAsync(request, BODY));
+                return new FetchResponse(response.statusCode(), response.headers().map(), decode(response));
             } finally {
                 permits.release();
             }
@@ -98,6 +114,55 @@ public class DefaultFetchClient implements FetchClient {
             Thread.currentThread().interrupt();
             throw e;
         }
+    }
+
+    /**
+     * The request timeout only covers the response headers, so a server that stalls mid-body would hold the
+     * host permit forever; this bounds the whole exchange.
+     */
+    private HttpResponse<byte[]> await(CompletableFuture<HttpResponse<byte[]>> pending)
+            throws IOException, InterruptedException {
+        Duration deadline = timeout.multipliedBy(3);
+        try {
+            return pending.get(deadline.toMillis(), TimeUnit.MILLISECONDS);
+        } catch (TimeoutException e) {
+            pending.cancel(true);
+            throw new HttpTimeoutException("response not completed within " + deadline.toSeconds() + " s");
+        } catch (InterruptedException e) {
+            pending.cancel(true);
+            throw e;
+        } catch (ExecutionException e) {
+            if (e.getCause() instanceof IOException io) throw io;
+            throw new IOException(e.getCause());
+        }
+    }
+
+    private static String decode(HttpResponse<byte[]> response) throws IOException {
+        byte[] body = response.body();
+        HttpHeaders headers = response.headers();
+        if (body.length > 0 && headers.firstValue("Content-Encoding").orElse("").equalsIgnoreCase("gzip")) {
+            try (InputStream in = new GZIPInputStream(new ByteArrayInputStream(body))) {
+                body = in.readNBytes(MAX_BODY_BYTES + 1);
+            }
+            if (body.length > MAX_BODY_BYTES) {
+                throw new IOException("decoded body exceeds " + MAX_BODY_BYTES + " bytes");
+            }
+        }
+        return new String(body, charset(headers.firstValue("Content-Type").orElse("")));
+    }
+
+    private static Charset charset(String contentType) {
+        for (String parameter : contentType.split(";")) {
+            String[] pair = parameter.trim().split("=", 2);
+            if (pair.length == 2 && pair[0].trim().equalsIgnoreCase("charset")) {
+                try {
+                    return Charset.forName(pair[1].trim().replace("\"", ""));
+                } catch (IllegalArgumentException unsupported) {
+                    return StandardCharsets.UTF_8;
+                }
+            }
+        }
+        return StandardCharsets.UTF_8;
     }
 
     @Override

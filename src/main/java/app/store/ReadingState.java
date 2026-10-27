@@ -107,9 +107,9 @@ public final class ReadingState {
 
     /** Returns all bookmarked item links for initialising client-side state. */
     public List<String> loadBookmarkLinks(long userId) throws SQLException {
-        synchronized (store) {
+        return store.read(conn -> {
             List<String> result = new ArrayList<>();
-            try (PreparedStatement ps = store.conn.prepareStatement(
+            try (PreparedStatement ps = conn.prepareStatement(
                     "SELECT item_link FROM bookmarks WHERE user_id = ? ORDER BY bookmarked_at DESC")) {
                 ps.setLong(1, userId);
                 try (ResultSet rs = ps.executeQuery()) {
@@ -117,14 +117,14 @@ public final class ReadingState {
                 }
             }
             return result;
-        }
+        });
     }
 
     /** Returns full bookmark records newest first. */
     public List<BookmarkedItem> loadBookmarks(long userId) throws SQLException {
-        synchronized (store) {
+        return store.read(conn -> {
             List<BookmarkedItem> result = new ArrayList<>();
-            try (PreparedStatement ps = store.conn.prepareStatement("""
+            try (PreparedStatement ps = conn.prepareStatement("""
                     SELECT item_link, title, route_path, bookmarked_at
                     FROM bookmarks WHERE user_id = ? ORDER BY bookmarked_at DESC
                     """)) {
@@ -141,7 +141,7 @@ public final class ReadingState {
                 }
             }
             return result;
-        }
+        });
     }
 
 
@@ -186,9 +186,9 @@ public final class ReadingState {
 
     /** Returns all read item links, newest first. */
     public List<String> loadReadLinks(long userId) throws SQLException {
-        synchronized (store) {
+        return store.read(conn -> {
             List<String> result = new ArrayList<>();
-            try (PreparedStatement ps = store.conn.prepareStatement(
+            try (PreparedStatement ps = conn.prepareStatement(
                     "SELECT item_link FROM read_items WHERE user_id = ? ORDER BY read_at DESC")) {
                 ps.setLong(1, userId);
                 try (ResultSet rs = ps.executeQuery()) {
@@ -196,7 +196,7 @@ public final class ReadingState {
                 }
             }
             return result;
-        }
+        });
     }
 
     /** Marks all supplied links as read atomically. */

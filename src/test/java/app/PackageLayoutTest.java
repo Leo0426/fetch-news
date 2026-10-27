@@ -40,4 +40,21 @@ class PackageLayoutTest {
         }
         assertEquals(List.of(), violations, "move the shared type down into app.core or the domain package");
     }
+
+    @Test
+    void coreDoesNotDependOnSupport() throws IOException {
+        Path core = SourceSizeTest.projectRoot().resolve("src/main/java/app/core");
+        List<String> violations = new ArrayList<>();
+        try (Stream<Path> files = Files.walk(core)) {
+            for (Path file : files.filter(f -> f.toString().endsWith(".java")).toList()) {
+                Matcher imported = IMPORT.matcher(Files.readString(file));
+                while (imported.find()) {
+                    if (imported.group(1).equals("app.support")) {
+                        violations.add(file.getFileName() + " imports " + imported.group(0));
+                    }
+                }
+            }
+        }
+        assertEquals(List.of(), violations, "app.support builds on the core model; keep shared helpers in app.core");
+    }
 }
