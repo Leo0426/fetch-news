@@ -129,7 +129,8 @@ public class AppRuntime {
         if (config.path().contains(":")) return true;
         if (!config.path().equals(config.sourcePath())) return false;
         try {
-            return routeRegistry.resolve(config.path()).handler() instanceof GenericRssRoute;
+            // Curated feeds subclass GenericRssRoute with a fixed URL; only the bare class needs a mounted feedUrl.
+            return routeRegistry.resolve(config.path()).handler().getClass() == GenericRssRoute.class;
         } catch (RouteException e) {
             return false;
         }

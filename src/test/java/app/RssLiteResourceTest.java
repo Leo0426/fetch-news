@@ -320,6 +320,7 @@ class RssLiteResourceTest {
         assertTrue(runtime.isTemplate(runtime.routeConfigStore().get("/rss")));
         assertTrue(runtime.isTemplate(runtime.routeConfigStore().get("/hn/:feed")));
         assertFalse(runtime.isTemplate(runtime.routeConfigStore().get("/mritd/blog")));
+        assertFalse(runtime.isTemplate(runtime.routeConfigStore().get("/huggingface/blog")));
         assertFalse(runtime.isTemplate(new RouteConfig("/my-feed", "/rss", false, 300, 1800, 0, null,
                 "https://example.com/feed.xml", null)));
 
