@@ -9,18 +9,23 @@ import app.routes.AeonMagazineRoute;
 import app.routes.ApertureRoute;
 import app.routes.ApsResearchNewsRoute;
 import app.routes.ArchDailyRoute;
+import app.routes.ArsTechnicaRoute;
+import app.routes.BairBlogRoute;
 import app.routes.CarbonBriefRoute;
 import app.routes.ChinanewsCultureRoute;
 import app.routes.ChinanewsFinanceRoute;
 import app.routes.ChinanewsSocietyRoute;
 import app.routes.CloudflareBlogRoute;
 import app.routes.ColossalRoute;
+import app.routes.DeepMindBlogRoute;
 import app.routes.DezeenRoute;
 import app.routes.EcbBlogRoute;
 import app.routes.EdSurgeNewsRoute;
 import app.routes.FactorioBlogRoute;
 import app.routes.FedsNotesRoute;
+import app.routes.FtChineseRoute;
 import app.routes.GcoresRoute;
+import app.routes.GeekParkRoute;
 import app.routes.GithubChangelogRoute;
 import app.routes.GithubOpenSourceRoute;
 import app.routes.GodotNewsRoute;
@@ -30,14 +35,17 @@ import app.routes.GuardianWorldRoute;
 import app.routes.HackadayRoute;
 import app.routes.HechingerReportRoute;
 import app.routes.HuggingFaceBlogRoute;
+import app.routes.IfanrRoute;
 import app.routes.InfoqChinaRoute;
 import app.routes.JstorDailyRoute;
 import app.routes.KffHealthNewsRoute;
 import app.routes.KrebsSecurityRoute;
+import app.routes.LwnHeadlinesRoute;
 import app.routes.MartinFowlerRoute;
 import app.routes.NasaNewsRoute;
 import app.routes.NetflixTechBlogRoute;
 import app.routes.NoaaNewsRoute;
+import app.routes.NprWorldRoute;
 import app.routes.OpenAiNewsRoute;
 import app.routes.OurWorldInDataRoute;
 import app.routes.PewResearchRoute;
@@ -49,6 +57,7 @@ import app.routes.RthkLocalRoute;
 import app.routes.RuanYifengRoute;
 import app.routes.SchneierSecurityRoute;
 import app.routes.ScienceNewsRoute;
+import app.routes.SimonWillisonRoute;
 import app.routes.SmashingMagazineRoute;
 import app.routes.SolidotRoute;
 import app.routes.StatNewsRoute;
@@ -84,6 +93,21 @@ final class CuratedRoutes {
                             "OpenAI 官方动态 · 研究、产品与工程",
                             Topic.AI, "官方 RSS",
                             "openai.com/news/rss.xml；无需密钥，只读取列表；历史内容较多，建议每 180 分钟刷新", 180),
+                    new Route("/deepmind/blog",
+                            new DeepMindBlogRoute(defaultFetchClient, feedStore),
+                            "Google DeepMind · 前沿 AI 研究与科学应用（英文）",
+                            Topic.AI, "官方 RSS",
+                            "deepmind.google/blog/rss.xml；无需密钥，只读取列表；建议每 360 分钟刷新", 360),
+                    new Route("/bair/blog",
+                            new BairBlogRoute(defaultFetchClient, feedStore),
+                            "BAIR 伯克利 AI 研究博客 · 学术前沿解读（英文）",
+                            Topic.AI, "官方 RSS",
+                            "bair.berkeley.edu/blog/feed.xml；无需密钥，只读取列表；更新频率低，建议每 1440 分钟刷新", 1440),
+                    new Route("/simonwillison/weblog",
+                            new SimonWillisonRoute(defaultFetchClient, feedStore),
+                            "Simon Willison · LLM 工具、提示工程与实践笔记（英文）",
+                            Topic.AI, "官方 RSS",
+                            "simonwillison.net/atom/everything/；无需密钥，只读取列表；含短链接与引用，更新频繁；建议每 120 分钟刷新", 120),
                     new Route("/github/open-source",
                             new GithubOpenSourceRoute(defaultFetchClient, feedStore),
                             "GitHub Open Source · 开源项目、维护者与社区报道",
@@ -124,6 +148,11 @@ final class CuratedRoutes {
                             "The Guardian 世界 · 国际与社会新闻（英文）",
                             Topic.NEWS, "官方 RSS",
                             "theguardian.com/world/rss；无需密钥，只读取列表；建议每 60 分钟刷新", 60),
+                    new Route("/npr/world",
+                            new NprWorldRoute(defaultFetchClient, feedStore),
+                            "NPR 国际 · 美国公共广播国际新闻（英文）",
+                            Topic.NEWS, "官方 RSS",
+                            "feeds.npr.org/1004/rss.xml；无需密钥，只读取列表；建议每 60 分钟刷新", 60),
                     new Route("/nasa/news",
                             new NasaNewsRoute(defaultFetchClient, feedStore),
                             "NASA · 航天任务与科学动态（英文）",
@@ -169,6 +198,11 @@ final class CuratedRoutes {
                             "InfoQ 中文 · 软件开发与架构资讯",
                             Topic.SOFTWARE, "官方 RSS",
                             "www.infoq.cn/feed；无需密钥，只读取列表；建议每 120 分钟刷新", 120),
+                    new Route("/lwn/headlines",
+                            new LwnHeadlinesRoute(defaultFetchClient, feedStore),
+                            "LWN.net · Linux 内核与开源生态深度报道（英文）",
+                            Topic.SOFTWARE, "官方 RSS",
+                            "lwn.net/headlines/rss；无需密钥，只读取列表；订阅文章发布一周后免费；建议每 180 分钟刷新", 180),
                     new Route("/google/security",
                             new GoogleSecurityRoute(defaultFetchClient, feedStore),
                             "Google Security · 安全研究与防护更新（英文）",
@@ -199,6 +233,11 @@ final class CuratedRoutes {
                             "中新网财经 · 国内经济与产业资讯",
                             Topic.BUSINESS, "官方 RSS",
                             "www.chinanews.com.cn/rss/finance.xml；无需密钥，只读取列表；建议每 60 分钟刷新", 60),
+                    new Route("/ftchinese/news",
+                            new FtChineseRoute(defaultFetchClient, feedStore),
+                            "FT 中文网 · 全球财经、商业与国际时事",
+                            Topic.BUSINESS, "官方 RSS",
+                            "www.ftchinese.com/rss/news；无需密钥，只读取列表；部分原文需订阅；建议每 120 分钟刷新", 120),
                     new Route("/smashing/articles",
                             new SmashingMagazineRoute(defaultFetchClient, feedStore),
                             "Smashing Magazine · 网页设计、UX 与可访问性（英文）",
@@ -224,6 +263,21 @@ final class CuratedRoutes {
                             "Solidot · 科技、科学与开源资讯中文编译",
                             Topic.TECH, "官方 RSS",
                             "www.solidot.org/index.rss；无需密钥，只读取列表；建议每 120 分钟刷新", 120),
+                    new Route("/arstechnica/latest",
+                            new ArsTechnicaRoute(defaultFetchClient, feedStore),
+                            "Ars Technica · 科技、科学与政策深度报道（英文）",
+                            Topic.TECH, "官方 RSS",
+                            "feeds.arstechnica.com/arstechnica/index；无需密钥，只读取列表；建议每 120 分钟刷新", 120),
+                    new Route("/ifanr/latest",
+                            new IfanrRoute(defaultFetchClient, feedStore),
+                            "爱范儿 · 消费科技、产品评测与数字生活",
+                            Topic.TECH, "官方 RSS",
+                            "www.ifanr.com/feed；无需密钥，只读取列表；建议每 120 分钟刷新", 120),
+                    new Route("/geekpark/news",
+                            new GeekParkRoute(defaultFetchClient, feedStore),
+                            "极客公园 · 科技公司、创新产品与行业访谈",
+                            Topic.TECH, "官方 RSS",
+                            "www.geekpark.net/rss；无需密钥，只读取列表；建议每 120 分钟刷新", 120),
                     new Route("/kff/health-news",
                             new KffHealthNewsRoute(defaultFetchClient, feedStore),
                             "KFF Health News · 公共健康、医疗制度与健康政策深度报道（英文）",

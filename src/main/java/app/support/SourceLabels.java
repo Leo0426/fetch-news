@@ -70,6 +70,15 @@ public final class SourceLabels {
             case "aps" -> "APS 心理科学研究";
             case "edsurge" -> "EdSurge";
             case "hechinger" -> "The Hechinger Report";
+            case "deepmind" -> "DeepMind";
+            case "bair" -> "BAIR";
+            case "simonwillison" -> "Simon Willison";
+            case "npr" -> "NPR";
+            case "lwn" -> "LWN";
+            case "ftchinese" -> "FT 中文网";
+            case "arstechnica" -> "Ars Technica";
+            case "ifanr" -> "爱范儿";
+            case "geekpark" -> "极客公园";
             case "gcores"        -> "机核";
             case "yystv"         -> "游研社";
             case "reddit"        -> "Reddit";

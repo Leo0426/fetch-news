@@ -139,7 +139,14 @@ class RssLiteResourceTest {
                 Map.entry("/godot/news", "游戏"),
                 Map.entry("/factorio/blog", "游戏"),
                 Map.entry("/gcores/articles", "游戏"),
-                Map.entry("/yystv/articles", "游戏"));
+                Map.entry("/yystv/articles", "游戏"),
+                Map.entry("/deepmind/blog", "AI"), Map.entry("/bair/blog", "AI"),
+                Map.entry("/simonwillison/weblog", "AI"),
+                Map.entry("/npr/world", "时事要闻"),
+                Map.entry("/lwn/headlines", "软件开发"),
+                Map.entry("/ftchinese/news", "财经商业"),
+                Map.entry("/arstechnica/latest", "科技资讯"), Map.entry("/ifanr/latest", "科技资讯"),
+                Map.entry("/geekpark/news", "科技资讯"));
         var configs = given().get("/index/api/routes").then().statusCode(200).extract().jsonPath();
         sources.forEach((path, category) -> {
             assertEquals(category, runtime.routeRegistry().categories().get(path), path);

@@ -41,7 +41,16 @@ class ReaderSourceLabelsTest {
                 Arguments.of("/psyche/magazine", "Psyche"),
                 Arguments.of("/aps/research", "APS 心理科学研究"),
                 Arguments.of("/edsurge/news", "EdSurge"),
-                Arguments.of("/hechinger/report", "The Hechinger Report"));
+                Arguments.of("/hechinger/report", "The Hechinger Report"),
+                Arguments.of("/deepmind/blog", "DeepMind"),
+                Arguments.of("/bair/blog", "BAIR"),
+                Arguments.of("/simonwillison/weblog", "Simon Willison"),
+                Arguments.of("/npr/world", "NPR"),
+                Arguments.of("/lwn/headlines", "LWN"),
+                Arguments.of("/ftchinese/news", "FT 中文网"),
+                Arguments.of("/arstechnica/latest", "Ars Technica"),
+                Arguments.of("/ifanr/latest", "爱范儿"),
+                Arguments.of("/geekpark/news", "极客公园"));
     }
 
     private static Stream<Arguments> existingSources() {
