@@ -18,6 +18,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.function.Supplier;
 import java.util.regex.Pattern;
 
 /**
@@ -97,24 +98,29 @@ class TwitterHelper {
     private final FetchClient fetchClient;
     private final ObjectMapper objectMapper;
     private final CacheService cacheService;
-    private final CredentialConfigStore credStore;
+    private final Supplier<String> cookie;
 
     TwitterHelper(FetchClient fetchClient, ObjectMapper objectMapper,
                   CacheService cacheService, CredentialConfigStore credStore) {
+        this(fetchClient, objectMapper, cacheService, credStore::getTwitterCookie);
+    }
+
+    TwitterHelper(FetchClient fetchClient, ObjectMapper objectMapper,
+                  CacheService cacheService, Supplier<String> cookie) {
         this.fetchClient  = fetchClient;
         this.objectMapper = objectMapper;
         this.cacheService = cacheService;
-        this.credStore    = credStore;
+        this.cookie       = cookie;
     }
 
     boolean hasCookie() {
-        String c = credStore.getTwitterCookie();
+        String c = cookie.get();
         return c != null && !c.isBlank();
     }
 
-    /** Builds auth headers using the current Twitter cookie from the credential store. */
+    /** Builds auth headers using the current Twitter cookie. */
     private Map<String, String> authHeaders() {
-        String cookie = credStore.getTwitterCookie();
+        String cookie = this.cookie.get();
         var h = new HashMap<String, String>();
         h.put("authorization",              BEARER);
         h.put("x-twitter-active-user",      "yes");
@@ -367,7 +373,7 @@ class TwitterHelper {
         return URLEncoder.encode(s, StandardCharsets.UTF_8);
     }
 
-    private static String extractCt0(String cookieStr) {
+    static String extractCt0(String cookieStr) {
         for (String part : cookieStr.split(";")) {
             String[] kv = part.strip().split("=", 2);
             if (kv.length == 2 && "ct0".equals(kv[0].strip())) return kv[1].strip();

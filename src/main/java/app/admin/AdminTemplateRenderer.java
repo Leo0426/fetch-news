@@ -4,7 +4,6 @@ import app.AppRuntime;
 import app.ai.AiSettingsPage;
 import app.ai.OllamaClient;
 import app.auth.CurrentUser;
-import app.core.CredentialConfig;
 import app.core.RouteConfig;
 import app.feishu.FeishuConfig;
 import app.store.FeedRefreshState;
@@ -202,21 +201,6 @@ public class AdminTemplateRenderer {
         ctx.setVariable("defaultRouteTtl", RouteConfig.DEFAULT_ROUTE_CACHE_TTL_SECONDS);
         ctx.setVariable("defaultDetailTtl", RouteConfig.DEFAULT_DETAIL_CACHE_TTL_SECONDS);
         return engine.process("index/instance-modal", ctx);
-    }
-
-    /**
-     * AI settings section.
-     *
-     * @param config       current AI config
-     * @param extractCount number of cached AI extracts in SQLite
-     * @param summaryCount number of cached AI summaries in SQLite
-     * @param message      optional save confirmation message
-     */
-    public String credentialsSettings(CredentialConfig config, String message) {
-        Context ctx = new Context();
-        ctx.setVariable("config", config);
-        ctx.setVariable("message", message);
-        return engine.process("index/credentials", ctx);
     }
 
     public String feishuSettings(FeishuConfig config, List<String> allCategories, String message) {

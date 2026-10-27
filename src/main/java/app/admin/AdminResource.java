@@ -1,7 +1,6 @@
 package app.admin;
 
 import app.AppRuntime;
-import app.core.CredentialConfig;
 import app.core.RouteConfig;
 import app.core.RouteError;
 import app.core.RouteException;
@@ -11,7 +10,6 @@ import app.store.FeedStore;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Collections;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.slf4j.Logger;
@@ -274,66 +272,6 @@ public class AdminResource {
             }
         }
         return templates.healthSection(routes(), healthMap, refreshStates);
-    }
-
-    /**
-     * Credentials settings page fragment.
-     */
-    @GetMapping(value = "/credentials", produces = MediaType.TEXT_HTML_VALUE)
-    @ResponseBody
-    public String credentialsSettings() {
-        return templates.credentialsSettings(runtime.credentialConfigStore().getStored(), null);
-    }
-
-    /**
-     * Save credentials from form.
-     */
-    @PostMapping(
-            value = "/credentials",
-            consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE,
-            produces = MediaType.TEXT_HTML_VALUE)
-    @ResponseBody
-    public String saveCredentials(
-            @RequestParam(defaultValue = "") String bilibiliCookie,
-            @RequestParam(defaultValue = "") String twitterCookie,
-            @RequestParam(required = false) List<String> uidKey,
-            @RequestParam(required = false) List<String> uidCookie,
-            @RequestParam(required = false) List<String> uidName) {
-        var uidCookieMap = new LinkedHashMap<String, String>();
-        var uidNameMap   = new LinkedHashMap<String, String>();
-        if (uidKey != null && uidCookie != null) {
-            int len = Math.min(uidKey.size(), uidCookie.size());
-            for (int i = 0; i < len; i++) {
-                String k = uidKey.get(i).strip();
-                String v = uidCookie.get(i).strip();
-                if (!k.isBlank() && !v.isBlank()) {
-                    uidCookieMap.put(k, v);
-                    if (uidName != null && i < uidName.size()) {
-                        String n = uidName.get(i).strip();
-                        if (!n.isBlank()) uidNameMap.put(k, n);
-                    }
-                }
-            }
-        }
-        CredentialConfig saved = runtime.credentialConfigStore().save(
-                new CredentialConfig(bilibiliCookie.strip(), uidCookieMap, uidNameMap, twitterCookie.strip()));
-        return templates.credentialsSettings(saved, "已保存");
-    }
-
-    /**
-     * Saves a single per-UID Bilibili cookie from the route modal.
-     * Returns an inline status fragment (targets #cookie-save-result).
-     */
-    @PostMapping(
-            value = "/credentials/uid-cookie",
-            consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE,
-            produces = MediaType.TEXT_HTML_VALUE)
-    @ResponseBody
-    public String saveUidCookie(
-            @RequestParam String uid,
-            @RequestParam(defaultValue = "") String cookie) {
-        runtime.credentialConfigStore().putUidCookie(uid.strip(), cookie.strip());
-        return "<span class='form-msg ok'>Cookie 已保存</span>";
     }
 
     /**
