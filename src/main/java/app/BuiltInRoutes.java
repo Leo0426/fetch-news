@@ -126,7 +126,7 @@ final class BuiltInRoutes {
                             new ThirtySixKrRoute(defaultFetchClient),
                             "36氪 latest tech news",
                             Topic.TECH, "RSS 代理",
-                            "代理 36kr.com/feed 官方 RSS/Atom，标准字段解析"),
+                            "代理 www.36kr.com/feed 官方 RSS/Atom，标准字段解析"),
                     new Route("/huanqiu/news",
                             new HuanqiuRoute(defaultFetchClient),
                             "环球网最新新闻",

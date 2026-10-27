@@ -28,9 +28,14 @@ public class BilibiliVideoRoute implements RouteHandler {
 
     private static final String API_URL =
             "https://api.bilibili.com/x/space/wbi/arc/search";
+    // Without the dm_img_* browser fingerprint the endpoint answers -352 (风控校验失败), with or without cookies.
     private static final String BASE_PARAMS =
             "tid=0&pn=1&ps=30&keyword=&order=pubdate&platform=web" +
-            "&web_location=1550101&order_avoided=true";
+            "&web_location=1550101&order_avoided=true" +
+            "&dm_img_list=[]&dm_img_str=V2ViR0wgMS4wIChPcGVuR0wgRVMgMi4wIENocm9taXVtKQ" +
+            "&dm_cover_img_str=QU5HTEUgKEludGVsLCBJbnRlbChSKSBIRCBHcmFwaGljcyBEaXJlY3QzRDExIHZz" +
+            "XzVfMCBwc181XzApR29vZ2xlIEluYy4gKEludGVsKQ" +
+            "&dm_img_inter={\"ds\":[],\"wh\":[0,0,0],\"of\":[0,0,0]}";
 
     private final BilibiliHelper helper;
     private final ObjectMapper objectMapper;

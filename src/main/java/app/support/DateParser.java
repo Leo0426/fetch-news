@@ -9,6 +9,9 @@ import java.time.format.DateTimeParseException;
  * Small helpers for parsing source dates.
  */
 public final class DateParser {
+    // Some Chinese feeds (36氪) publish "2026-10-27 18:54:53  +0800" instead of RFC 822.
+    private static final DateTimeFormatter LOCAL_WITH_OFFSET = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss Z");
+
     /**
      * Prevents construction of this utility class.
      */
@@ -48,6 +51,11 @@ public final class DateParser {
         }
         try {
             return ZonedDateTime.parse(value.trim(), DateTimeFormatter.RFC_1123_DATE_TIME).toInstant();
+        } catch (DateTimeParseException ignored) {
+            // fall through to the space-separated form
+        }
+        try {
+            return ZonedDateTime.parse(value.trim().replaceAll("\\s+", " "), LOCAL_WITH_OFFSET).toInstant();
         } catch (DateTimeParseException ignored) {
             return null;
         }

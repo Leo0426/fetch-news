@@ -9,7 +9,7 @@ import org.springframework.stereotype.Component;
  */
 @Component
 public class AppInfo {
-    public static final String VERSION = "0.7.2";
+    public static final String VERSION = "0.7.3";
     private final Instant startTime = Instant.now();
 
     public String version() {

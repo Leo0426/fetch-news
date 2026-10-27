@@ -10,8 +10,14 @@ import app.core.RouteError;
 import app.core.RouteException;
 import app.routes.bilibili.BilibiliVideoRoute;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.net.URI;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.security.MessageDigest;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.HexFormat;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
@@ -75,6 +81,11 @@ class BilibiliVideoRouteTest {
         return new BilibiliVideoRoute(mockFetcher(videoJson), MAPPER, cache, creds);
     }
 
+    private static String md5(String input) throws Exception {
+        return HexFormat.of().formatHex(
+                MessageDigest.getInstance("MD5").digest(input.getBytes(StandardCharsets.UTF_8)));
+    }
+
     private RouteContext ctx(String uid) {
         return new RouteContext("/bilibili/user/video/" + uid, Map.of("uid", uid), Map.of());
     }
@@ -97,6 +108,28 @@ class BilibiliVideoRouteTest {
         assertNotNull(first.pubDate());
         assertTrue(first.description().contains("demo video"));
         assertTrue(first.description().contains("<img"));
+    }
+
+    @Test
+    void signsAnEncodedQueryCarryingTheBrowserFingerprint() throws Exception {
+        List<String> searches = new ArrayList<>();
+        var cache = new CacheService(Duration.ofMinutes(5), Duration.ofMinutes(30));
+        var creds = new CredentialConfigStore(Path.of("build/test-creds.json"), MAPPER);
+        var route = new BilibiliVideoRoute(url -> {
+            if (url.contains("web-interface/nav")) return NAV_JSON;
+            if (url.contains("bili-header.umd.js")) return FAKE_JS;
+            searches.add(url);
+            return RESPONSE_JSON;
+        }, MAPPER, cache, creds);
+
+        route.handle(ctx("12345"));
+
+        String query = URI.create(searches.getFirst()).getRawQuery();
+        assertTrue(query.contains("mid=12345"), query);
+        assertTrue(query.contains("dm_img_inter=%7B%22ds%22%3A%5B%5D"), query);
+        int signature = query.indexOf("&w_rid=");
+        assertEquals(md5(query.substring(0, signature) + "abcdefghijklmnopqrstuvwxyz012345"),
+                query.substring(signature + "&w_rid=".length()));
     }
 
     @Test

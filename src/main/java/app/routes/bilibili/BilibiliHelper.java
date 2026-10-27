@@ -116,7 +116,7 @@ class BilibiliHelper {
     FetchClient fetchClient() { return fetchClient; }
 
     /**
-     * Signs a raw query-string with WBI (appends w_rid + wts).
+     * Signs a raw query-string with WBI and returns it URL-encoded with {@code wts} and {@code w_rid} appended.
      * Fetches / caches the mixin key automatically.
      */
     String wbiSign(String rawParams) throws Exception {
@@ -136,9 +136,8 @@ class BilibiliHelper {
             sb.append(encode(e.getKey())).append('=').append(encode(e.getValue()));
         }
         sb.append("&wts=").append(wts);
-        sb.append(mixinKey);
-        String wRid = md5(sb.toString());
-        return rawParams + "&w_rid=" + wRid + "&wts=" + wts;
+        String query = sb.toString();
+        return query + "&w_rid=" + md5(query + mixinKey);
     }
 
     // ── WBI key derivation ────────────────────────────────────────────────────

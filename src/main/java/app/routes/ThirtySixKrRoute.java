@@ -10,7 +10,7 @@ import app.core.RouteContext;
  */
 public class ThirtySixKrRoute extends RssProxyRoute {
 
-    private static final String FEED_URL = "https://36kr.com/feed";
+    private static final String FEED_URL = "https://www.36kr.com/feed";
 
     public ThirtySixKrRoute(FetchClient fetchClient) {
         super(fetchClient);
