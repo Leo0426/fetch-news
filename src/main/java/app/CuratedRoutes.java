@@ -6,6 +6,7 @@ import app.core.FetchClient;
 import app.core.Route;
 import app.core.Topic;
 import app.routes.AeonMagazineRoute;
+import app.routes.AiHotRoute;
 import app.routes.ApertureRoute;
 import app.routes.ApsResearchNewsRoute;
 import app.routes.ArchDailyRoute;
@@ -108,6 +109,11 @@ final class CuratedRoutes {
                             "Simon Willison · LLM 工具、提示工程与实践笔记（英文）",
                             Topic.AI, "官方 RSS",
                             "simonwillison.net/atom/everything/；无需密钥，只读取列表；含短链接与引用，更新频繁；建议每 120 分钟刷新", 120),
+                    new Route("/aihot/news",
+                            new AiHotRoute(defaultFetchClient, feedStore),
+                            "AIHOT · 中文 AI 资讯精选摘要，附原文链接",
+                            Topic.AI, "官方 RSS",
+                            "aihot.news/feed.xml；无需密钥，只读取最新 50 条精选；更新频繁，建议每 60 分钟刷新", 60),
                     new Route("/github/open-source",
                             new GithubOpenSourceRoute(defaultFetchClient, feedStore),
                             "GitHub Open Source · 开源项目、维护者与社区报道",

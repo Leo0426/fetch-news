@@ -95,6 +95,8 @@ class ResearchAndNewsSourcesTest {
                         client -> new BairBlogRoute(client, null)),
                 new Source("/simonwillison/weblog", "https://simonwillison.net/atom/everything/", true,
                         client -> new SimonWillisonRoute(client, null)),
+                new Source("/aihot/news", "https://aihot.news/feed.xml", false,
+                        client -> new AiHotRoute(client, null)),
                 new Source("/npr/world", "https://feeds.npr.org/1004/rss.xml", false,
                         client -> new NprWorldRoute(client, null)),
                 new Source("/lwn/headlines", "https://lwn.net/headlines/rss", false,

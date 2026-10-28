@@ -141,7 +141,7 @@ class RssLiteResourceTest {
                 Map.entry("/gcores/articles", "游戏"),
                 Map.entry("/yystv/articles", "游戏"),
                 Map.entry("/deepmind/blog", "AI"), Map.entry("/bair/blog", "AI"),
-                Map.entry("/simonwillison/weblog", "AI"),
+                Map.entry("/simonwillison/weblog", "AI"), Map.entry("/aihot/news", "AI"),
                 Map.entry("/npr/world", "时事要闻"),
                 Map.entry("/lwn/headlines", "软件开发"),
                 Map.entry("/ftchinese/news", "财经商业"),

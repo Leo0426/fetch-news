@@ -73,6 +73,7 @@ public final class SourceLabels {
             case "deepmind" -> "DeepMind";
             case "bair" -> "BAIR";
             case "simonwillison" -> "Simon Willison";
+            case "aihot" -> "AIHOT";
             case "npr" -> "NPR";
             case "lwn" -> "LWN";
             case "ftchinese" -> "FT 中文网";

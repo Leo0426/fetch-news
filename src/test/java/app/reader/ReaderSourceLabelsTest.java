@@ -45,6 +45,7 @@ class ReaderSourceLabelsTest {
                 Arguments.of("/deepmind/blog", "DeepMind"),
                 Arguments.of("/bair/blog", "BAIR"),
                 Arguments.of("/simonwillison/weblog", "Simon Willison"),
+                Arguments.of("/aihot/news", "AIHOT"),
                 Arguments.of("/npr/world", "NPR"),
                 Arguments.of("/lwn/headlines", "LWN"),
                 Arguments.of("/ftchinese/news", "FT 中文网"),
