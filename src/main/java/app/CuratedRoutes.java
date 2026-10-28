@@ -30,6 +30,7 @@ import app.routes.KffHealthNewsRoute;
 import app.routes.NasaNewsRoute;
 import app.routes.NoaaNewsRoute;
 import app.routes.NprWorldRoute;
+import app.routes.NytChineseRoute;
 import app.routes.OurWorldInDataRoute;
 import app.routes.PewResearchRoute;
 import app.routes.PsycheMagazineRoute;
@@ -39,6 +40,7 @@ import app.routes.RthkLocalRoute;
 import app.routes.ScienceNewsRoute;
 import app.routes.SmashingMagazineRoute;
 import app.routes.StatNewsRoute;
+import app.routes.ThirtySixKrNewsflashRoute;
 import app.routes.TmtpostRoute;
 import app.routes.UnNewsChineseRoute;
 import app.routes.WoshipmRoute;
@@ -85,6 +87,11 @@ final class CuratedRoutes {
                             "NPR 国际 · 美国公共广播国际新闻（英文）",
                             Topic.NEWS, "官方 RSS",
                             "feeds.npr.org/1004/rss.xml；无需密钥，只读取列表；建议每 60 分钟刷新", 60),
+                    new Route("/nytimes/cn",
+                            new NytChineseRoute(defaultFetchClient, feedStore),
+                            "纽约时报中文网 · 国际、中国与商业报道",
+                            Topic.NEWS, "官方 RSS",
+                            "cn.nytimes.com/rss/；无需密钥，只读取列表；建议每 120 分钟刷新", 120),
                     new Route("/nasa/news",
                             new NasaNewsRoute(defaultFetchClient, feedStore),
                             "NASA · 航天任务与科学动态（英文）",
@@ -145,6 +152,11 @@ final class CuratedRoutes {
                             "人人都是产品经理 · 产品设计、运营与 AI 产品实践",
                             Topic.BUSINESS, "官方 RSS",
                             "www.woshipm.com/feed；无需密钥，只读取列表；含正文全文；建议每 360 分钟刷新", 360),
+                    new Route("/36kr/newsflashes",
+                            new ThirtySixKrNewsflashRoute(defaultFetchClient, feedStore),
+                            "36氪快讯 · 创投、公司与市场即时快讯",
+                            Topic.BUSINESS, "官方 RSS",
+                            "www.36kr.com/feed-newsflash；无需密钥，只读取列表；更新频繁；建议每 60 分钟刷新", 60),
                     new Route("/smashing/articles",
                             new SmashingMagazineRoute(defaultFetchClient, feedStore),
                             "Smashing Magazine · 网页设计、UX 与可访问性（英文）",

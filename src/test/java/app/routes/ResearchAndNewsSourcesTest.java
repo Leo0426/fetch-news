@@ -6,7 +6,12 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import app.core.Feed;
 import app.core.FetchClient;
 import app.core.RouteContext;
+import app.routes.github.ClaudeCodeReleasesRoute;
+import app.routes.github.ComfyUiReleasesRoute;
+import app.routes.github.LlamaCppReleasesRoute;
+import app.routes.github.OpenWebUiReleasesRoute;
 import app.routes.github.VllmReleasesRoute;
+import app.routes.github.VscodeReleasesRoute;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -98,6 +103,38 @@ class ResearchAndNewsSourcesTest {
                         client -> new SimonWillisonRoute(client, null)),
                 new Source("/aihot/news", "https://aihot.news/feed.xml", false,
                         client -> new AiHotRoute(client, null)),
+                new Source("/google/ai-blog", "https://blog.google/technology/ai/rss/", false,
+                        client -> new GoogleAiBlogRoute(client, null)),
+                new Source("/raschka/ahead-of-ai", "https://magazine.sebastianraschka.com/feed", false,
+                        client -> new AheadOfAiRoute(client, null)),
+                new Source("/karpathy/blog", "https://karpathy.bearblog.dev/feed/", false,
+                        client -> new KarpathyBlogRoute(client, null)),
+                new Source("/kexue/blog", "https://kexue.fm/feed", false,
+                        client -> new KexueRoute(client, null)),
+                new Source("/takara/daily-papers", "https://papers.takara.ai/api/feed", false,
+                        client -> new TakaraDailyPapersRoute(client, null)),
+                new Source("/pragmaticengineer/newsletter", "https://newsletter.pragmaticengineer.com/feed", false,
+                        client -> new PragmaticEngineerRoute(client, null)),
+                new Source("/github/product-news", "https://github.blog/news-insights/product-news/feed/", false,
+                        client -> new GithubProductNewsRoute(client, null)),
+                new Source("/vscode/releases", "https://github.com/microsoft/vscode/releases.atom", true,
+                        client -> new VscodeReleasesRoute(client, null)),
+                new Source("/open-webui/releases", "https://github.com/open-webui/open-webui/releases.atom", true,
+                        client -> new OpenWebUiReleasesRoute(client, null)),
+                new Source("/claude-code/releases", "https://github.com/anthropics/claude-code/releases.atom", true,
+                        client -> new ClaudeCodeReleasesRoute(client, null)),
+                new Source("/comfyui/releases", "https://github.com/Comfy-Org/ComfyUI/releases.atom", true,
+                        client -> new ComfyUiReleasesRoute(client, null)),
+                new Source("/llama-cpp/releases", "https://github.com/ggml-org/llama.cpp/releases.atom", true,
+                        client -> new LlamaCppReleasesRoute(client, null)),
+                new Source("/landian/news", "https://www.landiannews.com/feed", false,
+                        client -> new LandianNewsRoute(client, null)),
+                new Source("/juejin/posts", "https://juejin.cn/rss", false,
+                        client -> new JuejinRoute(client, null)),
+                new Source("/36kr/newsflashes", "https://www.36kr.com/feed-newsflash", false,
+                        client -> new ThirtySixKrNewsflashRoute(client, null)),
+                new Source("/nytimes/cn", "https://cn.nytimes.com/rss/", false,
+                        client -> new NytChineseRoute(client, null)),
                 new Source("/vllm/releases", "https://github.com/vllm-project/vllm/releases.atom", true,
                         client -> new VllmReleasesRoute(client, null)),
                 new Source("/microsoft/research", "https://www.microsoft.com/en-us/research/feed/", false,

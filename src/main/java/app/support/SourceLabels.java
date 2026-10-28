@@ -28,8 +28,11 @@ public final class SourceLabels {
             case "github"        -> "GitHub";
             case "openai"        -> "OpenAI";
             case "huggingface"   -> "Hugging Face";
-            case "google"        -> parts.length > 2 && "security".equals(parts[2])
-                    ? "Google Security" : "Google Research";
+            case "google"        -> parts.length < 3 ? "Google Research" : switch (parts[2]) {
+                case "security" -> "Google Security";
+                case "ai-blog" -> "Google AI";
+                default -> "Google Research";
+            };
             case "ollama"        -> "Ollama";
             case "chinanews"     -> "中新网";
             case "un"            -> "联合国新闻";
@@ -74,6 +77,19 @@ public final class SourceLabels {
             case "bair" -> "BAIR";
             case "simonwillison" -> "Simon Willison";
             case "aihot" -> "AIHOT";
+            case "raschka" -> "Ahead of AI";
+            case "karpathy" -> "Karpathy";
+            case "kexue" -> "科学空间";
+            case "takara" -> "Takara 论文速递";
+            case "pragmaticengineer" -> "Pragmatic Engineer";
+            case "vscode" -> "VS Code";
+            case "open-webui" -> "Open WebUI";
+            case "claude-code" -> "Claude Code";
+            case "comfyui" -> "ComfyUI";
+            case "llama-cpp" -> "llama.cpp";
+            case "landian" -> "蓝点网";
+            case "juejin" -> "掘金";
+            case "nytimes" -> "纽约时报中文网";
             case "nvidia" -> "NVIDIA";
             case "importai" -> "Import AI";
             case "latentspace" -> "Latent Space";

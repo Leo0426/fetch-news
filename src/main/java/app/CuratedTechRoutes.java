@@ -5,6 +5,7 @@ import app.core.CredentialConfigStore;
 import app.core.FetchClient;
 import app.core.Route;
 import app.core.Topic;
+import app.routes.AheadOfAiRoute;
 import app.routes.AiHotRoute;
 import app.routes.AppinnRoute;
 import app.routes.ArsTechnicaRoute;
@@ -16,7 +17,9 @@ import app.routes.GithubAiMlRoute;
 import app.routes.GithubChangelogRoute;
 import app.routes.GithubEngineeringRoute;
 import app.routes.GithubOpenSourceRoute;
+import app.routes.GithubProductNewsRoute;
 import app.routes.GithubSecurityRoute;
+import app.routes.GoogleAiBlogRoute;
 import app.routes.GoogleResearchRoute;
 import app.routes.GoogleSecurityRoute;
 import app.routes.HackadayRoute;
@@ -26,7 +29,11 @@ import app.routes.ImportAiRoute;
 import app.routes.InfoqChinaRoute;
 import app.routes.InterconnectsRoute;
 import app.routes.IthomeRoute;
+import app.routes.JuejinRoute;
+import app.routes.KarpathyBlogRoute;
+import app.routes.KexueRoute;
 import app.routes.KrebsSecurityRoute;
+import app.routes.LandianNewsRoute;
 import app.routes.LatentSpaceRoute;
 import app.routes.LeiphoneRoute;
 import app.routes.LilianWengRoute;
@@ -38,16 +45,23 @@ import app.routes.NvidiaTechBlogRoute;
 import app.routes.OneUsefulThingRoute;
 import app.routes.OpenAiNewsRoute;
 import app.routes.OschinaNewsRoute;
+import app.routes.PragmaticEngineerRoute;
 import app.routes.QbitAiRoute;
 import app.routes.RaspberryPiRoute;
 import app.routes.RuanYifengRoute;
 import app.routes.SchneierSecurityRoute;
 import app.routes.SimonWillisonRoute;
 import app.routes.SolidotRoute;
+import app.routes.TakaraDailyPapersRoute;
 import app.routes.ZhidxRoute;
+import app.routes.github.ClaudeCodeReleasesRoute;
+import app.routes.github.ComfyUiReleasesRoute;
+import app.routes.github.LlamaCppReleasesRoute;
 import app.routes.github.OllamaReleasesRoute;
+import app.routes.github.OpenWebUiReleasesRoute;
 import app.routes.github.TransformersReleasesRoute;
 import app.routes.github.VllmReleasesRoute;
+import app.routes.github.VscodeReleasesRoute;
 import app.store.FeedStore;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.List;
@@ -171,6 +185,51 @@ final class CuratedTechRoutes {
                             "vLLM · 大模型推理引擎版本发布",
                             Topic.AI, "官方 Atom",
                             "github.com/vllm-project/vllm/releases.atom；无需密钥，包含预发布版本；不占用 GitHub API 限额；建议每 180 分钟刷新", 180),
+                    new Route("/google/ai-blog",
+                            new GoogleAiBlogRoute(defaultFetchClient, feedStore),
+                            "Google AI 博客 · Gemini 与 Google AI 产品动态（英文）",
+                            Topic.AI, "官方 RSS",
+                            "blog.google/technology/ai/rss/；无需密钥，只读取列表；建议每 180 分钟刷新", 180),
+                    new Route("/raschka/ahead-of-ai",
+                            new AheadOfAiRoute(defaultFetchClient, feedStore),
+                            "Ahead of AI · Sebastian Raschka 的 LLM 研究解读（英文）",
+                            Topic.AI, "官方 RSS",
+                            "magazine.sebastianraschka.com/feed；无需密钥，只读取列表；含正文全文，单次约 2.5 MB；建议每 720 分钟刷新", 720),
+                    new Route("/karpathy/blog",
+                            new KarpathyBlogRoute(defaultFetchClient, feedStore),
+                            "Andrej Karpathy 博客 · 大模型与 AI 教育长文（英文）",
+                            Topic.AI, "官方 RSS",
+                            "karpathy.bearblog.dev/feed/；无需密钥，只读取列表；更新频率低；建议每 1440 分钟刷新", 1440),
+                    new Route("/kexue/blog",
+                            new KexueRoute(defaultFetchClient, feedStore),
+                            "科学空间 · 苏剑林的深度学习与大模型原理推导",
+                            Topic.AI, "官方 RSS",
+                            "kexue.fm/feed；无需密钥，只读取列表；更新频率低；建议每 720 分钟刷新", 720),
+                    new Route("/takara/daily-papers",
+                            new TakaraDailyPapersRoute(defaultFetchClient, feedStore),
+                            "Takara TLDR · Hugging Face 每日热门 AI 论文摘要（英文）",
+                            Topic.AI, "官方 RSS",
+                            "papers.takara.ai/api/feed；无需密钥，只读取列表；每天约 50 篇；建议每 360 分钟刷新", 360),
+                    new Route("/open-webui/releases",
+                            new OpenWebUiReleasesRoute(defaultFetchClient, feedStore),
+                            "Open WebUI · 自托管大模型界面版本发布",
+                            Topic.AI, "官方 Atom",
+                            "github.com/open-webui/open-webui/releases.atom；无需密钥，不占用 GitHub API 限额；建议每 360 分钟刷新", 360),
+                    new Route("/claude-code/releases",
+                            new ClaudeCodeReleasesRoute(defaultFetchClient, feedStore),
+                            "Claude Code · 命令行编程智能体版本发布",
+                            Topic.AI, "官方 Atom",
+                            "github.com/anthropics/claude-code/releases.atom；无需密钥，不占用 GitHub API 限额；更新频繁；建议每 180 分钟刷新", 180),
+                    new Route("/comfyui/releases",
+                            new ComfyUiReleasesRoute(defaultFetchClient, feedStore),
+                            "ComfyUI · 图像与视频生成工作流版本发布",
+                            Topic.AI, "官方 Atom",
+                            "github.com/Comfy-Org/ComfyUI/releases.atom；无需密钥，不占用 GitHub API 限额；建议每 360 分钟刷新", 360),
+                    new Route("/llama-cpp/releases",
+                            new LlamaCppReleasesRoute(defaultFetchClient, feedStore),
+                            "llama.cpp · 本地大模型推理引擎版本发布",
+                            Topic.AI, "官方 Atom",
+                            "github.com/ggml-org/llama.cpp/releases.atom；无需密钥，不占用 GitHub API 限额；建议每 360 分钟刷新", 360),
                     new Route("/cloudflare/blog",
                             new CloudflareBlogRoute(defaultFetchClient, feedStore),
                             "Cloudflare · 网络、性能与工程实践（英文）",
@@ -206,6 +265,26 @@ final class CuratedTechRoutes {
                             "开源中国 · 开源项目、软件发布与开发者资讯",
                             Topic.SOFTWARE, "官方 RSS",
                             "www.oschina.net/news/rss；无需密钥，只读取列表；更新频繁；建议每 120 分钟刷新", 120),
+                    new Route("/pragmaticengineer/newsletter",
+                            new PragmaticEngineerRoute(defaultFetchClient, feedStore),
+                            "The Pragmatic Engineer · 软件工程团队与行业观察（英文）",
+                            Topic.SOFTWARE, "官方 RSS",
+                            "newsletter.pragmaticengineer.com/feed；无需密钥，只读取列表；付费文章只有摘要；建议每 720 分钟刷新", 720),
+                    new Route("/github/product-news",
+                            new GithubProductNewsRoute(defaultFetchClient, feedStore),
+                            "GitHub 产品动态 · Copilot 与平台新功能发布",
+                            Topic.SOFTWARE, "官方 RSS",
+                            "github.blog/news-insights/product-news/feed/；无需密钥，只读取列表；建议每 360 分钟刷新", 360),
+                    new Route("/vscode/releases",
+                            new VscodeReleasesRoute(defaultFetchClient, feedStore),
+                            "VS Code · 编辑器版本发布",
+                            Topic.SOFTWARE, "官方 Atom",
+                            "github.com/microsoft/vscode/releases.atom；无需密钥，不占用 GitHub API 限额；建议每 720 分钟刷新", 720),
+                    new Route("/juejin/posts",
+                            new JuejinRoute(defaultFetchClient, feedStore),
+                            "掘金 · 开发者社区热门技术文章",
+                            Topic.SOFTWARE, "官方 RSS",
+                            "juejin.cn/rss；无需密钥，只读取列表；建议每 180 分钟刷新", 180),
                     new Route("/google/security",
                             new GoogleSecurityRoute(defaultFetchClient, feedStore),
                             "Google Security · 安全研究与防护更新（英文）",
@@ -275,6 +354,11 @@ final class CuratedTechRoutes {
                             new AppinnRoute(defaultFetchClient, feedStore),
                             "小众软件 · 实用软件、工具与效率技巧",
                             Topic.TECH, "官方 RSS",
-                            "www.appinn.com/feed/；无需密钥，只读取列表；建议每 360 分钟刷新", 360));
+                            "www.appinn.com/feed/；无需密钥，只读取列表；建议每 360 分钟刷新", 360),
+                    new Route("/landian/news",
+                            new LandianNewsRoute(defaultFetchClient, feedStore),
+                            "蓝点网 · 软件、系统与互联网科技快讯",
+                            Topic.TECH, "官方 RSS",
+                            "www.landiannews.com/feed；无需密钥，只读取列表；建议每 120 分钟刷新", 120));
     }
 }
