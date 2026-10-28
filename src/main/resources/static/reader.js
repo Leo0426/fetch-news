@@ -331,7 +331,16 @@ function readerState() {
       label.className = 'rd-toc-label';
       label.textContent = '阅读来源';
       toc.append(label);
+      let topic;
       document.querySelectorAll('.rd-section[id]').forEach(section => {
+        const sectionTopic = section.dataset.tag || '未分类';
+        if (sectionTopic !== topic) {
+          topic = sectionTopic;
+          const heading = document.createElement('div');
+          heading.className = 'rd-toc-group';
+          heading.textContent = topic;
+          toc.append(heading);
+        }
         const link = document.createElement('a');
         link.href = '#' + section.id;
         link.className = 'rd-toc-link';
@@ -383,6 +392,13 @@ function readerState() {
         const section = document.getElementById(link.hash.slice(1));
         link.hidden = !section || !this.sectionVisible(section);
         if (!link.hidden) count++;
+      });
+      toc.querySelectorAll('.rd-toc-group').forEach(heading => {
+        let visible = false;
+        for (let el = heading.nextElementSibling; el?.classList.contains('rd-toc-link'); el = el.nextElementSibling) {
+          if (!el.hidden) visible = true;
+        }
+        heading.hidden = !visible;
       });
       toc.hidden = count < 2;
       document.querySelector('.rd-layout')?.classList.toggle('rd-layout--single', count < 2);

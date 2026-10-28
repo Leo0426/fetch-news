@@ -251,6 +251,16 @@
   color: var(--ink-faint);
 }
 
+.rd-toc-group {
+  margin: 14px 0 4px;
+  padding-left: 10px;
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+.rd-toc-label + .rd-toc-group { margin-top: 0; }
+
 .rd-toc-link {
   display: block;
   padding: 5px 8px;
@@ -274,6 +284,7 @@
   background: rgba(21, 19, 15, 0.04);
   transform: translateX(2px);
 }
+.rd-toc-group ~ .rd-toc-link { padding-left: 16px; }
 .rd-toc-link.active {
   color: var(--black);
   border-left-color: var(--accent);
