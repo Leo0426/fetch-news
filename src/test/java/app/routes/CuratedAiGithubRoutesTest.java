@@ -9,7 +9,6 @@ import app.core.RouteContext;
 import app.core.RouteHandler;
 import app.routes.github.OllamaReleasesRoute;
 import app.routes.github.TransformersReleasesRoute;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -22,8 +21,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 
 class CuratedAiGithubRoutesTest {
-    private static final ObjectMapper MAPPER = new ObjectMapper();
-
     @ParameterizedTest(name = "{0}")
     @MethodSource("rssSources")
     void fetchesTheOfficialFeedOnceAndPreservesPublishedFields(RssSource source) throws Exception {
@@ -70,34 +67,6 @@ class CuratedAiGithubRoutesTest {
         assertEquals(Instant.parse("2026-10-20T12:30:00Z"), feed.items().getFirst().pubDate());
     }
 
-    @ParameterizedTest(name = "{0}")
-    @MethodSource("releaseSources")
-    void fetchesOnlyTheFixedRepositoryAndPreservesPublishedReleaseFields(ReleaseSource source)
-            throws Exception {
-        List<String> requests = new ArrayList<>();
-        String repositoryUrl = "https://github.com/" + source.repository();
-        FetchClient client = url -> {
-            requests.add(url);
-            return releases(repositoryUrl);
-        };
-        RouteContext context = new RouteContext(source.path(),
-                Map.of("owner", "unrelated", "repo", "other"), Map.of("limit", "1"),
-                Duration.ofMinutes(20), "https://unrelated.example/feed.xml");
-
-        Feed feed = source.factory().apply(client).handle(context);
-
-        assertEquals(List.of("https://api.github.com/repos/" + source.repository() + "/releases"), requests);
-        assertEquals(source.repository() + " releases", feed.title());
-        assertEquals(repositoryUrl + "/releases", feed.link());
-        assertEquals(1, feed.items().size());
-        var item = feed.items().getFirst();
-        assertEquals("Release 1.0", item.title());
-        assertEquals(repositoryUrl + "/releases/tag/v1.0", item.link());
-        assertEquals("<pre>Published release notes.</pre>", item.description());
-        assertEquals(Instant.parse("2026-10-20T12:30:00Z"), item.pubDate());
-        assertEquals("maintainer", item.author());
-    }
-
     private static Stream<RssSource> rssSources() {
         return Stream.of(
                 new RssSource("/openai/news", "https://openai.com/news/rss.xml",
@@ -109,15 +78,12 @@ class CuratedAiGithubRoutesTest {
                 new RssSource("/github/open-source", "https://github.blog/open-source/feed/",
                         client -> new GithubOpenSourceRoute(client, null)),
                 new RssSource("/github/changelog", "https://github.blog/changelog/feed/",
-                        client -> new GithubChangelogRoute(client, null)));
-    }
-
-    private static Stream<ReleaseSource> releaseSources() {
-        return Stream.of(
-                new ReleaseSource("/ollama/releases", "ollama/ollama",
-                        client -> new OllamaReleasesRoute(client, MAPPER)),
-                new ReleaseSource("/huggingface/transformers/releases", "huggingface/transformers",
-                        client -> new TransformersReleasesRoute(client, MAPPER)));
+                        client -> new GithubChangelogRoute(client, null)),
+                new RssSource("/ollama/releases", "https://github.com/ollama/ollama/releases.atom",
+                        client -> new OllamaReleasesRoute(client, null)),
+                new RssSource("/huggingface/transformers/releases",
+                        "https://github.com/huggingface/transformers/releases.atom",
+                        client -> new TransformersReleasesRoute(client, null)));
     }
 
     private static String rss() {
@@ -139,27 +105,7 @@ class CuratedAiGithubRoutesTest {
                 """;
     }
 
-    private static String releases(String repositoryUrl) {
-        return """
-                [
-                  {"tag_name":"v1.0","name":"Release 1.0","body":"Published release notes.",
-                   "html_url":"%s/releases/tag/v1.0","published_at":"2026-10-20T12:30:00Z",
-                   "author":{"login":"maintainer"},"draft":false,"prerelease":false},
-                  {"tag_name":"v2.0","name":"Draft release","body":"Not published",
-                   "html_url":"%s/releases/tag/v2.0","draft":true,"prerelease":false}
-                ]
-                """.formatted(repositoryUrl, repositoryUrl);
-    }
-
     private record RssSource(String path, String url, Function<FetchClient, RouteHandler> factory) {
-        @Override
-        public String toString() {
-            return path;
-        }
-    }
-
-    private record ReleaseSource(String path, String repository,
-                                 Function<FetchClient, RouteHandler> factory) {
         @Override
         public String toString() {
             return path;
