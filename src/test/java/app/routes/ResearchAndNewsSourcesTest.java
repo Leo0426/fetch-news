@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import app.core.Feed;
 import app.core.FetchClient;
 import app.core.RouteContext;
+import app.routes.github.VllmReleasesRoute;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -97,6 +98,8 @@ class ResearchAndNewsSourcesTest {
                         client -> new SimonWillisonRoute(client, null)),
                 new Source("/aihot/news", "https://aihot.news/feed.xml", false,
                         client -> new AiHotRoute(client, null)),
+                new Source("/vllm/releases", "https://github.com/vllm-project/vllm/releases.atom", true,
+                        client -> new VllmReleasesRoute(client, null)),
                 new Source("/microsoft/research", "https://www.microsoft.com/en-us/research/feed/", false,
                         client -> new MicrosoftResearchRoute(client, null)),
                 new Source("/nvidia/blog", "https://developer.nvidia.com/blog/feed", true,

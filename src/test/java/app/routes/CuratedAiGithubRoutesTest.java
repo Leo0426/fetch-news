@@ -9,7 +9,6 @@ import app.core.RouteContext;
 import app.core.RouteHandler;
 import app.routes.github.OllamaReleasesRoute;
 import app.routes.github.TransformersReleasesRoute;
-import app.routes.github.VllmReleasesRoute;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Duration;
 import java.time.Instant;
@@ -118,9 +117,7 @@ class CuratedAiGithubRoutesTest {
                 new ReleaseSource("/ollama/releases", "ollama/ollama",
                         client -> new OllamaReleasesRoute(client, MAPPER)),
                 new ReleaseSource("/huggingface/transformers/releases", "huggingface/transformers",
-                        client -> new TransformersReleasesRoute(client, MAPPER)),
-                new ReleaseSource("/vllm/releases", "vllm-project/vllm",
-                        client -> new VllmReleasesRoute(client, MAPPER)));
+                        client -> new TransformersReleasesRoute(client, MAPPER)));
     }
 
     private static String rss() {

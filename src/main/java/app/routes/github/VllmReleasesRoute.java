@@ -1,23 +1,18 @@
 package app.routes.github;
 
-import app.core.Feed;
 import app.core.FetchClient;
 import app.core.RouteContext;
-import app.core.RouteHandler;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import java.util.Map;
+import app.routes.GenericRssRoute;
+import app.store.FeedStore;
 
-public class VllmReleasesRoute implements RouteHandler {
-    private final GithubReleaseRoute delegate;
-
-    public VllmReleasesRoute(FetchClient client, ObjectMapper mapper) {
-        delegate = new GithubReleaseRoute(client, mapper);
+/** Reads the repository's Atom feed rather than the REST API, which shares a 60-per-hour unauthenticated quota. */
+public class VllmReleasesRoute extends GenericRssRoute {
+    public VllmReleasesRoute(FetchClient client, FeedStore store) {
+        super(client, store);
     }
 
     @Override
-    public Feed handle(RouteContext context) throws Exception {
-        return delegate.handle(new RouteContext(context.path(),
-                Map.of("owner", "vllm-project", "repo", "vllm"), context.queryParams(),
-                context.detailCacheTtl(), context.feedUrl()));
+    public String feedUrl(RouteContext context) {
+        return "https://github.com/vllm-project/vllm/releases.atom";
     }
 }
