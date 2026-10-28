@@ -74,6 +74,22 @@ public final class SourceLabels {
             case "bair" -> "BAIR";
             case "simonwillison" -> "Simon Willison";
             case "aihot" -> "AIHOT";
+            case "nvidia" -> "NVIDIA";
+            case "importai" -> "Import AI";
+            case "latentspace" -> "Latent Space";
+            case "interconnects" -> "Interconnects";
+            case "oneusefulthing" -> "One Useful Thing";
+            case "lilianweng" -> "Lil'Log";
+            case "qbitai" -> "量子位";
+            case "leiphone" -> "雷峰网";
+            case "vllm" -> "vLLM";
+            case "huxiu" -> "虎嗅";
+            case "tmtpost" -> "钛媒体";
+            case "ithome" -> "IT之家";
+            case "zhidx" -> "智东西";
+            case "appinn" -> "小众软件";
+            case "oschina" -> "开源中国";
+            case "woshipm" -> "人人都是产品经理";
             case "npr" -> "NPR";
             case "lwn" -> "LWN";
             case "ftchinese" -> "FT 中文网";
@@ -92,7 +108,8 @@ public final class SourceLabels {
             case "cctv"          -> "CCTV";
             case "bilibili"      -> "B站";
             case "cnblogs"       -> "博客园";
-            case "microsoft"     -> "MSDN";
+            case "microsoft"     -> parts.length > 2 && "research".equals(parts[2])
+                    ? "Microsoft Research" : "MSDN";
             case "techcrunch"    -> "TC";
             case "wired"         -> "Wired";
             case "producthunt"   -> "PH";

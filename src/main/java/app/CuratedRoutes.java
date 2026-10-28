@@ -6,19 +6,14 @@ import app.core.FetchClient;
 import app.core.Route;
 import app.core.Topic;
 import app.routes.AeonMagazineRoute;
-import app.routes.AiHotRoute;
 import app.routes.ApertureRoute;
 import app.routes.ApsResearchNewsRoute;
 import app.routes.ArchDailyRoute;
-import app.routes.ArsTechnicaRoute;
-import app.routes.BairBlogRoute;
 import app.routes.CarbonBriefRoute;
 import app.routes.ChinanewsCultureRoute;
 import app.routes.ChinanewsFinanceRoute;
 import app.routes.ChinanewsSocietyRoute;
-import app.routes.CloudflareBlogRoute;
 import app.routes.ColossalRoute;
-import app.routes.DeepMindBlogRoute;
 import app.routes.DezeenRoute;
 import app.routes.EcbBlogRoute;
 import app.routes.EdSurgeNewsRoute;
@@ -26,114 +21,45 @@ import app.routes.FactorioBlogRoute;
 import app.routes.FedsNotesRoute;
 import app.routes.FtChineseRoute;
 import app.routes.GcoresRoute;
-import app.routes.GeekParkRoute;
-import app.routes.GithubChangelogRoute;
-import app.routes.GithubOpenSourceRoute;
 import app.routes.GodotNewsRoute;
-import app.routes.GoogleResearchRoute;
-import app.routes.GoogleSecurityRoute;
 import app.routes.GuardianWorldRoute;
-import app.routes.HackadayRoute;
 import app.routes.HechingerReportRoute;
-import app.routes.HuggingFaceBlogRoute;
-import app.routes.IfanrRoute;
-import app.routes.InfoqChinaRoute;
+import app.routes.HuxiuRoute;
 import app.routes.JstorDailyRoute;
 import app.routes.KffHealthNewsRoute;
-import app.routes.KrebsSecurityRoute;
-import app.routes.LwnHeadlinesRoute;
-import app.routes.MartinFowlerRoute;
 import app.routes.NasaNewsRoute;
-import app.routes.NetflixTechBlogRoute;
 import app.routes.NoaaNewsRoute;
 import app.routes.NprWorldRoute;
-import app.routes.OpenAiNewsRoute;
 import app.routes.OurWorldInDataRoute;
 import app.routes.PewResearchRoute;
 import app.routes.PsycheMagazineRoute;
 import app.routes.PublicDomainReviewRoute;
 import app.routes.QuantaMagazineRoute;
-import app.routes.RaspberryPiRoute;
 import app.routes.RthkLocalRoute;
-import app.routes.RuanYifengRoute;
-import app.routes.SchneierSecurityRoute;
 import app.routes.ScienceNewsRoute;
-import app.routes.SimonWillisonRoute;
 import app.routes.SmashingMagazineRoute;
-import app.routes.SolidotRoute;
 import app.routes.StatNewsRoute;
+import app.routes.TmtpostRoute;
 import app.routes.UnNewsChineseRoute;
+import app.routes.WoshipmRoute;
 import app.routes.YystvRoute;
-import app.routes.github.OllamaReleasesRoute;
-import app.routes.github.TransformersReleasesRoute;
 import app.store.FeedStore;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
  * The curated subscription catalog: verified publisher RSS/Atom feeds offered in /index#subscriptions.
+ * Technology feeds live in {@link CuratedTechRoutes}; this class lists the rest and returns both.
  */
 final class CuratedRoutes {
     private CuratedRoutes() {}
 
     static List<Route> create(FetchClient defaultFetchClient, FeedStore feedStore, ObjectMapper objectMapper,
                               CacheService cacheService, CredentialConfigStore credentialConfigStore) {
-        return List.of(
-                    new Route("/huggingface/blog",
-                            new HuggingFaceBlogRoute(defaultFetchClient, feedStore),
-                            "Hugging Face 官方博客 · 开源模型、工具与实践",
-                            Topic.AI, "官方 RSS",
-                            "huggingface.co/blog/feed.xml；无需密钥，只读取列表；建议每 120 分钟刷新", 120),
-                    new Route("/google/research",
-                            new GoogleResearchRoute(defaultFetchClient, feedStore),
-                            "Google Research · 一手研究与技术解读",
-                            Topic.AI, "官方 RSS",
-                            "research.google/blog/rss/；无需密钥，只读取列表；建议每 360 分钟刷新", 360),
-                    new Route("/openai/news",
-                            new OpenAiNewsRoute(defaultFetchClient, feedStore),
-                            "OpenAI 官方动态 · 研究、产品与工程",
-                            Topic.AI, "官方 RSS",
-                            "openai.com/news/rss.xml；无需密钥，只读取列表；历史内容较多，建议每 180 分钟刷新", 180),
-                    new Route("/deepmind/blog",
-                            new DeepMindBlogRoute(defaultFetchClient, feedStore),
-                            "Google DeepMind · 前沿 AI 研究与科学应用（英文）",
-                            Topic.AI, "官方 RSS",
-                            "deepmind.google/blog/rss.xml；无需密钥，只读取列表；建议每 360 分钟刷新", 360),
-                    new Route("/bair/blog",
-                            new BairBlogRoute(defaultFetchClient, feedStore),
-                            "BAIR 伯克利 AI 研究博客 · 学术前沿解读（英文）",
-                            Topic.AI, "官方 RSS",
-                            "bair.berkeley.edu/blog/feed.xml；无需密钥，只读取列表；更新频率低，建议每 1440 分钟刷新", 1440),
-                    new Route("/simonwillison/weblog",
-                            new SimonWillisonRoute(defaultFetchClient, feedStore),
-                            "Simon Willison · LLM 工具、提示工程与实践笔记（英文）",
-                            Topic.AI, "官方 RSS",
-                            "simonwillison.net/atom/everything/；无需密钥，只读取列表；含短链接与引用，更新频繁；建议每 120 分钟刷新", 120),
-                    new Route("/aihot/news",
-                            new AiHotRoute(defaultFetchClient, feedStore),
-                            "AIHOT · 中文 AI 资讯精选摘要，附原文链接",
-                            Topic.AI, "官方 RSS",
-                            "aihot.news/feed.xml；无需密钥，只读取最新 50 条精选；更新频繁，建议每 60 分钟刷新", 60),
-                    new Route("/github/open-source",
-                            new GithubOpenSourceRoute(defaultFetchClient, feedStore),
-                            "GitHub Open Source · 开源项目、维护者与社区报道",
-                            Topic.SOFTWARE, "官方 RSS",
-                            "github.blog/open-source/feed/；无需密钥，只读取列表；建议每 360 分钟刷新", 360),
-                    new Route("/github/changelog",
-                            new GithubChangelogRoute(defaultFetchClient, feedStore),
-                            "GitHub Changelog · 开发平台更新",
-                            Topic.SOFTWARE, "官方 RSS",
-                            "github.blog/changelog/feed/；无需密钥，只读取列表；建议每 120 分钟刷新", 120),
-                    new Route("/ollama/releases",
-                            new OllamaReleasesRoute(defaultFetchClient, objectMapper),
-                            "Ollama · 本地模型工具版本发布",
-                            Topic.AI, "官方 JSON API",
-                            "GitHub ollama/ollama Releases；无需密钥，包含标记为预发布的版本；建议每 180 分钟刷新，共享每 IP 每小时 60 次未认证请求限额", 180),
-                    new Route("/huggingface/transformers/releases",
-                            new TransformersReleasesRoute(defaultFetchClient, objectMapper),
-                            "Transformers · 模型库版本发布",
-                            Topic.AI, "官方 JSON API",
-                            "GitHub huggingface/transformers Releases；无需密钥，包含标记为预发布的版本；建议每 180 分钟刷新，共享每 IP 每小时 60 次未认证请求限额", 180),
+        List<Route> routes = new ArrayList<>(CuratedTechRoutes.create(defaultFetchClient, feedStore, objectMapper,
+                cacheService, credentialConfigStore));
+        routes.addAll(List.of(
                     new Route("/chinanews/society",
                             new ChinanewsSocietyRoute(defaultFetchClient, feedStore),
                             "中新网社会 · 大陆社会与民生",
@@ -184,46 +110,6 @@ final class CuratedRoutes {
                             "NOAA · 海洋、天气与气候机构动态（英文）",
                             Topic.SCIENCE, "官方 RSS",
                             "www.noaa.gov/rss.xml；无需密钥，只读取列表；建议每 360 分钟刷新", 360),
-                    new Route("/cloudflare/blog",
-                            new CloudflareBlogRoute(defaultFetchClient, feedStore),
-                            "Cloudflare · 网络、性能与工程实践（英文）",
-                            Topic.SOFTWARE, "官方 RSS",
-                            "blog.cloudflare.com/rss/；无需密钥，只读取列表；建议每 180 分钟刷新", 180),
-                    new Route("/martinfowler/articles",
-                            new MartinFowlerRoute(defaultFetchClient, feedStore),
-                            "Martin Fowler · 软件架构、设计与重构（英文）",
-                            Topic.SOFTWARE, "官方 RSS",
-                            "martinfowler.com/feed.atom；无需密钥，只读取列表；建议每 360 分钟刷新", 360),
-                    new Route("/netflix/techblog",
-                            new NetflixTechBlogRoute(defaultFetchClient, feedStore),
-                            "Netflix TechBlog · 分布式系统与工程实践（英文）",
-                            Topic.SOFTWARE, "官方 RSS",
-                            "netflixtechblog.com/feed；无需密钥，只读取列表；建议每 360 分钟刷新", 360),
-                    new Route("/infoq/china",
-                            new InfoqChinaRoute(defaultFetchClient, feedStore),
-                            "InfoQ 中文 · 软件开发与架构资讯",
-                            Topic.SOFTWARE, "官方 RSS",
-                            "www.infoq.cn/feed；无需密钥，只读取列表；建议每 120 分钟刷新", 120),
-                    new Route("/lwn/headlines",
-                            new LwnHeadlinesRoute(defaultFetchClient, feedStore),
-                            "LWN.net · Linux 内核与开源生态深度报道（英文）",
-                            Topic.SOFTWARE, "官方 RSS",
-                            "lwn.net/headlines/rss；无需密钥，只读取列表；订阅文章发布一周后免费；建议每 180 分钟刷新", 180),
-                    new Route("/google/security",
-                            new GoogleSecurityRoute(defaultFetchClient, feedStore),
-                            "Google Security · 安全研究与防护更新（英文）",
-                            Topic.SECURITY, "官方 RSS",
-                            "blog.google/security/rss/；无需密钥，只读取列表；建议每 180 分钟刷新", 180),
-                    new Route("/krebs/security",
-                            new KrebsSecurityRoute(defaultFetchClient, feedStore),
-                            "Krebs on Security · 安全事件调查报道（英文）",
-                            Topic.SECURITY, "官方 RSS",
-                            "krebsonsecurity.com/feed/；无需密钥，只读取列表；建议每 180 分钟刷新", 180),
-                    new Route("/schneier/security",
-                            new SchneierSecurityRoute(defaultFetchClient, feedStore),
-                            "Schneier on Security · 安全、隐私与政策评论（英文）",
-                            Topic.SECURITY, "官方 RSS",
-                            "www.schneier.com/feed/；无需密钥，只读取列表；建议每 180 分钟刷新", 180),
                     new Route("/ecb/blog",
                             new EcbBlogRoute(defaultFetchClient, feedStore),
                             "欧洲央行博客 · 欧元区宏观与货币政策（英文）",
@@ -244,6 +130,21 @@ final class CuratedRoutes {
                             "FT 中文网 · 全球财经、商业与国际时事",
                             Topic.BUSINESS, "官方 RSS",
                             "www.ftchinese.com/rss/news；无需密钥，只读取列表；部分原文需订阅；建议每 120 分钟刷新", 120),
+                    new Route("/huxiu/articles",
+                            new HuxiuRoute(defaultFetchClient, feedStore),
+                            "虎嗅 · 科技商业深度报道与评论",
+                            Topic.BUSINESS, "官方 RSS",
+                            "rss.huxiu.com；无需密钥，只读取列表；含正文全文，单次约 3 MB；建议每 120 分钟刷新", 120),
+                    new Route("/tmtpost/news",
+                            new TmtpostRoute(defaultFetchClient, feedStore),
+                            "钛媒体 · 科技、财经与产业新闻",
+                            Topic.BUSINESS, "官方 RSS",
+                            "www.tmtpost.com/rss.xml；无需密钥，只读取列表；建议每 120 分钟刷新", 120),
+                    new Route("/woshipm/articles",
+                            new WoshipmRoute(defaultFetchClient, feedStore),
+                            "人人都是产品经理 · 产品设计、运营与 AI 产品实践",
+                            Topic.BUSINESS, "官方 RSS",
+                            "www.woshipm.com/feed；无需密钥，只读取列表；含正文全文；建议每 360 分钟刷新", 360),
                     new Route("/smashing/articles",
                             new SmashingMagazineRoute(defaultFetchClient, feedStore),
                             "Smashing Magazine · 网页设计、UX 与可访问性（英文）",
@@ -259,31 +160,6 @@ final class CuratedRoutes {
                             "中新网文化 · 文化、艺术与历史资讯",
                             Topic.HUMANITIES, "官方 RSS",
                             "www.chinanews.com.cn/rss/culture.xml；无需密钥，只读取列表；建议每 120 分钟刷新", 120),
-                    new Route("/ruanyifeng/blog",
-                            new RuanYifengRoute(defaultFetchClient, feedStore),
-                            "阮一峰 · 网络日志与科技爱好者周刊",
-                            Topic.TECH, "官方 RSS",
-                            "www.ruanyifeng.com/blog/atom.xml；无需密钥，只读取列表；建议每 1440 分钟刷新", 1440),
-                    new Route("/solidot/news",
-                            new SolidotRoute(defaultFetchClient, feedStore),
-                            "Solidot · 科技、科学与开源资讯中文编译",
-                            Topic.TECH, "官方 RSS",
-                            "www.solidot.org/index.rss；无需密钥，只读取列表；建议每 120 分钟刷新", 120),
-                    new Route("/arstechnica/latest",
-                            new ArsTechnicaRoute(defaultFetchClient, feedStore),
-                            "Ars Technica · 科技、科学与政策深度报道（英文）",
-                            Topic.TECH, "官方 RSS",
-                            "feeds.arstechnica.com/arstechnica/index；无需密钥，只读取列表；建议每 120 分钟刷新", 120),
-                    new Route("/ifanr/latest",
-                            new IfanrRoute(defaultFetchClient, feedStore),
-                            "爱范儿 · 消费科技、产品评测与数字生活",
-                            Topic.TECH, "官方 RSS",
-                            "www.ifanr.com/feed；无需密钥，只读取列表；建议每 120 分钟刷新", 120),
-                    new Route("/geekpark/news",
-                            new GeekParkRoute(defaultFetchClient, feedStore),
-                            "极客公园 · 科技公司、创新产品与行业访谈",
-                            Topic.TECH, "官方 RSS",
-                            "www.geekpark.net/rss；无需密钥，只读取列表；建议每 120 分钟刷新", 120),
                     new Route("/kff/health-news",
                             new KffHealthNewsRoute(defaultFetchClient, feedStore),
                             "KFF Health News · 公共健康、医疗制度与健康政策深度报道（英文）",
@@ -324,16 +200,6 @@ final class CuratedRoutes {
                             "Pew Research Center · 民意调查、人口与社会趋势研究（英文）",
                             Topic.HUMANITIES, "官方 RSS",
                             "www.pewresearch.org/publications/feed/；无需密钥，只读取列表；建议每 360 分钟刷新；含报告章节，提供摘要", 360),
-                    new Route("/hackaday/posts",
-                            new HackadayRoute(defaultFetchClient, feedStore),
-                            "Hackaday · 硬件改造、电子工程与创客项目（英文）",
-                            Topic.TECH, "官方 RSS",
-                            "hackaday.com/blog/feed/；无需密钥，只读取列表；建议每 120 分钟刷新", 120),
-                    new Route("/raspberrypi/news",
-                            new RaspberryPiRoute(defaultFetchClient, feedStore),
-                            "Raspberry Pi · 树莓派项目实践、软硬件与产品动态（英文）",
-                            Topic.TECH, "官方 RSS",
-                            "www.raspberrypi.com/news/feed/；无需密钥，只读取列表；建议每 360 分钟刷新", 360),
                     new Route("/godot/news",
                             new GodotNewsRoute(defaultFetchClient, feedStore),
                             "Godot Engine · 游戏引擎开发进展、技术文章与版本发布（英文）",
@@ -383,6 +249,7 @@ final class CuratedRoutes {
                             new YystvRoute(defaultFetchClient, feedStore),
                             "游研社 · 游戏报道、行业故事与文化观察",
                             Topic.GAMES, "官方 RSS",
-                            "www.yystv.cn/rss/feed；无需密钥，只读取列表；建议每 120 分钟刷新", 120));
+                            "www.yystv.cn/rss/feed；无需密钥，只读取列表；建议每 120 分钟刷新", 120)));
+        return routes;
     }
 }

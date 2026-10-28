@@ -8,7 +8,7 @@ Domain vocabulary and data flow: `CONTEXT.md`. Decisions: `docs/adr/`. Radar rep
 
 ```
 app/                 entry point and wiring only: AppRuntime (registry, config, topics), AppConfig (beans),
-                     BuiltInRoutes/CuratedRoutes (all routes), RssLiteResource (public feeds), FrontendAssetResource
+                     BuiltInRoutes/CuratedRoutes/CuratedTechRoutes (all routes), RssLiteResource (public feeds), FrontendAssetResource
 app/core/            Feed/FeedItem model, Route, Topic, RouteRegistry, RouteConfig(+Store), CredentialConfig(+Store),
                      CacheService, FetchClient, RouteError/RouteException, RSS/JSON renderers, XmlEscaper
 app/routes/          one RouteHandler per source; GenericRssRoute serves /rss mounts
@@ -30,7 +30,7 @@ templates/           index/ (admin, HTMX), reader/, auth/, shared/
 
 ## Core principles
 
-1. One source = one class implementing `RouteHandler`, registered explicitly in `BuiltInRoutes` (curated catalog feeds in `CuratedRoutes`) — nowhere else. No annotations, classpath scanning, reflection-heavy libraries or dynamic class loading.
+1. One source = one class implementing `RouteHandler`, registered explicitly in `BuiltInRoutes` (curated catalog feeds in `CuratedRoutes`, technology feeds in `CuratedTechRoutes`) — nowhere else. No annotations, classpath scanning, reflection-heavy libraries or dynamic class loading.
 2. All outbound HTTP goes through the injected `FetchClient`; never build an `HttpClient` in a handler.
 3. `FeedFetcher` owns fetch → persist → log; never duplicate it in controllers, handlers or the scheduler.
 4. All database access goes through `app.store` — `FeedStore` and the modules it hands out. Tests may pass `null` for the store, so callers null-check.
@@ -43,7 +43,7 @@ templates/           index/ (admin, HTMX), reader/, auth/, shared/
 
 1. Create `app/routes/MySourceRoute.java`; the constructor takes `FetchClient` (plus `CacheService` / `ObjectMapper` if needed).
 2. In `handle(RouteContext ctx)`: build the URL from `ctx.pathParam(...)`, fetch with `client.get(url)`, parse once with JSoup or Jackson, map entries to `FeedItem`, return `new Feed(title, link, description, items)`.
-3. Register in `BuiltInRoutes` (or `CuratedRoutes` for catalog feeds) with exactly one topic: `new Route("/my/:param", new MySourceRoute(defaultFetchClient), "Description", Topic.SOFTWARE)`. Topics are declared in `app.core.Topic`; regrouping old names goes into `Topic.RENAMED`.
+3. Register in `BuiltInRoutes` (or `CuratedRoutes` / `CuratedTechRoutes` for catalog feeds) with exactly one topic: `new Route("/my/:param", new MySourceRoute(defaultFetchClient), "Description", Topic.SOFTWARE)`. Topics are declared in `app.core.Topic`; regrouping old names goes into `Topic.RENAMED`.
 
 To mount an external feed without code, create a `/rss` mount with a `feedUrl` in `/index` or `route-config.json`.
 

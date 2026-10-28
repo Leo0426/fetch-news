@@ -103,7 +103,7 @@ The project is intentionally smaller than RSSHub. Core mechanics:
 
 **RouteHandler** — single-method interface that produces a Feed. One class per source. No annotations or framework magic.
 
-**RouteRegistry** — explicit registry mapping route path patterns to RouteHandlers. Registered manually in `BuiltInRoutes` (the curated catalog in `CuratedRoutes`).
+**RouteRegistry** — explicit registry mapping route path patterns to RouteHandlers. Registered manually in `BuiltInRoutes` (the curated catalog in `CuratedRoutes`, its AI, software, security and tech feeds in `CuratedTechRoutes`).
 
 **RouteConfig** — persisted per-route configuration: enabled flag, cache TTLs, schedule (minutes or cron), sourcePath alias, feedUrl, alias, autoSummary and topic. Stored in `route-config.json`.
 
