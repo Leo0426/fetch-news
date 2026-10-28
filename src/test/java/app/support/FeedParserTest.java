@@ -70,6 +70,27 @@ class FeedParserTest {
     }
 
     @Test
+    void decodesEntityEscapedAtomAndRssBodies() {
+        var atom = FeedParser.parse("""
+                <feed xmlns="http://www.w3.org/2005/Atom"><title>Releases</title>
+                  <entry><title>v1.0</title><link href="https://example.com/v1"/>
+                    <content type="html">&lt;p&gt;Fixes &lt;a href=&quot;https://example.com/pr&quot;&gt;#1&lt;/a&gt; &amp;amp; more&lt;/p&gt;</content>
+                  </entry>
+                </feed>
+                """, "https://example.com/feed").items().getFirst();
+        var rss = FeedParser.parse("""
+                <rss version="2.0"><channel><title>News</title>
+                  <item><title>Story</title><link>https://example.com/story</link>
+                    <description>&lt;p&gt;Body &lt;em&gt;text&lt;/em&gt;.&lt;/p&gt;</description>
+                  </item>
+                </channel></rss>
+                """, "https://example.com/feed").items().getFirst();
+
+        assertEquals("<p>Fixes <a href=\"https://example.com/pr\">#1</a> &amp; more</p>", atom.description());
+        assertEquals("<p>Body <em>text</em>.</p>", rss.description());
+    }
+
+    @Test
     void readsCoverFromMediaTagsAndImageEnclosures() {
         var items = FeedParser.parse("""
                 <rss xmlns:media="http://search.yahoo.com/mrss/">

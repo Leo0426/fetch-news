@@ -7,9 +7,9 @@ import app.core.RouteException;
 import java.util.List;
 import java.util.stream.Collectors;
 import org.jsoup.Jsoup;
-import org.jsoup.nodes.CDataNode;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
+import org.jsoup.nodes.TextNode;
 import org.jsoup.parser.Parser;
 
 /**
@@ -147,10 +147,11 @@ public final class FeedParser {
         return el == null ? null : el.text().strip();
     }
 
+    /** Body HTML of an element: CDATA and entity-escaped text are the HTML itself; XHTML children are kept as markup. */
     private static String inner(Element el) {
         if (el == null) return null;
         String content = el.childNodes().stream()
-                .map(node -> node instanceof CDataNode data ? data.getWholeText() : node.outerHtml())
+                .map(node -> node instanceof TextNode text ? text.getWholeText() : node.outerHtml())
                 .collect(Collectors.joining()).strip();
         return content.isBlank() ? null : content;
     }
