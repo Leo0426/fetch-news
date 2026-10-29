@@ -14,7 +14,7 @@ import org.thymeleaf.TemplateEngine;
 import org.thymeleaf.context.Context;
 
 /**
- * Renders the reader pages: digest, article, unread inbox, briefing, bookmarks, search and radar.
+ * Renders the reader pages: digest, article, briefing, bookmarks, search and radar.
  */
 @Component
 public class ReaderTemplateRenderer {
@@ -57,18 +57,6 @@ public class ReaderTemplateRenderer {
         ctx.setVariable("page", page);
         ctx.setVariable("sourceLabels", sourceLabels());
         return engine.process("reader/article", ctx);
-    }
-
-    public String unreadPage(UnreadPageView page) {
-        return unreadPage(page, ReaderPicks.NONE);
-    }
-
-    public String unreadPage(UnreadPageView page, ReaderPicks picks) {
-        Context ctx = readerContext();
-        ctx.setVariable("page", page);
-        ctx.setVariable("sourceLabels", sourceLabels());
-        ctx.setVariable("picks", picks);
-        return engine.process("reader/unread", ctx);
     }
 
     /** Reader pages show admin links and the account menu depending on who is signed in. */

@@ -9,7 +9,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import app.TestPages;
-import app.auth.UserAccount;
 import app.core.Feed;
 import app.core.FeedItem;
 import app.core.Route;
@@ -72,8 +71,8 @@ class SubscriptionResourceTest {
             var card = Jsoup.parse(completed);
             assertTrue(card.text().contains("更新完成"));
             assertFalse(card.selectFirst(".subscription-card").attr("hx-trigger").contains("every"));
-            assertNotNull(card.selectFirst("a[href='/reader/unread?source=%2Fscience']"));
-            assertEquals(1, store.unread().loadUnreadPage(UserAccount.OWNER_ID, "/science", "", false, null, 50).totalCount());
+            assertNotNull(card.selectFirst("a.subscription-read[href='/reader']"));
+            assertEquals(1, store.items().countItems("/science"));
             mvc.perform(post("/index/subscriptions/pause").param("path", "/science")).andExpect(status().isOk());
             assertFalse(configs.get("/science").enabled());
             assertEquals(1, store.items().countItems("/science"));

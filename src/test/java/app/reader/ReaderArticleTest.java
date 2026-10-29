@@ -50,14 +50,14 @@ class ReaderArticleTest {
         String link = "https://example.com/正文?a=1&b=2";
         save(link, "Saved title <script>bad()</script>", "<h2>正文标题</h2><p>离线也能阅读的保存内容。</p>");
         store.aiCache().saveSummary(link, "<img src=x onerror=bad()> 摘要", "fixture");
-        var response = reader(store).article(link, "/reader/unread?source=%2Farticles&before=42");
+        var response = reader(store).article(link, "/reader?hours=72#rd-main");
         assertEquals(200, response.getStatusCode().value());
         var page = Jsoup.parse(response.getBody());
         assertTrue(page.text().contains("离线也能阅读的保存内容"));
         assertTrue(page.text().contains("Saved title <script>bad()</script>"));
         assertTrue(page.text().contains("<img src=x onerror=bad()> 摘要"));
         assertTrue(page.select("main img, main script").isEmpty());
-        assertTrue(page.select("a[href='/reader/unread?source=%2Farticles&before=42']").size() > 0);
+        assertTrue(page.select("a[href='/reader?hours=72#rd-main']").size() > 0);
         assertFalse(store.reading().isRead(UserAccount.OWNER_ID, link));
         assertFalse(store.reading().isBookmarked(UserAccount.OWNER_ID, link));
         assertTrue(store.summaryQueue().statuses(List.of(link)).get(link).success());
@@ -87,7 +87,7 @@ class ReaderArticleTest {
         var resource = reader(store);
         assertEquals(400, resource.article("javascript:alert(1)", "https://evil.invalid").getStatusCode().value());
         var invalid = Jsoup.parse(resource.article("javascript:alert(1)", "/reader\\evil").getBody());
-        assertTrue(invalid.select("a[href='/reader/unread']").size() > 0);
+        assertTrue(invalid.select("a[href='/reader']").size() > 0);
         assertTrue(invalid.select("a[href^='javascript:']").isEmpty());
         String missing = "https://example.com/missing";
         store.reading().saveBookmark(UserAccount.OWNER_ID, missing, "Orphan bookmark", "/old");
@@ -137,14 +137,14 @@ class ReaderArticleTest {
         save(link, "Saved", "Saved content");
         var snapshot = store.loadArticle(UserAccount.OWNER_ID, link);
         var progress = new SummaryProgress("success", "Newly completed summary", null);
-        var page = ArticlePageView.from(snapshot, "/reader/unread", true, progress);
+        var page = ArticlePageView.from(snapshot, "/reader", true, progress);
         assertTrue(page.aiEnabled());
         assertEquals(progress, page.summaryProgress());
         assertEquals("Newly completed summary", page.item().summary());
-        var compatible = ArticlePageView.from(snapshot, "/reader/unread");
+        var compatible = ArticlePageView.from(snapshot, "/reader");
         assertFalse(compatible.aiEnabled());
         assertEquals("none", compatible.summaryProgress().state());
-        var missing = ArticlePageView.from(snapshot, "/reader/unread", true,
+        var missing = ArticlePageView.from(snapshot, "/reader", true,
                 new SummaryProgress("success", null, null));
         assertEquals("unknown", missing.summaryProgress().state());
         assertFalse(missing.item().hasSummary());
@@ -181,7 +181,7 @@ class ReaderArticleTest {
             var before = store.summaryQueue().statuses(List.of(link));
             var resource = new ReaderResource(store, null, renderer, summarizer, config);
             for (int reload = 0; reload < 2; reload++) {
-                var response = resource.article(link, "/reader/unread");
+                var response = resource.article(link, "/reader");
                 assertEquals(200, response.getStatusCode().value());
                 assertEquals("no-store", response.getHeaders().getFirst("Cache-Control"));
                 var page = Jsoup.parse(response.getBody());
@@ -214,7 +214,7 @@ class ReaderArticleTest {
             var resource = new ReaderResource(unavailable, null, renderer, summarizer, null);
             // Hiding the run table makes the status read fail the way a broken database would.
             statement.execute("ALTER TABLE ai_summary_runs RENAME TO ai_summary_runs_hidden");
-            var response = resource.article(link, "/reader/unread");
+            var response = resource.article(link, "/reader");
             statement.execute("ALTER TABLE ai_summary_runs_hidden RENAME TO ai_summary_runs");
             assertEquals(200, response.getStatusCode().value());
             var page = Jsoup.parse(response.getBody());
@@ -241,7 +241,7 @@ class ReaderArticleTest {
             completing.saveItems("/articles", List.of(new FeedItem("Saved", link,
                     "Original content", null, null, List.of())));
             var resource = new ReaderResource(completing, null, renderer, summarizer, null);
-            var response = resource.article(link, "/reader/unread");
+            var response = resource.article(link, "/reader");
             assertEquals(200, response.getStatusCode().value());
             var page = Jsoup.parse(response.getBody());
             assertEquals("success", page.select("[data-summary-state]").attr("data-summary-state"));

@@ -51,7 +51,7 @@ class UserScopedStateTest {
     }
 
     @Test
-    void bookmarksReadStateAndUnreadInboxAreIndependentPerUser() throws Exception {
+    void bookmarksAndReadStateAreIndependentPerUser() throws Exception {
         try (FeedStore store = new FeedStore(tempDir.resolve("users.db"), new ObjectMapper())) {
             String first = "https://example.com/one";
             String second = "https://example.com/two";
@@ -62,10 +62,6 @@ class UserScopedStateTest {
             store.reading().markAllRead(alice.id(), List.of(first));
             store.reading().saveBookmark(bob.id(), second, "Two", "/news");
 
-            assertEquals(List.of(second), links(store.unread().loadUnreadPage(alice.id(), null, null, false, null, 10)));
-            assertEquals(2, store.unread().loadUnreadPage(bob.id(), null, null, false, null, 10).totalCount());
-            assertEquals(List.of(second), links(store.unread().loadUnreadPage(bob.id(), null, null, true, null, 10)));
-            assertTrue(store.unread().loadUnreadPage(alice.id(), null, null, true, null, 10).items().isEmpty());
             assertTrue(store.loadArticle(alice.id(), first).read());
             assertFalse(store.loadArticle(bob.id(), first).read());
             assertTrue(store.loadArticle(bob.id(), second).bookmarked());
@@ -91,10 +87,6 @@ class UserScopedStateTest {
             assertNull(store.accounts().findUserByTokenHash(hash));
             assertNull(store.accounts().findUserByFeedKey("fk_carol"));
         }
-    }
-
-    private static List<String> links(UnreadPage page) {
-        return page.items().stream().map(StoredItem::link).toList();
     }
 
     private static FeedItem item(String title, String link) {

@@ -54,7 +54,7 @@ class AuthFilterTest {
 
     @Test
     void loginRedirectsStayOnThisSite() {
-        assertEquals("/reader/unread?q=x", AuthResource.safeNext("/reader/unread?q=x"));
+        assertEquals("/reader/search?q=model", AuthResource.safeNext("/reader/search?q=model"));
         assertEquals("/reader", AuthResource.safeNext("//evil.example"));
         assertEquals("/reader", AuthResource.safeNext("https://evil.example"));
         assertEquals("/reader", AuthResource.safeNext("/\\evil.example"));

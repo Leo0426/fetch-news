@@ -61,7 +61,6 @@ public class FeedStore implements Closeable {
     private final ReadingState reading = new ReadingState(this);
     private final RadarStore radar = new RadarStore(this);
     private final RadarJobs radarJobs = new RadarJobs(this);
-    private final UnreadInbox unread = new UnreadInbox(this);
     private final FeedSchema schema = new FeedSchema(this);
     private final ItemQueries items = new ItemQueries(this);
     private final AiCache aiCache = new AiCache(this);
@@ -106,11 +105,6 @@ public class FeedStore implements Closeable {
     /** Creates and migrates the core tables; feature modules add their own tables through their createSchema; shares this store's connection and lock. */
     FeedSchema schema() {
         return schema;
-    }
-
-    /** The unread inbox: each reader's retained unread articles, filtered and paged by insertion order; shares this store's connection and lock. */
-    public UnreadInbox unread() {
-        return unread;
     }
 
     /** Radar runs, reports and community context; shares this store's connection and lock. */

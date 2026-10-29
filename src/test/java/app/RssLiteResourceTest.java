@@ -290,7 +290,7 @@ class RssLiteResourceTest {
 
     @Test
     void readerPagesRenderNavigationAndInteractionAssets() {
-        for (String path : new String[] {"/reader", "/reader/bookmarks", "/reader/search", "/reader/briefing", "/reader/unread"}) {
+        for (String path : new String[] {"/reader", "/reader/bookmarks", "/reader/search", "/reader/briefing"}) {
             given().when().get(path).then()
                     .statusCode(200)
                     .contentType(containsString("text/html"))
@@ -300,12 +300,9 @@ class RssLiteResourceTest {
     }
 
     @Test
-    void unreadStylesAndCursorValidationAreAvailableOverHttp() {
-        given().when().get("/unread.css").then()
-                .statusCode(200).contentType(containsString("text/css"));
-        for (String cursor : new String[] {"0", "-1", "invalid", "9223372036854775808"}) {
-            given().queryParam("before", cursor).when().get("/reader/unread").then().statusCode(400);
-        }
+    void removedUnreadPageAndStylesAreNotAvailableOverHttp() {
+        given().when().get("/reader/unread").then().statusCode(404);
+        given().when().get("/unread.css").then().statusCode(404);
     }
 
     @Test

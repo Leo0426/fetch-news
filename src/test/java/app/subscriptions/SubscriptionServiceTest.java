@@ -6,7 +6,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import app.TestPages;
-import app.auth.UserAccount;
 import app.core.Feed;
 import app.core.FeedItem;
 import app.core.Route;
@@ -56,7 +55,6 @@ class SubscriptionServiceTest {
             assertEquals(1, store.items().countItems("/science"));
             assertTrue(new RouteConfigStore(directory.resolve("routes.json"), mapper).get("/science").hasSchedule());
             assertEquals("success", service.source("/science").status().kind());
-            assertEquals(1, store.unread().loadUnreadPage(UserAccount.OWNER_ID, "/science", "", false, null, 50).totalCount());
         }
     }
 
@@ -138,7 +136,6 @@ class SubscriptionServiceTest {
                 var restored = new SubscriptionService(runtime, store, restarted).source(saved.path());
                 assertEquals("success", restored.status().kind());
                 assertEquals(1, restored.articleCount());
-                assertEquals("/reader/unread?source=%2Fnews%2Fscience", restored.readerUrl());
                 store.fetchState().logFetch(saved.path(), Instant.now().minusSeconds(10), 1, 0, 0, "Source failed");
                 assertEquals("error", new SubscriptionService(runtime, store, restarted).source(saved.path()).status().kind());
             } finally { restarted.shutdown(); }

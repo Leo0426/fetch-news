@@ -9,7 +9,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import app.TestPages;
-import app.auth.UserAccount;
 import app.core.Route;
 import app.core.RouteConfig;
 import app.core.RouteConfigStore;
@@ -78,7 +77,7 @@ class SubscriptionCreationTest {
             String saved = fixture.mvc.perform(get("/index/subscriptions/card").param("path", path))
                     .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
             assertNotNull(Jsoup.parse(saved).selectFirst("a.subscription-read"));
-            assertEquals(1, fixture.store.unread().loadUnreadPage(UserAccount.OWNER_ID, path, "", false, null, 50).totalCount());
+            assertEquals(1, fixture.store.items().countItems(path));
             assertEquals(1, fixture.fetches.get());
             assertEquals(existing, fixture.configs.get("/keep"));
         }

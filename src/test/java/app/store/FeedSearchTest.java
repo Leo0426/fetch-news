@@ -43,9 +43,6 @@ class FeedSearchTest {
 
             assertEquals(List.of("https://example.com/mixed"), links(store, "GPT-5"));
             assertEquals(List.of("https://example.com/chinese"), links(store, "大模型"));
-            assertEquals(List.of("https://example.com/mixed"),
-                    store.unread().loadUnreadPage(1, null, "GPT-5", false, null, 10).items().stream()
-                            .map(StoredItem::link).toList());
         }
     }
 

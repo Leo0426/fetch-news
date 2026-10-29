@@ -1,7 +1,6 @@
 function readerState() {
   const ui = window.FetchNewsUI;
   const savedFilter = ui.storage.get('fn-filter');
-  const queueMode = document.body.dataset.readerMode === 'unread';
   const summaryRequests = new Map();
   const summaryTimers = new Map();
   let summaryActive = true;
@@ -10,10 +9,7 @@ function readerState() {
   return {
     reads: Object.fromEntries((_fnReads || []).map(link => [link, true])),
     bookmarks: Object.fromEntries((_fnBookmarks || []).map(link => [link, true])),
-    filter: !queueMode && ['all', 'unread', 'read', 'bookmarked'].includes(savedFilter) ? savedFilter : 'unread',
-    queueMode,
-    queueBookmarkedOnly: queueMode && document.body.dataset.bookmarkedOnly === 'true',
-    queueTotal: Number(document.body.dataset.queueTotal || 0),
+    filter: ['all', 'unread', 'read', 'bookmarked'].includes(savedFilter) ? savedFilter : 'unread',
     activeTag: 'all',
     pickFilter: 'all',
     pickVerdicts: {},
@@ -84,7 +80,6 @@ function readerState() {
         && (this.pickFilter === 'all' || ((card.dataset.picks || '').split(' ').includes(this.pickFilter)
           && this.pickVerdict(link, this.pickFilter) !== 'down'))
         && (!query || (card.dataset.title || '').toLowerCase().includes(query))
-        && (!this.queueBookmarkedOnly || this.isBookmarked(link))
         && (this.filter === 'all'
           || (this.filter === 'unread' && !this.isRead(link))
           || (this.filter === 'read' && this.isRead(link))
@@ -92,21 +87,6 @@ function readerState() {
     },
     visibleCount(scope = document) {
       return this.cards(scope).filter(card => this.itemVisible(card)).length;
-    },
-    queueRemainingCount() {
-      const removed = this.cards().filter(card => this.isRead(card.dataset.link)
-        || (this.queueBookmarkedOnly && !this.isBookmarked(card.dataset.link))).length;
-      return Math.max(0, this.queueTotal - removed);
-    },
-    queueBusy() {
-      return this.anyReadPending() || Object.values(this.bookmarkPending).some(Boolean);
-    },
-    guardQueueNavigation(event) {
-      if (!this.queueMode || !this.queueBusy() || event.ctrlKey || event.metaKey || event.shiftKey) return;
-      const link = event.target.closest('a[href]');
-      if (link && link.target !== '_blank' && !link.getAttribute('href').startsWith('#')) {
-        event.preventDefault();
-      }
     },
     sectionVisible(section) {
       return this.visibleCount(section) > 0;
@@ -178,11 +158,10 @@ function readerState() {
       }
     },
     markRead(link) { return this.setReadState(link, true); },
-    toggleRead(link) { return this.setReadState(link, this.queueMode); },
+    toggleRead(link) { return this.setReadState(link, false); },
     async markAllRead() {
-      if (this.queueMode ? this.queueBusy() : this.anyReadPending()) return;
-      const links = [...new Set(this.cards().filter(card => !this.queueMode || this.itemVisible(card))
-        .map(card => card.dataset.link))];
+      if (this.anyReadPending()) return;
+      const links = [...new Set(this.cards().map(card => card.dataset.link))];
       if (!links.length || !this.unreadCount()) return;
       const previous = {...this.reads};
       this.readAllPending = true;
@@ -190,7 +169,7 @@ function readerState() {
       try {
         const result = await this.save('/reader/read-all', links.map(link => ['links', link]));
         if (result !== 'ok') throw new Error('Unexpected response');
-        ui.notify(this.queueMode ? '本页文章已标为已读，可以继续下一页。' : '当前时间范围内的文章已全部标为已读。');
+        ui.notify('当前时间范围内的文章已全部标为已读。');
       } catch (error) {
         this.reads = previous;
         ui.notify('暂时无法确认批量已读状态，请重试。', 'error');

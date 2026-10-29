@@ -25,7 +25,7 @@
   <div class="subscription-saved">
     <span th:if="${source.articleCount() >= 0}">已保存 <strong th:text="${source.articleCount()}">0</strong> 篇</span>
     <span th:if="${source.articleCount() < 0}">保存数量暂不可用</span>
-    <a th:if="${source.articleCount() > 0}" class="subscription-read" th:href="${source.readerUrl()}">去阅读 <span aria-hidden="true">→</span></a>
+    <a th:if="${source.articleCount() > 0}" class="subscription-read" href="/reader">去速览 <span aria-hidden="true">→</span></a>
   </div>
 
   <div class="subscription-controls">

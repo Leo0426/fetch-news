@@ -18,7 +18,6 @@ public record SubscriptionPage(List<Source> sources, List<String> categories, St
         }
         public String cardUrl() { return "/index/subscriptions/card?path=" + encodedPath(); }
         public String editUrl() { return "/index/routes/edit?path=" + encodedPath(); }
-        public String readerUrl() { return "/reader/unread?source=" + encodedPath(); }
         public String scheduleLabel() {
             if (config.scheduleCron() != null) return "自定义计划：" + config.scheduleCron();
             return config.scheduleMinutes() > 0 ? frequencyLabel(config.scheduleMinutes()) : "尚未设置自动更新";

@@ -7,7 +7,7 @@ const {runInNewContext} = require('node:vm');
 const script = readFileSync(join(__dirname, '../../main/resources/static/reader.js'), 'utf8');
 const articleLink = 'https://example.com/article?x=1&y=2';
 
-function reader(reply, {queueMode = false, read = false, bookmarked = false} = {}) {
+function reader(reply, {read = false, bookmarked = false} = {}) {
   const requests = [];
   const notifications = [];
   const timers = new Map();
@@ -15,7 +15,7 @@ function reader(reply, {queueMode = false, read = false, bookmarked = false} = {
   const card = {dataset: {link: articleLink, title: 'Saved article', routePath: '/source'},
     closest() { return null; }};
   const document = {
-    body: {dataset: {readerMode: queueMode ? 'unread' : '', queueTotal: '1'}},
+    body: {},
     activeElement: null,
     addEventListener() {},
     querySelector() { return null; },
@@ -87,36 +87,27 @@ test('retrying either read selection after a lost response preserves the intende
   }
 });
 
-test('hanging read, bookmark and bulk saves time out and release unread navigation', async () => {
+test('hanging read, bookmark and bulk saves time out and release pending actions', async () => {
   for (const action of ['read', 'bookmark', 'bulk']) {
     const view = reader((path, options) => new Promise((resolve, reject) => {
       options.signal?.addEventListener('abort', () => reject(new Error('Timed out')), {once: true});
-    }), {queueMode: true});
+    }));
     const completion = action === 'read' ? view.state.toggleRead(articleLink)
       : action === 'bookmark' ? view.state.toggleBookmark(articleLink, 'Saved article', '/source')
       : view.state.markAllRead();
-    const navigation = () => ({
-      target: {closest() { return {target: '', getAttribute() { return '/reader/bookmarks'; }}; }},
-      defaultPrevented: false,
-      preventDefault() { this.defaultPrevented = true; }
-    });
-    const blocked = navigation();
-    view.state.guardQueueNavigation(blocked);
-    assert.equal(blocked.defaultPrevented, true);
-    assert.equal(view.state.queueBusy(), true);
+    assert.equal(view.state.anyReadPending(), action !== 'bookmark');
+    assert.equal(!!view.state.bookmarkPending[articleLink], action === 'bookmark');
     assert.equal(view.timers.size, 1);
     const timeout = [...view.timers.values()][0];
     assert.equal(timeout.delay, 15000);
     timeout.callback();
     await completion;
-    assert.equal(view.state.queueBusy(), false);
+    assert.equal(view.state.anyReadPending(), false);
+    assert.equal(!!view.state.bookmarkPending[articleLink], false);
     assert.equal(view.state.isRead(articleLink), false);
     assert.equal(view.state.isBookmarked(articleLink), false);
     assert.equal(view.timers.size, 0);
     assert.match(view.notifications.at(-1)[0], /无法确认/);
-    const available = navigation();
-    view.state.guardQueueNavigation(available);
-    assert.equal(available.defaultPrevented, false);
   }
 });
 
@@ -132,10 +123,10 @@ test('stale lists submit their visible intended read and bookmark selections', a
     assert.equal(view.state.isBookmarked(articleLink), !previous);
   }
   const alreadyRead = savedState({read: true});
-  const inbox = reader(alreadyRead.reply, {queueMode: true});
-  await inbox.state.toggleRead(articleLink);
+  const view = reader(alreadyRead.reply);
+  await view.state.markRead(articleLink);
   assert.equal(alreadyRead.read, true);
-  assert.equal(inbox.state.isRead(articleLink), true);
+  assert.equal(view.state.isRead(articleLink), true);
 });
 
 test('a response whose body hangs is also bounded and pending clicks coalesce', async () => {
@@ -144,7 +135,7 @@ test('a response whose body hangs is also bounded and pending clicks coalesce', 
     text: () => new Promise((resolve, reject) => {
       options.signal.addEventListener('abort', () => reject(new Error('Body timed out')), {once: true});
     })
-  }), {queueMode: true});
+  }));
   const pending = view.state.toggleBookmark(articleLink);
   await Promise.resolve();
   await Promise.resolve();
@@ -153,7 +144,7 @@ test('a response whose body hangs is also bounded and pending clicks coalesce', 
   assert.equal(view.timers.size, 1);
   [...view.timers.values()][0].callback();
   await pending;
-  assert.equal(view.state.queueBusy(), false);
+  assert.equal(!!view.state.bookmarkPending[articleLink], false);
   assert.equal(view.state.isBookmarked(articleLink), false);
   assert.equal(view.timers.size, 0);
 });

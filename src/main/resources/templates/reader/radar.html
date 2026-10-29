@@ -10,7 +10,7 @@
 <body class="reader-page">
 <a class="skip-link" href="#radar-content">跳到精选日报</a>
 <main class="radar-wrap" id="radar-content">
-  <nav class="reader-nav" aria-label="阅读导航"><a href="/reader"><svg th:replace="~{shared/icons :: icon('book')}"></svg><span>速览</span></a><a href="/reader/unread"><svg th:replace="~{shared/icons :: icon('inbox')}"></svg><span>待读</span></a><a href="/reader/briefing"><svg th:replace="~{shared/icons :: icon('news')}"></svg><span>原始日报</span></a><a href="/reader/radar" aria-current="page"><svg th:replace="~{shared/icons :: icon('radar')}"></svg><span>精选日报</span></a><a href="/reader/bookmarks"><svg th:replace="~{shared/icons :: icon('bookmark')}"></svg><span>收藏</span></a>
+  <nav class="reader-nav" aria-label="阅读导航"><a href="/reader"><svg th:replace="~{shared/icons :: icon('book')}"></svg><span>速览</span></a><a href="/reader/briefing"><svg th:replace="~{shared/icons :: icon('news')}"></svg><span>原始日报</span></a><a href="/reader/radar" aria-current="page"><svg th:replace="~{shared/icons :: icon('radar')}"></svg><span>精选日报</span></a><a href="/reader/bookmarks"><svg th:replace="~{shared/icons :: icon('bookmark')}"></svg><span>收藏</span></a>
     <a href="/reader/search"><svg th:replace="~{shared/icons :: icon('search')}"></svg><span>搜索</span></a>
     <a th:if="${viewer == null or viewer.admin()}" href="/index#subscriptions"><svg th:replace="~{shared/icons :: icon('rss')}"></svg><span>订阅来源</span></a>
     <a th:if="${viewer == null or viewer.admin()}" href="/index" class="reader-nav-admin"><svg th:replace="~{shared/icons :: icon('settings')}"></svg><span>管理</span></a>

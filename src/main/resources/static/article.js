@@ -41,7 +41,7 @@
       url: currentListUrl(), savedAt: Date.now(),
       candidates: [...new Set(candidates.map(articleId))].slice(0, 200),
       offset: link.getBoundingClientRect().top,
-      filters: readerState && !readerState.queueMode ? {
+      filters: readerState ? {
         filter: readerState.filter, activeTag: readerState.activeTag,
         searchQuery: document.getElementById('reader-search')?.value ?? readerState.searchQuery
       } : null
@@ -77,7 +77,7 @@
     attach(state) {
       readerState = state;
       const filters = savedContext()?.filters;
-      if (filters && !state.queueMode) {
+      if (filters) {
         if (['all', 'unread', 'read', 'bookmarked'].includes(filters.filter)) state.filter = filters.filter;
         if (typeof filters.activeTag === 'string' && filters.activeTag.length <= 200) state.activeTag = filters.activeTag;
         if (typeof filters.searchQuery === 'string' && filters.searchQuery.length <= 200) state.searchQuery = filters.searchQuery;

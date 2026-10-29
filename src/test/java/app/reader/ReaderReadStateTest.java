@@ -28,12 +28,10 @@ class ReaderReadStateTest {
             assertEquals("read", resource.setReadState(link, true).getBody());
             assertEquals("read", resource.setReadState(link, true).getBody());
             assertTrue(store.reading().isRead(UserAccount.OWNER_ID, link));
-            assertEquals(0, store.unread().loadUnreadPage(UserAccount.OWNER_ID, "", "", false, null, 50).totalCount());
 
             assertEquals("unread", resource.setReadState(link, false).getBody());
             assertEquals("unread", resource.setReadState(link, false).getBody());
             assertFalse(store.reading().isRead(UserAccount.OWNER_ID, link));
-            assertEquals(1, store.unread().loadUnreadPage(UserAccount.OWNER_ID, "", "", false, null, 50).totalCount());
 
             assertEquals("read", resource.toggleRead(link).getBody());
             assertEquals("unread", resource.toggleRead(link).getBody());

@@ -38,7 +38,7 @@ function page(storage, {path = '/reader', links = ['first', 'second', 'third'], 
   };
   runInNewContext(script, {window, document, URL, URLSearchParams, setTimeout, clearTimeout});
   listeners.get('DOMContentLoaded')();
-  const state = {filter, activeTag: 'all', searchQuery: '', queueMode: path.startsWith('/reader/unread'),
+  const state = {filter, activeTag: 'all', searchQuery: '',
     reads: {first: true}, bookmarks: {}, $nextTick: callback => callback()};
   window.FetchNewsReadingContext?.attach(state);
   return {
@@ -103,13 +103,13 @@ test('a consumed return snapshot does not override later filter choices on reloa
   assert.equal(reloaded.focused, undefined);
 });
 
-test('saved view is isolated from different filters, pagination and browser tabs', () => {
+test('saved view is isolated from different filters, lists and browser tabs', () => {
   const storage = memory();
   const original = page(storage, {path: '/reader?hours=72'});
   original.state.searchQuery = '卫星';
   original.open('first');
   assert.equal(page(storage, {path: '/reader?hours=24'}).state.searchQuery, '');
-  assert.equal(page(storage, {path: '/reader/unread?before=20'}).focused, undefined);
+  assert.equal(page(storage, {path: '/reader/bookmarks', reader: false}).focused, undefined);
   assert.equal(page(memory(), {path: '/reader?hours=72'}).state.searchQuery, '');
 });
 

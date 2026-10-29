@@ -4,7 +4,7 @@ import java.net.URI;
 import java.util.Set;
 
 public final class ArticleNavigation {
-    private static final Set<String> RETURN_PATHS = Set.of("/reader", "/reader/unread", "/reader/search",
+    private static final Set<String> RETURN_PATHS = Set.of("/reader", "/reader/search",
             "/reader/bookmarks", "/reader/briefing");
     private ArticleNavigation() {}
 
@@ -18,7 +18,7 @@ public final class ArticleNavigation {
             } catch (IllegalArgumentException ignored) {
             }
         }
-        return "/reader/unread";
+        return "/reader";
     }
 
     public static String originalUrl(String value) {

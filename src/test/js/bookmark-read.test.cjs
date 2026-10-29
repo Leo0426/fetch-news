@@ -4,7 +4,7 @@ const {join} = require('node:path');
 const {test} = require('node:test');
 const {runInNewContext} = require('node:vm');
 
-const script = readFileSync(join(__dirname, '../../main/resources/static/reader.js'), 'utf8');
+const script = readFileSync(join(__dirname, '../../main/resources/static/reader-page.js'), 'utf8');
 const settle = () => new Promise(resolve => setImmediate(resolve));
 
 function page(reply, read = 'false') {

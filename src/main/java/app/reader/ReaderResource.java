@@ -13,7 +13,6 @@ import app.store.PickKind;
 import app.store.SearchHit;
 import app.store.StoredArticle;
 import app.store.StoredItem;
-import app.store.UnreadPage;
 import java.sql.SQLException;
 import java.time.Duration;
 import java.time.Instant;
@@ -39,7 +38,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
-import org.springframework.web.util.UriComponentsBuilder;
 
 /**
  * Serves the reader page — a daily digest of all recently fetched items grouped by category.
@@ -163,57 +161,6 @@ public class ReaderResource {
             log.warn("failed to set article bookmark: {}", e.toString());
             return ResponseEntity.status(500).body("收藏状态暂时无法确认，请重试。");
         }
-    }
-
-    @GetMapping(value = "/reader/unread", produces = MediaType.TEXT_HTML_VALUE)
-    @ResponseBody
-    public ResponseEntity<String> unread(
-            @RequestParam(defaultValue = "") String source,
-            @RequestParam(defaultValue = "") String q,
-            @RequestParam(defaultValue = "false") boolean bookmarked,
-            @RequestParam(required = false) Long before) {
-        source = source.strip();
-        q = q.strip();
-        if ((before != null && before <= 0) || source.length() > 2048 || q.length() > 200) {
-            return unreadError(400, source, q, bookmarked,
-                    "筛选或翻页参数无效。关键词最多 200 个字符，请重新选择条件。");
-        }
-        if (feedStore == null) {
-            return unreadError(503, source, q, bookmarked, "文章库暂时不可用，请稍后重试。");
-        }
-        UnreadPageView page;
-        ReaderPicks picks;
-        try {
-            UnreadPage stored = feedStore.unread().loadUnreadPage(CurrentUser.id(), source, q, bookmarked, before, 50);
-            ReaderItems.Page cards = readerItems.load(stored.items(), CurrentUser.id());
-            picks = cards.picks();
-            page = new UnreadPageView(cards.items(), stored.bookmarkedLinks(), stored.sources(), source, q,
-                    bookmarked, stored.totalCount(), stored.nextCursor() == null ? null
-                            : unreadUrl(source, q, bookmarked, stored.nextCursor()),
-                    unreadUrl(source, q, bookmarked, null), before != null,
-                    aiConfigStore != null && aiConfigStore.get().enabled(), null);
-        } catch (SQLException e) {
-            log.warn("failed to load unread inbox: {}", e.getMessage());
-            return unreadError(500, source, q, bookmarked, "待读内容暂时加载失败，请重试。");
-        }
-        return ResponseEntity.ok(templates.unreadPage(page, picks));
-    }
-
-    private ResponseEntity<String> unreadError(int status, String source, String query,
-                                               boolean bookmarked, String message) {
-        UnreadPageView page = new UnreadPageView(List.of(), List.of(), List.of(), source, query,
-                bookmarked, 0, null, status == 400 ? "/reader/unread" : unreadUrl(source, query, bookmarked, null),
-                false, false, message);
-        return ResponseEntity.status(status).body(templates.unreadPage(page));
-    }
-
-    private static String unreadUrl(String source, String query, boolean bookmarked, Long before) {
-        UriComponentsBuilder url = UriComponentsBuilder.fromPath("/reader/unread");
-        if (!source.isEmpty()) url.queryParam("source", "{source}");
-        if (!query.isEmpty()) url.queryParam("q", "{query}");
-        if (bookmarked) url.queryParam("bookmarked", true);
-        if (before != null) url.queryParam("before", before);
-        return url.encode().buildAndExpand(Map.of("source", source, "query", query)).toUriString();
     }
 
     @GetMapping(value = "/reader/search", produces = MediaType.TEXT_HTML_VALUE)

@@ -42,13 +42,12 @@ class ReadConnectionsTest {
                 CompletableFuture<Integer> reads = CompletableFuture.supplyAsync(() -> {
                     try {
                         return store.items().loadRecentItems(Duration.ofHours(1)).size()
-                                + store.searchIndex().search("Lock", 10).size()
-                                + store.unread().loadUnreadPage(1, null, null, false, null, 10).items().size();
+                                + store.searchIndex().search("Lock", 10).size();
                     } catch (SQLException e) {
                         throw new IllegalStateException(e);
                     }
                 });
-                assertEquals(3, reads.get(2, TimeUnit.SECONDS));
+                assertEquals(2, reads.get(2, TimeUnit.SECONDS));
             } finally {
                 release.countDown();
                 writer.join(2000);

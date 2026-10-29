@@ -2,13 +2,50 @@ package app.reader;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import app.TestPages;
+import app.core.FeedItem;
+import app.core.Route;
+import app.core.RouteConfig;
+import app.core.RouteConfigStore;
+import app.core.Topic;
 import app.store.BookmarkedItem;
+import app.store.FeedStore;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.nio.file.Path;
+import java.time.Instant;
+import java.util.List;
 import java.util.stream.Stream;
+import org.jsoup.Jsoup;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 class ReaderSourceLabelsTest {
+    @Test
+    void recentReaderGroupsUseConfiguredMountNameAndRegisteredSourceCategory(@TempDir Path directory)
+            throws Exception {
+        ObjectMapper mapper = new ObjectMapper();
+        var runtime = TestPages.runtime(new RouteConfigStore(directory.resolve("routes.json"), mapper),
+                new Route("/rss", context -> { throw new AssertionError("Reading must not fetch"); },
+                        "RSS", Topic.GENERAL));
+        var renderer = new ReaderTemplateRenderer(TestPages.engine(), runtime);
+        String source = "/my-custom-reading";
+        runtime.routeConfigStore().save(new RouteConfig(source, "/rss", true, 300, 1800,
+                60, null, "https://example.test/feed.xml", "我的阅读"));
+        try (FeedStore store = new FeedStore(directory.resolve("feed.db"), mapper)) {
+            store.saveItems(source, List.of(new FeedItem("Article", "https://example.com/article", "Stored body",
+                    Instant.EPOCH, null, List.of())));
+            var reader = new ReaderResource(store, runtime, renderer, null, null);
+
+            var page = Jsoup.parse(reader.reader(24));
+            assertEquals("我的阅读", page.selectFirst(".rd-section-name").text());
+            assertEquals("通用", page.selectFirst(".reader-source-tag").text());
+            assertEquals("通用", page.selectFirst(".rd-section").attr("data-tag"));
+        }
+    }
+
     @ParameterizedTest(name = "{0} -> {1}")
     @MethodSource({"newSources", "existingSources"})
     void usesTheSameSourceNameInReaderAndBookmarks(String path, String expected) {
