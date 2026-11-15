@@ -79,10 +79,10 @@ public class RssLiteResource {
             @RequestParam(required = false) String format,
             @RequestParam(required = false) String limit) {
         String path = normalizePath(routePath);
-        // Redirect root and legacy /admin URL to the index UI
+        // Open the daily reader by default; keep the legacy administration shortcut.
         if ("/".equals(path) || "/admin".equals(path)) {
             return ResponseEntity.status(HttpStatus.FOUND)
-                    .header(HttpHeaders.LOCATION, "/index")
+                    .header(HttpHeaders.LOCATION, "/".equals(path) ? "/reader" : "/index")
                     .build();
         }
         String outputFormat = format == null || format.isBlank() ? "rss" : format;

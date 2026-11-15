@@ -73,6 +73,10 @@ class AuthIntegrationTest {
         assertTrue(response.header("Set-Cookie").contains("HttpOnly"));
         assertTrue(response.header("Set-Cookie").contains("SameSite=Lax"));
         given().cookie(AuthFilter.COOKIE, ADMIN_TOKEN).when().get("/index").then().statusCode(200);
+        given().cookie(AuthFilter.COOKIE, ADMIN_TOKEN).redirects().follow(false).when().get("/")
+                .then().statusCode(302).header("Location", "/reader");
+        given().cookie(AuthFilter.COOKIE, ADMIN_TOKEN).redirects().follow(false).when().get("/admin")
+                .then().statusCode(302).header("Location", "/index");
     }
 
     @Test

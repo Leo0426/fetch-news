@@ -1,5 +1,6 @@
 package app.reader;
 
+import app.support.HtmlImages;
 import java.net.URI;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
@@ -11,16 +12,20 @@ public record ArticleContent(String html, String kind) {
     private static final Safelist ALLOWED = new Safelist().addTags(
             "p", "br", "h2", "h3", "h4", "h5", "h6", "blockquote", "ul", "ol", "li",
             "pre", "code", "strong", "em", "b", "i", "s", "hr", "table", "thead", "tbody",
-            "tr", "th", "td", "a").addAttributes("a", "href");
+            "tr", "th", "td", "a", "img", "figure", "figcaption")
+            .addAttributes("a", "href").addAttributes("img", "src", "alt")
+            .addProtocols("img", "src", "http", "https");
 
     public static ArticleContent from(String description, String extract, String baseUrl) {
-        var source = Jsoup.parseBodyFragment(description == null ? "" : description);
+        description = HtmlImages.unwrapBody(description);
+        var source = Jsoup.parseBodyFragment(description);
         boolean plainText = source.body().getAllElements().stream().skip(1)
                 .noneMatch(element -> element.tag().isKnownTag());
         String plainSource = plainText && !source.body().children().isEmpty()
                 ? Parser.unescapeEntities(description, false) : source.body().wholeText();
         source.select("script, style, iframe, form, svg, math, object, embed, video, audio, canvas, "
-                + "link, meta, base, template, noscript, img, picture, source, input, button, select, textarea").remove();
+                + "link, meta, base, template, input, button, select, textarea").remove();
+        HtmlImages.normalize(source.body(), baseUrl);
         source.select("a[href]").forEach(link -> {
             String destination = safeDestination(link.attr("href"), baseUrl);
             if (destination == null) link.removeAttr("href");
@@ -29,15 +34,19 @@ public record ArticleContent(String html, String kind) {
         var body = new Cleaner(ALLOWED).clean(source);
         body.outputSettings().prettyPrint(false);
         body.select("a[href]").forEach(link -> link.attr("target", "_blank").attr("rel", "noopener noreferrer"));
+        body.select("img").forEach(image -> image.attr("loading", "lazy").attr("decoding", "async")
+                .attr("referrerpolicy", "no-referrer"));
+        String images = String.join("", body.select("img").stream().map(image -> image.outerHtml()).toList());
         String sourceText = plainText ? plainSource : body.text();
         if (textLength(sourceText) < 200 && textLength(extract) >= 200) {
-            return new ArticleContent(paragraphs(extract), "extract");
+            return new ArticleContent(paragraphs(extract) + images, "extract");
         }
         if (hasText(sourceText)) {
             return new ArticleContent(plainText ? paragraphs(plainSource) : body.body().html(), "source");
         }
-        return hasText(extract) ? new ArticleContent(paragraphs(extract), "extract")
-                : new ArticleContent("", "empty");
+        if (hasText(extract)) return new ArticleContent(paragraphs(extract) + images, "extract");
+        return images.isEmpty() ? new ArticleContent("", "empty")
+                : new ArticleContent(body.body().html(), "source");
     }
 
     private static int textLength(String value) {

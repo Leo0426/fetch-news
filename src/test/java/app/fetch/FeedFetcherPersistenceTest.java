@@ -89,4 +89,21 @@ class FeedFetcherPersistenceTest {
         return new Feed("News", "https://example.com", "News", List.of(
                 new FeedItem("Article", "https://example.com/article", "Body", null, null, List.of())));
     }
+
+    @Test
+    void persistsResponsiveBodyImageAsCoverWhenSourceCoverIsBlank() throws Exception {
+        try (FeedStore store = new FeedStore(tempDir.resolve("feed.db"), new ObjectMapper())) {
+            Feed feed = new Feed("News", "https://example.com", "News", List.of(
+                    new FeedItem("Photo", "https://example.com/article",
+                            "<picture><source srcset='/small.jpg 320w, /large.jpg 1200w'><img></picture>",
+                            null, null, List.of()).withImage(" ")));
+            RouteContext context = new RouteContext("/news", Map.of(), Map.of());
+            RouteMatch match = new RouteMatch(ignored -> feed, context);
+
+            Feed fetched = new FeedFetcher(store).fetch(match, context, "/news");
+
+            assertEquals("https://example.com/large.jpg", fetched.items().getFirst().image());
+            assertEquals("https://example.com/large.jpg", store.loadItem("https://example.com/article").image());
+        }
+    }
 }

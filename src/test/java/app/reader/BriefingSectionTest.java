@@ -66,7 +66,7 @@ class BriefingSectionTest {
     }
 
     @Test
-    void appliesDisplayLimitAfterGroupingAndRetainsEveryMemberOfVisibleStories() {
+    void retainsEveryStoryAndEveryMemberAfterGrouping() {
         List<ReaderItem> items = new ArrayList<>();
         for (int i = 0; i < 20; i++) items.add(item("/repeat-" + i, "我国成功发射新一代气象观测卫星"));
         for (int i = 0; i < 16; i++) items.add(item("/unique-" + i, "独立报道 " + i));
@@ -75,10 +75,10 @@ class BriefingSectionTest {
 
         assertEquals(36, section.totalCount());
         assertEquals(17, section.totalStoryCount());
-        assertEquals(15, section.stories().size());
+        assertEquals(17, section.stories().size());
         assertEquals("https://example.test/repeat-0", section.stories().getFirst().primary().link());
         assertEquals(19, section.stories().getFirst().related().size());
-        assertEquals("https://example.test/unique-13", section.stories().getLast().primary().link());
+        assertEquals("https://example.test/unique-15", section.stories().getLast().primary().link());
     }
 
     @Test

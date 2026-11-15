@@ -74,7 +74,7 @@ class BriefingReaderTest {
     }
 
     @Test
-    void repeatedCoverageDoesNotConsumeTheFifteenStoryLimit() throws Exception {
+    void repeatedCoverageKeepsEveryOriginalAccessible() throws Exception {
         for (int i = 0; i < 20; i++) {
             save("/xinhua", "https://example.test/repeat-" + i, "我国成功发射新一代气象观测卫星");
         }
@@ -86,6 +86,20 @@ class BriefingReaderTest {
         assertEquals(19, page.select(".bf-related-item").size());
         assertTrue(page.select(".bf-more").isEmpty());
         assertEquals("1 组 · 20 篇", page.selectFirst(".bf-cat-count").text());
+    }
+
+    @Test
+    void rendersEveryStoryInScrollableCategoryIncludingThoseBeyondFifteen() throws Exception {
+        for (int i = 0; i < 248; i++) {
+            save("/xinhua", "https://example.test/story-" + i, "独立报道 " + i);
+        }
+
+        var page = Jsoup.parse(reader.briefing(LocalDate.now().toString()));
+
+        assertEquals("248 组 · 248 篇", page.selectFirst(".bf-cat-count").text());
+        assertEquals(248, page.select(".bf-items .bf-item").size());
+        assertEquals(248, page.select(".bf-items [data-article-link]").size());
+        assertTrue(page.select(".bf-more").isEmpty());
     }
 
     @Test

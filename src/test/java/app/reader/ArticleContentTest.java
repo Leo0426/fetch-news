@@ -25,7 +25,7 @@ class ArticleContentTest {
     }
 
     @Test
-    void discardsActiveSubtreesAttributesAndRemoteMedia() {
+    void discardsActiveSubtreesAttributesAndTrackingPixels() {
         ArticleContent content = ArticleContent.from("""
                 <p id="victim" style="background:url(https://tracking.test/bg)" onclick="alert(1)">保留正文。</p>
                 <script>alert('script')</script><style>p {display:none}</style>
@@ -34,7 +34,7 @@ class ArticleContentTest {
                 <svg onload="alert(1)"><text>矢量文本</text></svg>
                 <object data="https://tracking.test/object">对象文本</object>
                 <video src="https://tracking.test/video">视频文本</video>
-                <img src="https://tracking.test/pixel" srcset="https://tracking.test/pixel2 2x" alt="图片文字">
+                <img src="https://tracking.test/pixel" srcset="https://tracking.test/pixel2 2x" width="1" alt="图片文字">
                 <link rel="stylesheet" href="https://tracking.test/style"><meta http-equiv="refresh" content="0">
                 """, null, "https://example.com/article");
 
@@ -43,6 +43,61 @@ class ArticleContentTest {
         assertTrue(body.select("script, style, iframe, form, svg, object, video, img, link, meta").isEmpty());
         assertEquals(0, body.selectFirst("p").attributes().size());
         assertFalse(content.html().contains("tracking.test"));
+    }
+
+    @Test
+    void displaysSafeBodyImagesAndCaptionsWithoutPublisherScriptsOrStyles() {
+        ArticleContent content = ArticleContent.from("""
+                <figure style="width:9999px"><picture><source srcset="/photo.jpg 1200w">
+                  <img src="data:image/gif;base64,AA" alt="正文配图" onerror="bad()"></picture>
+                  <figcaption>图片说明</figcaption></figure>
+                <noscript><img data-original="/second.jpg"></noscript>
+                <img src="javascript:bad()"><img src="https://user:secret@example.com/private">
+                """, null, "https://example.com/article");
+        Document body = Jsoup.parseBodyFragment(content.html());
+        assertEquals("source", content.kind());
+        assertEquals(2, body.select("img").size());
+        assertEquals("https://example.com/photo.jpg", body.selectFirst("img").attr("src"));
+        assertEquals("正文配图", body.selectFirst("img").attr("alt"));
+        assertEquals("图片说明", body.selectFirst("figcaption").text());
+        assertTrue(body.select("source, [onerror], [style], [srcset]").isEmpty());
+        body.select("img").forEach(image -> {
+            assertEquals("lazy", image.attr("loading"));
+            assertEquals("no-referrer", image.attr("referrerpolicy"));
+        });
+    }
+
+    @Test
+    void imageOnlyStoriesAreReadableAndExtractFallbackRetainsSourcePhotos() {
+        String image = "<img src='/photo.jpg'>";
+        ArticleContent photo = ArticleContent.from(image, null, "https://example.com/article");
+        assertFalse(photo.isEmpty());
+        assertEquals(1, Jsoup.parse(photo.html()).select("img").size());
+        ArticleContent extracted = ArticleContent.from("<p>Preview</p>" + image,
+                "Full article. ".repeat(30), "https://example.com/article");
+        assertEquals("extract", extracted.kind());
+        assertEquals(1, Jsoup.parse(extracted.html()).select("img").size());
+        assertTrue(Jsoup.parse(extracted.html()).text().contains("Full article."));
+    }
+
+    @Test
+    void noscriptFallbackDoesNotDuplicateTheSameLazyPhoto() {
+        ArticleContent content = ArticleContent.from("""
+                <img data-src="/photo.jpg" src="data:image/gif;base64,AA">
+                <noscript><img src="/photo.jpg"></noscript>
+                """, null, "https://example.com/article");
+        assertEquals(1, Jsoup.parse(content.html()).select("img").size());
+    }
+
+    @Test
+    void restoresImagesAndStructureFromLegacyCdataBodies() {
+        ArticleContent content = ArticleContent.from(
+                "<![CDATA[<p>Archived body</p><img src='/archive.jpg'><script>bad()</script>]]>",
+                null, "https://example.com/article");
+        Document body = Jsoup.parseBodyFragment(content.html());
+        assertEquals("Archived body", body.text());
+        assertEquals("https://example.com/archive.jpg", body.selectFirst("img").attr("src"));
+        assertTrue(body.select("script").isEmpty());
     }
 
     @Test
@@ -167,7 +222,7 @@ class ArticleContentTest {
     @Test
     void emptyAndUnicodeWhitespaceContentStayEmpty() {
         for (String source : new String[]{null, "", " \t\n\u00a0\u2003\u202f", "<p>&nbsp;\u2003</p>",
-                "<!-- no article --><img src='https://tracking.test' alt='替代文字'>",
+                "<!-- no article --><img src='https://tracking.test' width='1' alt='替代文字'>",
                 "<form><p>表单内容</p></form><script>bad()</script><svg><text>图形</text></svg>"}) {
             ArticleContent content = ArticleContent.from(source, " \n\u00a0\u202f", null);
             assertTrue(content.isEmpty(), source);

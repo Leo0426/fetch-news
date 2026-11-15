@@ -23,7 +23,7 @@ public record BriefingSection(String category, List<BriefingStory> stories, int 
         List<BriefingStory> stories = grouped.values().stream()
                 .map(group -> new BriefingStory(group.getFirst(), group.subList(1, group.size())))
                 .toList();
-        return new BriefingSection(category, stories.stream().limit(15).toList(), items.size(), stories.size());
+        return new BriefingSection(category, stories, items.size(), stories.size());
     }
 
     private static String foldKey(ReaderItem item) {

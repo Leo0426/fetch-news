@@ -108,7 +108,7 @@ class ReaderArticleTest {
         String source = "https://example.com/source", extracted = "https://example.com/extracted";
         String summarized = "https://example.com/summary", empty = "https://example.com/empty";
         save(source, "Source", "<p>Source passage</p>");
-        save(extracted, "Extracted", "<script>hidden</script><img src='https://external.invalid/tracker'>");
+        save(extracted, "Extracted", "<script>hidden</script><img width='1' src='https://external.invalid/tracker'>");
         save(summarized, "Summary only", null);
         save(empty, "Empty", " ");
         store.aiCache().saveExtract(source, "Must not replace source", "fixture");

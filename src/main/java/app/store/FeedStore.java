@@ -2,6 +2,7 @@ package app.store;
 
 import app.core.Feed;
 import app.core.FeedItem;
+import app.support.CoverImages;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.Closeable;
@@ -318,18 +319,19 @@ public class FeedStore implements Closeable {
         Map<String, String> covers = new LinkedHashMap<>();
         try (PreparedStatement ps = conn.prepareStatement("""
                 SELECT item_link, description FROM feed_items
-                WHERE image IS NULL AND (description LIKE '%<img%' OR description LIKE '%poster=%')
+                WHERE (image IS NULL OR trim(image) = '')
+                  AND (description LIKE '%<img%' OR description LIKE '%<picture%' OR description LIKE '%poster%')
                 """);
              ResultSet rs = ps.executeQuery()) {
             while (rs.next()) {
-                String cover = app.support.CoverImages.firstInHtml(rs.getString("description"), rs.getString("item_link"));
+                String cover = CoverImages.firstInHtml(rs.getString("description"), rs.getString("item_link"));
                 if (cover != null) covers.put(rs.getString("item_link"), cover);
             }
         }
         if (covers.isEmpty()) return 0;
         return inTransaction(() -> {
             try (PreparedStatement ps = conn.prepareStatement(
-                    "UPDATE feed_items SET image = ? WHERE item_link = ? AND image IS NULL")) {
+                    "UPDATE feed_items SET image = ? WHERE item_link = ? AND (image IS NULL OR trim(image) = '')")) {
                 for (var cover : covers.entrySet()) {
                     ps.setString(1, cover.getValue());
                     ps.setString(2, cover.getKey());

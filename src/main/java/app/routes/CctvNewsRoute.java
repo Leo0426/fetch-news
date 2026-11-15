@@ -8,6 +8,7 @@ import app.core.RouteContext;
 import app.core.RouteError;
 import app.core.RouteException;
 import app.core.RouteHandler;
+import app.support.CoverImages;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.net.URI;
@@ -109,17 +110,19 @@ public class CctvNewsRoute implements RouteHandler {
         String  image   = entry.path("image").asText(null);
         String  id      = filenameWithoutExt(link);
 
+        FeedItem item = new FeedItem(title, link, null, pubDate, null, List.of());
         if (id != null) {
             try {
-                if (id.startsWith("ART"))  return fetchArticle(id, title, link, pubDate, ctx);
-                if (id.startsWith("PHO"))  return fetchPhoto(id, title, link, pubDate, ctx);
+                if (id.startsWith("ART")) item = fetchArticle(id, title, link, pubDate, ctx);
+                if (id.startsWith("PHO")) item = fetchPhoto(id, title, link, pubDate, ctx);
                 if (id.startsWith("VIDE") && image != null)
-                                           return fetchVideo(id, image, title, link, pubDate, ctx);
+                    item = fetchVideo(id, image, title, link, pubDate, ctx);
             } catch (Exception ignored) {
                 // detail fetch failed — fall through to item without description
             }
         }
-        return new FeedItem(title, link, null, pubDate, null, List.of());
+        String cover = CoverImages.normalize(link, image);
+        return cover == null ? item : item.withImage(cover);
     }
 
     private FeedItem fetchArticle(String id, String title, String link, Instant pubDate, RouteContext ctx)

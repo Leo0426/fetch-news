@@ -5,6 +5,7 @@ import app.core.FeedItem;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Element;
 
@@ -41,11 +42,11 @@ public final class CoverImages {
      * Returns the first meaningful {@code <img>} or video poster in description HTML, skipping data URIs and tracking pixels.
      */
     public static String firstInHtml(String html, String baseUrl) {
-        if (html == null || (!html.contains("<img") && !html.contains("poster="))) return null;
-        for (Element img : Jsoup.parseBodyFragment(html).select("img, video[poster]")) {
-            if (isPixel(img.attr("width")) || isPixel(img.attr("height"))) continue;
-            String src = img.hasAttr("poster") ? img.attr("poster")
-                    : img.hasAttr("data-src") ? img.attr("data-src") : img.attr("src");
+        if (html == null || html.isBlank() || !html.contains("<")) return null;
+        Element body = Jsoup.parseBodyFragment(HtmlImages.unwrapBody(html)).body();
+        HtmlImages.normalize(body, baseUrl);
+        for (Element img : body.select("img, video[poster]")) {
+            String src = img.hasAttr("poster") ? img.attr("poster") : img.attr("src");
             String url = normalize(baseUrl, src);
             if (url != null) return url;
         }
@@ -57,8 +58,9 @@ public final class CoverImages {
         boolean changed = false;
         List<FeedItem> items = new ArrayList<>(feed.items().size());
         for (FeedItem item : feed.items()) {
-            String image = item.image() != null ? null : firstInHtml(item.description(), item.link());
-            if (image != null) {
+            String image = normalize(item.link(), item.image());
+            if (image == null) image = firstInHtml(item.description(), item.link());
+            if (!Objects.equals(image, item.image())) {
                 items.add(item.withImage(image));
                 changed = true;
             } else {
@@ -72,11 +74,11 @@ public final class CoverImages {
     public static String normalize(String baseUrl, String href) {
         if (href == null || href.isBlank() || href.startsWith("data:")) return null;
         try {
-            URI uri = baseUrl == null || baseUrl.isBlank()
-                    ? URI.create(href.strip())
-                    : URI.create(baseUrl).resolve(href.strip());
+            URI uri = URI.create(href.strip());
+            if (!uri.isAbsolute() && baseUrl != null && !baseUrl.isBlank()) uri = URI.create(baseUrl).resolve(uri);
             String scheme = uri.getScheme();
             if (!"http".equalsIgnoreCase(scheme) && !"https".equalsIgnoreCase(scheme)) return null;
+            if (uri.getHost() == null || uri.getUserInfo() != null) return null;
             String url = uri.toString();
             return url.length() <= MAX_URL_LENGTH ? url : null;
         } catch (IllegalArgumentException e) {
@@ -84,7 +86,4 @@ public final class CoverImages {
         }
     }
 
-    private static boolean isPixel(String size) {
-        return size.matches("[0-2]");
-    }
 }

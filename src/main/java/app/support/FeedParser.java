@@ -67,23 +67,24 @@ public final class FeedParser {
                 link = guid.text().strip();
             }
         }
-        String desc    = inner(item.selectFirst("description"));
-        if (desc == null) desc = inner(item.selectFirst("content|encoded"));
+        String desc    = inner(item.selectFirst("content|encoded"));
+        if (desc == null) desc = inner(item.selectFirst("description"));
         String pubDate = text(item.selectFirst("pubDate"));
         String author  = text(item.selectFirst("author"));
         if (author == null) author = text(item.selectFirst("dc|creator"));
         if (author == null) author = text(item.selectFirst("creator"));
         List<String> cats = item.select("category").stream()
                 .map(Element::text).filter(t -> !t.isBlank()).toList();
+        String articleUrl = link != null && !link.isBlank() ? Urls.resolve(baseUrl, link) : null;
 
         return new FeedItem(
                 title,
-                link != null && !link.isBlank() ? Urls.resolve(baseUrl, link) : null,
+                articleUrl,
                 desc,
                 DateParser.parseDateOrNull(pubDate),
                 author,
                 cats,
-                CoverImages.fromFeedEntry(item, baseUrl));
+                entryImage(item, desc, articleUrl, baseUrl));
     }
 
     // ── Atom ─────────────────────────────────────────────────────────────────
@@ -119,18 +120,27 @@ public final class FeedParser {
         List<String> cats = entry.select("category").stream()
                 .map(c -> c.hasAttr("term") ? c.attr("term") : c.text())
                 .filter(t -> !t.isBlank()).toList();
+        String articleUrl = link != null && !link.isBlank() ? Urls.resolve(baseUrl, link) : null;
 
         return new FeedItem(
                 title,
-                link != null && !link.isBlank() ? Urls.resolve(baseUrl, link) : null,
+                articleUrl,
                 desc,
                 DateParser.parseInstantOrNull(published),
                 author,
                 cats,
-                CoverImages.fromFeedEntry(entry, baseUrl));
+                entryImage(entry, desc, articleUrl, baseUrl));
     }
 
     // ── helpers ──────────────────────────────────────────────────────────────
+
+    private static String entryImage(Element entry, String body, String articleUrl, String feedUrl) {
+        String image = CoverImages.fromFeedEntry(entry, feedUrl);
+        String baseUrl = articleUrl == null ? feedUrl : articleUrl;
+        if (image == null) image = CoverImages.firstInHtml(body, baseUrl);
+        if (image == null) image = CoverImages.firstInHtml(inner(entry.selectFirst("description, summary")), baseUrl);
+        return image;
+    }
 
     private static Element preferredLink(Iterable<Element> links) {
         Element fallback = null;

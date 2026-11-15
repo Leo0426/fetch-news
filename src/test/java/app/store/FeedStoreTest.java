@@ -179,4 +179,19 @@ class FeedStoreTest {
     private static FeedItem item(String title, String link, String description) {
         return new FeedItem(title, link, description, Instant.parse("2026-05-22T08:00:00Z"), null, List.of());
     }
+
+    @Test
+    void backfillsHistoricalLazyAndPictureImagesIncludingBlankCovers() throws Exception {
+        try (FeedStore store = new FeedStore(tempDir.resolve("feed.db"), new ObjectMapper())) {
+            store.saveItems("/articles", List.of(
+                    item("Lazy", "https://example.com/lazy", "<![CDATA[<IMG data-original='/lazy.jpg'>]]>")
+                            .withImage(" "),
+                    item("Picture", "https://example.com/picture",
+                            "<picture><source srcset='/picture.jpg 2x'></picture>")));
+            assertEquals(2, store.backfillCoverImages());
+            assertEquals(0, store.backfillCoverImages());
+            assertEquals("https://example.com/lazy.jpg", store.loadItem("https://example.com/lazy").image());
+            assertEquals("https://example.com/picture.jpg", store.loadItem("https://example.com/picture").image());
+        }
+    }
 }

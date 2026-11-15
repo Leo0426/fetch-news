@@ -26,7 +26,7 @@ class FeedParserTest {
     }
 
     @Test
-    void keepsPublisherDescriptionAndAuthorWhenEncodedAlternativesExist() {
+    void prefersFullBodyAndKeepsPublisherAuthorWhenEncodedAlternativesExist() {
         var item = FeedParser.parse("""
                 <rss xmlns:content="http://purl.org/rss/1.0/modules/content/"
                      xmlns:dc="http://purl.org/dc/elements/1.1/">
@@ -38,8 +38,22 @@ class FeedParserTest {
                 </rss>
                 """, "https://example.com/feed").items().getFirst();
 
-        assertEquals("<p>Publisher summary.</p>", item.description());
+        assertEquals("<p>Long article.</p>", item.description());
         assertEquals("Original Author", item.author());
+    }
+
+    @Test
+    void findsImagesInFullRssBodyEvenWhenSummaryHasNoImages() {
+        var item = CoverImages.withFallbackCovers(FeedParser.parse("""
+                <rss xmlns:content="http://purl.org/rss/1.0/modules/content/">
+                  <channel><title>News</title><item><title>Photo story</title><link>https://example.com/posts/story</link>
+                    <description>Short summary</description>
+                    <content:encoded><![CDATA[<p>Full article</p><img data-original="photo.jpg">]]></content:encoded>
+                  </item></channel>
+                </rss>
+                """, "https://example.com/feed")).items().getFirst();
+        assertEquals("https://example.com/posts/photo.jpg", item.image());
+        assertEquals("<p>Full article</p><img data-original=\"photo.jpg\">", item.description());
     }
 
     @Test

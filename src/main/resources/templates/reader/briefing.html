@@ -82,16 +82,20 @@
   </div>
 
   <!-- ── Sections grid ───────────────────────────────────────── -->
+  <p th:if="${!sections.isEmpty()}" class="bf-scroll-hint" id="briefing-scroll-hint">
+    鼠标移入分类可滚动浏览；键盘聚焦后可用方向键或 Page Up / Page Down 翻页。
+  </p>
   <div th:if="${!sections.isEmpty()}" class="bf-grid">
     <div th:each="sec, si : ${sections}" class="bf-section reveal">
 
       <div class="bf-section-head">
-        <h2 class="bf-cat-name" th:text="${sec.category()}">分类</h2>
+        <h2 class="bf-cat-name" th:id="'briefing-category-' + ${si.index}" th:text="${sec.category()}">分类</h2>
         <span class="bf-cat-count"
               th:text="${sec.totalStoryCount()} + ' 组 · ' + ${sec.totalCount()} + ' 篇'">0 组 · 0 篇</span>
       </div>
 
-      <div class="bf-items">
+      <div class="bf-items" tabindex="0" role="region"
+           th:attr="aria-labelledby='briefing-category-' + ${si.index}" aria-describedby="briefing-scroll-hint">
         <div th:each="story, ii : ${sec.stories()}" class="bf-item" th:with="item=${story.primary()}">
           <span class="bf-item-num" th:text="${ii.index + 1}">1</span>
           <div class="bf-item-body">
@@ -124,10 +128,6 @@
         </div>
       </div>
 
-      <div th:if="${sec.totalStoryCount() > #lists.size(sec.stories())}"
-           class="bf-more"
-           th:text="'还有 ' + (${sec.totalStoryCount()} - ${#lists.size(sec.stories())}) + ' 组未展示'">
-      </div>
     </div>
   </div>
 
