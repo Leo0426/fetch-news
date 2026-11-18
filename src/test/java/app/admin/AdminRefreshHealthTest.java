@@ -56,6 +56,19 @@ class AdminRefreshHealthTest {
     }
 
     @Test
+    void routeDirectoryShowsLiveSchedulesAndLinksOnlyToConcreteRoutes() {
+        RouteConfig cron = new RouteConfig("/current", "/rss", true, 300, 1800, 0, "0 0 8 * * *", FEED_URL, null);
+        var routes = List.of(cron, rssRoute("/paused", FEED_URL).withScheduleMinutes(30).withEnabled(false),
+                new RouteConfig("/rss", "/rss", true, 300, 1800, 5));
+        Document page = Jsoup.parse(renderer.statsSection(routes));
+
+        assertEquals(List.of("3", "1", "1"), page.select(".console-metrics dd").eachText().subList(0, 3));
+        assertEquals(2, page.select(".directory-path a[href*='#items=']").size());
+        assertEquals("/rss", page.selectFirst(".directory-path .stats-path-tpl").text());
+        assertTrue(page.selectFirst("tr[data-enabled=true]").text().contains("0 0 8 * * *"));
+    }
+
+    @Test
     void unchangedFeedShowsCheckSuccessChangeTimesAndTransferDetails() {
         FeedRefreshState state = new FeedRefreshState(
                 "/stable", FEED_URL, CHECKED_AT, CHECKED_AT, Instant.parse("2026-10-02T08:00:00Z"),

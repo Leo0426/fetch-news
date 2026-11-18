@@ -145,3 +145,39 @@ test('opening disclosures does not restore an article hidden by the current filt
   assert.equal(returned.expanded('second'), false);
   assert.equal(returned.focused, 'third');
 });
+
+test('members can use the article controls when the admin-only summary settings link is absent', () => {
+  const elements = new Map();
+  function element(selector) {
+    if (!elements.has(selector)) {
+      elements.set(selector, {
+        dataset: {}, hidden: true, textContent: '', listeners: {},
+        classList: {toggle() {}}, contains() { return false; },
+        setAttribute(name, value) { this[name] = value; },
+        addEventListener(name, handler) { this.listeners[name] = handler; }
+      });
+    }
+    return elements.get(selector);
+  }
+  const sizeButton = element('large-font');
+  sizeButton.dataset.articleSize = 'large';
+  const article = element('[data-article]');
+  const summary = element('[data-article-summary]');
+  summary.dataset = {summaryState: 'none', aiEnabled: 'false'};
+  summary.querySelector = selector => selector === '[data-article-summary-settings]' ? null : element(selector);
+  article.querySelector = element;
+  article.querySelectorAll = selector => selector === '[data-article-size]' ? [sizeButton] : [];
+
+  const document = {
+    readyState: 'complete', body: {dataset: {}}, addEventListener() {},
+    querySelector: selector => selector === '[data-article]' ? article : null,
+    querySelectorAll: selector => selector === '[data-article-control]' ? [sizeButton] : []
+  };
+  const window = {addEventListener() {}, FetchNewsUI: {storage: {get() {}, set() {}}}};
+  runInNewContext(script, {window, document});
+  assert.equal(sizeButton.hidden, false);
+  sizeButton.listeners.click();
+  assert.equal(document.body.dataset.articleSize, 'large');
+  assert.equal(typeof element('[data-article-bookmark]').listeners.click, 'function');
+  assert.equal(typeof element('[data-article-mark-read]').listeners.click, 'function');
+});

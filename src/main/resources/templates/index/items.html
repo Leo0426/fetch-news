@@ -26,10 +26,10 @@
         <span id="batch-sum-msg" style="font-size:12px;align-self:center;"></span>
       </th:block>
       <a class="btn" th:href="${routePath}" target="_blank" rel="noopener">RSS ↗</a>
-      <button type="button" class="btn"
-              hx-get="/index/stats"
-              hx-target="#main-content"
-              hx-swap="innerHTML">← 返回</button>
+      <a class="btn" href="/index#stats"
+         :href="activePage.startsWith('cat:') ? '/index#cat=' + encodeURIComponent(activePage.slice(4))
+           : activePage === 'health' ? '/index#health' : '/index#stats'"
+         @click="navigate($event, $el.hash.slice(1))">← 返回列表</a>
     </div>
   </div>
 

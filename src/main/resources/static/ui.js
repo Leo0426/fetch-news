@@ -66,6 +66,21 @@
   };
 
   function initialize() {
+    const tools = document.querySelector('.reader-tools');
+    if (tools) {
+      document.addEventListener('click', event => {
+        if (tools.open && !tools.contains(event.target)) tools.open = false;
+      });
+      document.addEventListener('focusin', event => {
+        if (tools.open && !tools.contains(event.target)) tools.open = false;
+      });
+      document.addEventListener('keydown', event => {
+        if (tools.open && event.key === 'Escape') {
+          tools.open = false;
+          tools.querySelector('summary').focus();
+        }
+      });
+    }
     const candidates = document.querySelectorAll('.reveal');
     if ('IntersectionObserver' in window && !reducedMotion.matches) {
       const observer = new IntersectionObserver(entries => {
@@ -75,7 +90,7 @@
           entry.target.classList.add('in');
           observer.unobserve(entry.target);
         });
-      }, { threshold: 0.02, rootMargin: '0px 0px 40px 0px' });
+      }, { threshold: 0, rootMargin: '0px 0px 40px 0px' });
       candidates.forEach(element => {
         element.classList.add('ui-pending');
         observer.observe(element);

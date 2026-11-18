@@ -11,6 +11,8 @@ function readerState() {
     bookmarks: Object.fromEntries((_fnBookmarks || []).map(link => [link, true])),
     filter: ['all', 'unread', 'read', 'bookmarked'].includes(savedFilter) ? savedFilter : 'unread',
     activeTag: 'all',
+    sourceMenuOpen: false,
+    currentSource: '',
     pickFilter: 'all',
     pickVerdicts: {},
     pickVotes: {},
@@ -50,7 +52,7 @@ function readerState() {
       window.addEventListener('pagehide', pauseSummaries);
       window.addEventListener('pageshow', resumeSummaries);
       this.$nextTick(() => this.buildToc());
-      ['filter', 'activeTag', 'pickFilter', 'searchQuery', 'reads', 'bookmarks', 'listView'].forEach(key => {
+      ['filter', 'activeTag', 'pickFilter', 'searchQuery', 'reads', 'bookmarks', 'pickVerdicts', 'listView'].forEach(key => {
         this.$watch(key, () => this.$nextTick(() => this.updateToc()));
       });
     },
@@ -58,8 +60,8 @@ function readerState() {
     cards(scope = document) {
       return [...scope.querySelectorAll('.rd-card[data-link]')];
     },
-    toggleListView() {
-      this.listView = !this.listView;
+    setListView(enabled) {
+      this.listView = enabled;
       this.listView ? ui.storage.set('fn-list-view', '1') : ui.storage.remove('fn-list-view');
     },
     setFilter(filter) {
@@ -71,6 +73,10 @@ function readerState() {
       this.activeTag = 'all';
       this.pickFilter = 'all';
       this.setFilter('all');
+    },
+    caughtUp() {
+      return this.filter === 'unread' && this.pickFilter === 'all' && this.activeTag === 'all'
+        && !this.searchQuery.trim() && this.unreadCount() === 0;
     },
     itemVisible(card) {
       const tag = card.closest('.rd-section')?.dataset.tag;
@@ -112,7 +118,7 @@ function readerState() {
           next.querySelector('.rd-card-title')?.focus({preventScroll: true});
           next.scrollIntoView({block: 'nearest', behavior: ui.motionBehavior()});
         } else {
-          document.querySelector('.rd-empty .reader-empty-action')?.focus();
+          document.querySelector('[data-show-all]')?.focus();
         }
       });
     },
@@ -306,31 +312,6 @@ function readerState() {
     buildToc() {
       const toc = document.getElementById('rd-toc');
       if (!toc) return;
-      const label = document.createElement('div');
-      label.className = 'rd-toc-label';
-      label.textContent = '阅读来源';
-      toc.append(label);
-      let topic;
-      document.querySelectorAll('.rd-section[id]').forEach(section => {
-        const sectionTopic = section.dataset.tag || '未分类';
-        if (sectionTopic !== topic) {
-          topic = sectionTopic;
-          const heading = document.createElement('div');
-          heading.className = 'rd-toc-group';
-          heading.textContent = topic;
-          toc.append(heading);
-        }
-        const link = document.createElement('a');
-        link.href = '#' + section.id;
-        link.className = 'rd-toc-link';
-        link.textContent = section.querySelector('.rd-section-name')?.textContent.trim() || '';
-        link.addEventListener('click', event => {
-          event.preventDefault();
-          section.scrollIntoView({behavior: ui.motionBehavior(), block: 'start'});
-          section.querySelector('.rd-section-name')?.focus({preventScroll: true});
-        });
-        toc.append(link);
-      });
       let scheduled = false;
       const schedule = () => {
         if (scheduled) return;
@@ -346,6 +327,15 @@ function readerState() {
       if (content && 'ResizeObserver' in window) new ResizeObserver(schedule).observe(content);
       this.updateToc();
     },
+    goToSource(hash) {
+      const section = document.getElementById(hash.slice(1));
+      if (!section || !this.sectionVisible(section)) return;
+      this.sourceMenuOpen = false;
+      this.$nextTick(() => {
+        section.scrollIntoView({behavior: ui.motionBehavior(), block: 'start'});
+        section.querySelector('.rd-section-name')?.focus({preventScroll: true});
+      });
+    },
     updateActiveToc() {
       const toc = document.getElementById('rd-toc');
       if (!toc) return;
@@ -357,6 +347,7 @@ function readerState() {
         if (section.getBoundingClientRect().top > offset + 1) break;
         current = section;
       }
+      this.currentSource = current?.querySelector('.rd-section-name')?.textContent.trim() || '';
       toc.querySelectorAll('.rd-toc-link').forEach(link => {
         const active = !!current && !link.hidden && link.hash === '#' + current.id;
         link.classList.toggle('active', active);
@@ -369,8 +360,12 @@ function readerState() {
       let count = 0;
       toc.querySelectorAll('.rd-toc-link').forEach(link => {
         const section = document.getElementById(link.hash.slice(1));
-        link.hidden = !section || !this.sectionVisible(section);
-        if (!link.hidden) count++;
+        const visible = section ? this.visibleCount(section) : 0;
+        link.hidden = visible === 0;
+        if (visible) {
+          link.querySelector('small').textContent = visible;
+          count++;
+        }
       });
       toc.querySelectorAll('.rd-toc-group').forEach(heading => {
         let visible = false;
@@ -379,7 +374,9 @@ function readerState() {
         }
         heading.hidden = !visible;
       });
-      toc.hidden = count < 2;
+      document.getElementById('digest-source-count').textContent = count;
+      toc.hidden = count === 0;
+      if (!count) this.sourceMenuOpen = false;
       document.querySelector('.rd-layout')?.classList.toggle('rd-layout--single', count < 2);
       this.updateActiveToc();
     }

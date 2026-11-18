@@ -24,25 +24,14 @@
 <div class="rd-progress-bar" id="rd-progress-bar" aria-hidden="true"></div>
 
 <main class="bm-wrap">
-  <nav class="reader-nav" aria-label="阅读导航">
-    <a href="/reader"><svg th:replace="~{shared/icons :: icon('book')}"></svg><span>速览</span></a>
-    <a href="/reader/briefing"><svg th:replace="~{shared/icons :: icon('news')}"></svg><span>每日简报</span></a>
-    <a href="/reader/radar"><svg th:replace="~{shared/icons :: icon('radar')}"></svg><span>精选日报</span></a>
-    <a href="/reader/bookmarks" aria-current="page"><svg th:replace="~{shared/icons :: icon('bookmark')}"></svg><span>收藏</span></a>
-    <a href="/reader/search"><svg th:replace="~{shared/icons :: icon('search')}"></svg><span>搜索</span></a>
-    <a th:if="${viewer == null or viewer.admin()}" href="/index#subscriptions"><svg th:replace="~{shared/icons :: icon('rss')}"></svg><span>订阅来源</span></a>
-    <a th:if="${viewer == null or viewer.admin()}" href="/index" class="reader-nav-admin"><svg th:replace="~{shared/icons :: icon('settings')}"></svg><span>管理</span></a>
-    <a href="/account" class="reader-nav-account" th:if="${viewer != null}" th:classappend="${!viewer.admin()} ? ' reader-nav-admin'"><svg th:replace="~{shared/icons :: icon('user')}"></svg><span th:text="${viewer.name()}">账户</span></a>
-  </nav>
+  <nav th:replace="~{reader/navigation :: bar('bookmarks')}"></nav>
 
 
   <header class="bm-head">
     <div>
-      <div class="page-eyebrow">留给下一次阅读</div>
       <h1 class="bm-title">收藏夹</h1>
       <div id="bookmark-count" class="bm-count" role="status" aria-live="polite" th:text="${#lists.size(items)} + ' 条收藏'">0 条收藏</div>
     </div>
-    <p class="reader-header-note">保存值得回看的内容。</p>
   </header>
 
   <section id="bookmark-content" tabindex="-1" aria-label="已收藏文章">

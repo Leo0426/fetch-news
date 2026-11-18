@@ -344,7 +344,7 @@ public class AdminTemplateRenderer {
         return routes.stream().map(r -> {
             int count = 0;
             String lastFetched = "—";
-            if (feedStore != null && !r.path().contains(":")) {
+            if (feedStore != null && !runtime.isTemplate(r)) {
                 try {
                     count = feedStore.items().countItems(r.path());
                 } catch (Exception ignored) {
@@ -380,11 +380,13 @@ public class AdminTemplateRenderer {
         ctx.setVariable("strategies", strategies);
         ctx.setVariable("fetchDetails", fetchDetails);
         ctx.setVariable("enabledCount",
-                routes.stream().filter(RouteConfig::enabled).count());
+                routes.stream().filter(RouteConfig::enabled).filter(route -> !runtime.isTemplate(route)).count());
         ctx.setVariable("scheduledCount",
-                routes.stream().filter(r -> r.scheduleMinutes() > 0).count());
+                routes.stream().filter(RouteConfig::enabled).filter(RouteConfig::hasSchedule)
+                        .filter(route -> !runtime.isTemplate(route)).count());
         ctx.setVariable("uptime", appInfo.formattedUptime());
         ctx.setVariable("version", AppInfo.VERSION);
+        ctx.setVariable("templateRoutes", templatePaths(routes));
         ctx.setVariable("categoryList", computeCategoryList(routes));
         ctx.setVariable("failingCategories", computeFailingCategories());
         return ctx;

@@ -16,6 +16,7 @@
   <script defer src="/ai-settings.js"></script>
   <script defer src="/alpine.min.js"></script>
   <link rel="stylesheet" href="/ui-controls.css">
+  <link rel="stylesheet" href="/admin-stats.css">
 </head>
 <body x-data="appShell()" th:attr="data-feed-key=${viewer != null ? viewer.feedKey() : null}">
   <a class="skip-link" href="#main-content">跳至主要内容</a>
@@ -30,7 +31,7 @@
         <img class="sb-logo" src="/favicon.svg" width="36" height="36" alt="">
         <div>
           <div class="sb-name">fetch-news</div>
-          <div class="sb-ver" th:text="'v' + ${version}">v0.1.0</div>
+          <div class="sb-ver" th:text="'路由控制台 · v' + ${version}">路由控制台</div>
         </div>
       </div>
 
@@ -105,42 +106,26 @@
           抓取日志
         </a>
 
-        <div class="nav-label" style="margin-top:10px;">分类</div>
-        <th:block th:each="cat : ${categoryList}">
-          <a class="nav-item"
-             :class="{ active: activePage === 'cat:' + $el.dataset.cat }"
-             th:attr="data-cat=${cat.name}"
-             :aria-current="activePage === 'cat:' + $el.dataset.cat ? 'page' : null"
-             th:href="'/index#cat=' + ${#uris.escapeQueryParam(cat.name)}"
-             @click="navigate($event, 'cat=' + encodeURIComponent($el.dataset.cat))">
-            <svg th:replace="~{shared/icons :: icon('folder')}"></svg><span th:text="${cat.name}">分类</span>
-            <span class="nav-badge" th:text="${cat.count}">0</span>
-            <span th:if="${failingCategories != null and failingCategories.contains(cat.name)}"
-                  class="health-dot health-dot--err"
-                  style="margin-left:3px;flex-shrink:0;"
-                  title="该分类下有路由抓取失败"></span>
-          </a>
-        </th:block>
+        <details class="console-categories" x-effect="if (activePage.startsWith('cat:')) $el.open = true">
+          <summary>路由分类 <span th:text="${#lists.size(categoryList)}">0</span></summary>
+          <th:block th:each="cat : ${categoryList}">
+            <a class="nav-item"
+               :class="{ active: activePage === 'cat:' + $el.dataset.cat }"
+               th:attr="data-cat=${cat.name}"
+               :aria-current="activePage === 'cat:' + $el.dataset.cat ? 'page' : null"
+               th:href="'/index#cat=' + ${#uris.escapeQueryParam(cat.name)}"
+               @click="navigate($event, 'cat=' + encodeURIComponent($el.dataset.cat))">
+              <svg th:replace="~{shared/icons :: icon('folder')}"></svg><span th:text="${cat.name}">分类</span>
+              <span class="nav-badge" th:text="${cat.count}">0</span>
+              <span th:if="${failingCategories != null and failingCategories.contains(cat.name)}"
+                    class="health-dot health-dot--err"
+                    style="margin-left:3px;flex-shrink:0;"
+                    title="该分类下有路由抓取失败"></span>
+            </a>
+          </th:block>
+        </details>
       </div>
 
-      <div class="sb-footer">
-        <div class="sb-status-head">
-          <span class="dot-live"></span>
-          <span>控制台已连接</span>
-        </div>
-        <div class="sb-row">
-          <span>运行时间</span>
-          <span class="sb-row-val" th:text="${uptime}">—</span>
-        </div>
-        <div class="sb-row">
-          <span>路由总数</span>
-          <span class="sb-row-val" th:text="${#lists.size(routes)}">0</span>
-        </div>
-        <div class="sb-row">
-          <span>版本</span>
-          <span class="sb-row-val" th:text="${version}">—</span>
-        </div>
-      </div>
     </nav>
 
     <!-- ── Sidebar overlay (mobile) ─────────────────────────── -->
@@ -152,13 +137,14 @@
         <button class="hamburger" type="button" @click="sbOpen = !sbOpen"
                 aria-label="打开导航" aria-controls="console-sidebar" :aria-expanded="sbOpen"><svg th:replace="~{shared/icons :: icon('list')}"></svg></button>
         <div class="topbar-heading">
-          <span class="console-eyebrow">我的信息工作台</span>
           <h1 class="topbar-title" x-text="pageTitle">数据统计</h1>
         </div>
         <div class="topbar-actions">
           <a class="topbar-reader-link" href="/reader">开始阅读 <span aria-hidden="true">↗</span></a>
-          <a class="topbar-reader-link" href="/account" th:if="${viewer != null}" th:text="${viewer.name()}">账户</a>
-          <span class="ver-tag" th:text="'v' + ${version}">v0.1.0</span>
+          <a class="topbar-reader-link console-account" href="/account" th:if="${viewer != null}"
+             th:attr="aria-label=${'账户 · ' + viewer.name()}" th:title="${viewer.name()}">
+            <svg th:replace="~{shared/icons :: icon('user')}"></svg><span th:text="${viewer.name()}">账户</span>
+          </a>
         </div>
       </header>
 

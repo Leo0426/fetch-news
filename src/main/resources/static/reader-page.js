@@ -3,6 +3,15 @@ document.addEventListener('keydown', event => {
   if (!document.body.hasAttribute('data-reader') || event.defaultPrevented || event.isComposing
       || event.ctrlKey || event.metaKey || event.altKey
       || event.target.closest('input, textarea, select, [contenteditable="true"], [role="dialog"]')) return;
+  if (event.key === '/') {
+    const field = document.getElementById('reader-search');
+    if (field) {
+      event.preventDefault();
+      field.focus();
+      field.select();
+    }
+    return;
+  }
   if (event.key === '?') {
     event.preventDefault();
     document.getElementById('reader-shortcuts')?.click();

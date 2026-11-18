@@ -290,12 +290,15 @@ class RssLiteResourceTest {
 
     @Test
     void readerPagesRenderNavigationAndInteractionAssets() {
-        for (String path : new String[] {"/reader", "/reader/bookmarks", "/reader/search", "/reader/briefing"}) {
-            given().when().get(path).then()
+        for (String path : List.of("/reader", "/reader/bookmarks", "/reader/search", "/reader/briefing", "/reader/radar")) {
+            String html = given().when().get(path).then()
                     .statusCode(200)
                     .contentType(containsString("text/html"))
-                    .body(containsString("阅读导航"))
-                    .body(containsString("/ui.js"));
+                    .body(containsString("/ui.js")).extract().asString();
+            var navigation = Jsoup.parse(html).selectFirst("nav[aria-label=阅读导航]");
+            assertNotNull(navigation);
+            assertEquals(List.of(path), navigation.select("a[aria-current=page]").eachAttr("href"));
+            assertEquals(5, navigation.select(".reader-destinations a").size());
         }
     }
 

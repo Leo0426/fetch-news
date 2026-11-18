@@ -19,23 +19,12 @@
 <body class="reader-page search-page">
 <a class="skip-link" href="#search-content">跳到搜索结果</a>
 <main class="rd-wrap">
-  <nav class="reader-nav" aria-label="阅读导航">
-    <a href="/reader"><svg th:replace="~{shared/icons :: icon('book')}"></svg><span>速览</span></a>
-    <a href="/reader/briefing"><svg th:replace="~{shared/icons :: icon('news')}"></svg><span>每日简报</span></a>
-    <a href="/reader/radar"><svg th:replace="~{shared/icons :: icon('radar')}"></svg><span>精选日报</span></a>
-    <a href="/reader/bookmarks"><svg th:replace="~{shared/icons :: icon('bookmark')}"></svg><span>收藏</span></a>
-    <a href="/reader/search" aria-current="page"><svg th:replace="~{shared/icons :: icon('search')}"></svg><span>搜索</span></a>
-    <a th:if="${viewer == null or viewer.admin()}" href="/index#subscriptions"><svg th:replace="~{shared/icons :: icon('rss')}"></svg><span>订阅来源</span></a>
-    <a th:if="${viewer == null or viewer.admin()}" href="/index" class="reader-nav-admin"><svg th:replace="~{shared/icons :: icon('settings')}"></svg><span>管理</span></a>
-    <a href="/account" class="reader-nav-account" th:if="${viewer != null}" th:classappend="${!viewer.admin()} ? ' reader-nav-admin'"><svg th:replace="~{shared/icons :: icon('user')}"></svg><span th:text="${viewer.name()}">账户</span></a>
-  </nav>
-
+  <nav th:replace="~{reader/navigation :: bar('search')}"></nav>
 
   <header class="rd-head search-head">
     <div>
-      <div class="page-eyebrow">找回读过的线索</div>
       <h1 class="rd-title">搜索历史</h1>
-      <p class="rd-date">从已保存的标题、正文描述与 AI 摘要中，找回值得重读的内容。</p>
+      <p class="rd-date">搜索所有时间范围内已保存的标题、正文描述与 AI 摘要。</p>
     </div>
   </header>
 
@@ -44,11 +33,11 @@
       <label class="sr-only" for="history-query">搜索标题、正文描述与 AI 摘要</label>
       <input id="history-query" class="ui-control rd-search-input" type="search" name="q"
              th:value="${page.query}"
-             placeholder="输入关键词，找回旧文章…" minlength="2" maxlength="200" required
-             aria-describedby="history-search-hint" autocomplete="off" autofocus>
+             placeholder="搜索已保存的文章…" pattern=".{2,200}" title="请输入 2–200 个字符" required
+             aria-describedby="history-search-hint" autocomplete="off" th:autofocus="${page.query.isEmpty()}">
       <button type="submit" class="rd-search-submit"><svg th:replace="~{shared/icons :: icon('search')}"></svg>搜索</button>
     </form>
-    <p id="history-search-hint" class="reader-toolbar-hint">输入 2–200 个字符；多个关键词用空格分隔，同时匹配。</p>
+    <p id="history-search-hint" class="reader-toolbar-hint">输入 2–200 个字符。用空格分隔多个关键词，可缩小搜索范围。</p>
   </section>
 
   <section id="search-content" tabindex="-1" aria-label="搜索结果">
@@ -59,13 +48,9 @@
     </div>
 
     <th:block th:if="${page.error == null}">
-      <div th:if="${page.query.isEmpty()}" class="rd-empty search-welcome">
-        <span class="search-empty-symbol" aria-hidden="true">⌕</span>
-        <strong>记住一个关键词，就能重新找到</strong>
-        <p>中文短词也可以搜索。试试文章主题、工具名称，或记忆中的一句话。</p>
-        <span class="search-empty-note">搜索已保存的文章，不受速览时间范围限制。</span>
-        <a th:if="${viewer == null or viewer.admin()}" href="/index#subscriptions" class="reader-empty-action">订阅来源，积累值得读的内容 →</a>
-      </div>
+      <p th:if="${page.query.isEmpty()}" class="search-welcome">
+        例如，搜索「电池 回收」会找到同时提到这两个词的文章。
+      </p>
 
       <th:block th:if="${!page.query.isEmpty()}">
         <div class="rd-result-meta search-result-meta" role="status">
@@ -95,7 +80,8 @@
               <span class="rd-age" th:text="'获取 ' + ${item.article.formattedFetchedAt()}">获取 —</span>
               <span class="rd-age" th:text="'发布 ' + ${item.article.formattedPublishedAt()}">发布 —</span>
               <a class="reader-article-link" th:href="${'/reader/article?link=' + #uris.escapeQueryParam(item.article.link())}" data-article-link>站内阅读</a>
-              <span class="search-original-hint" aria-hidden="true">打开原文 ↗</span>
+              <a class="reader-article-link" th:href="${item.article.link()}" target="_blank"
+                 rel="noopener noreferrer">打开原文 <span aria-hidden="true">↗</span></a>
             </div>
           </article>
         </div>

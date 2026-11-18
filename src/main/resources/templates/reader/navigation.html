@@ -1,0 +1,36 @@
+<nav th:fragment="bar(activePage)" class="reader-nav" aria-label="阅读导航">
+  <a class="reader-brand" href="/reader" aria-label="fetch-news 速览首页">
+    <img src="/favicon.svg" alt="" width="30" height="30">
+    <span>fetch-news</span>
+  </a>
+  <div class="reader-destinations">
+    <a href="/reader" th:attr="aria-current=${activePage == 'index' ? 'page' : null}">
+      <svg th:replace="~{shared/icons :: icon('book')}"></svg><span>速览</span>
+    </a>
+    <a href="/reader/briefing" th:attr="aria-current=${activePage == 'briefing' ? 'page' : null}">
+      <svg th:replace="~{shared/icons :: icon('news')}"></svg><span>每日简报</span>
+    </a>
+    <a href="/reader/radar" th:attr="aria-current=${activePage == 'radar' ? 'page' : null}">
+      <svg th:replace="~{shared/icons :: icon('radar')}"></svg><span>精选日报</span>
+    </a>
+    <a href="/reader/bookmarks" th:attr="aria-current=${activePage == 'bookmarks' ? 'page' : null}">
+      <svg th:replace="~{shared/icons :: icon('bookmark')}"></svg><span>收藏</span>
+    </a>
+    <a href="/reader/search" th:attr="aria-current=${activePage == 'search' ? 'page' : null}">
+      <svg th:replace="~{shared/icons :: icon('search')}"></svg><span>搜索</span>
+    </a>
+  </div>
+  <details class="reader-tools" th:if="${viewer == null or viewer.admin()}">
+    <summary><svg th:replace="~{shared/icons :: icon('settings')}"></svg>账户与管理</summary>
+    <div class="reader-tools-panel">
+      <a href="/account" th:if="${viewer != null}">
+        <svg th:replace="~{shared/icons :: icon('user')}"></svg><span th:text="${viewer.name()}">我的账户</span>
+      </a>
+      <a href="/index#subscriptions"><svg th:replace="~{shared/icons :: icon('rss')}"></svg>订阅来源</a>
+      <a href="/index"><svg th:replace="~{shared/icons :: icon('settings')}"></svg>管理后台</a>
+    </div>
+  </details>
+  <a class="reader-account" href="/account" th:if="${viewer != null and !viewer.admin()}">
+    <svg th:replace="~{shared/icons :: icon('user')}"></svg><span th:text="${viewer.name()}">我的账户</span>
+  </a>
+</nav>

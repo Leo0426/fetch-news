@@ -23,7 +23,8 @@ function reader(reply, {read = false, bookmarked = false} = {}) {
   };
   const state = runInNewContext(script + '\nreaderState();', {
     document,
-    window: {FetchNewsUI: {storage: {get() { return null; }}, notify: (...args) => notifications.push(args)}},
+    window: {FetchNewsUI: {storage: {get() { return null; }}, motionBehavior: () => 'auto',
+      notify: (...args) => notifications.push(args)}},
     _fnReads: read ? [articleLink] : [],
     _fnBookmarks: bookmarked ? [articleLink] : [],
     URLSearchParams, AbortController,
@@ -31,7 +32,7 @@ function reader(reply, {read = false, bookmarked = false} = {}) {
     clearTimeout(id) { timers.delete(id); },
     fetch: async (path, options) => { requests.push({path, options}); return reply(path, options); }
   });
-  return {state, requests, notifications, timers};
+  return {state, document, requests, notifications, timers};
 }
 
 function savedState({read = false, bookmarked = false, loseResponse = false} = {}) {
@@ -147,4 +148,57 @@ test('a response whose body hangs is also bounded and pending clicks coalesce', 
   assert.equal(!!view.state.bookmarkPending[articleLink], false);
   assert.equal(view.state.isBookmarked(articleLink), false);
   assert.equal(view.timers.size, 0);
+});
+
+test('filtering updates the source menu counts and only jumps to a matching source', () => {
+  const {state, document} = reader();
+  const count = {};
+  const visits = [];
+  const sections = ['science', 'photography'].map(id => ({
+    id, dataset: {},
+    querySelectorAll: () => [id, id + ' news'].map(title => ({
+      dataset: {title, link: title}, closest: () => null
+    })),
+    scrollIntoView: () => visits.push('scroll ' + id),
+    querySelector: () => ({focus: () => visits.push('focus ' + id)})
+  }));
+  const links = sections.map(section => {
+    const badge = {};
+    return {hash: '#' + section.id, badge, querySelector: () => badge};
+  });
+  const toc = {querySelectorAll: selector => selector === '.rd-toc-link' ? links : []};
+  document.getElementById = id => {
+    if (id === 'rd-toc') return toc;
+    if (id === 'digest-source-count') return count;
+    return sections.find(section => section.id === id);
+  };
+  state.updateActiveToc = () => {};
+  state.$nextTick = callback => callback();
+  state.searchQuery = 'science news';
+  state.sourceMenuOpen = true;
+  state.updateToc();
+  assert.equal(count.textContent, 1);
+  assert.equal(links[0].badge.textContent, 1);
+  assert.equal(links[1].hidden, true);
+  state.goToSource('#photography');
+  assert.deepEqual(visits, []);
+  state.goToSource('#science');
+  assert.deepEqual(visits, ['scroll science', 'focus science']);
+  assert.equal(state.sourceMenuOpen, false);
+
+  state.searchQuery = 'no matches';
+  state.sourceMenuOpen = true;
+  state.updateToc();
+  assert.equal(toc.hidden, true);
+  assert.equal(state.sourceMenuOpen, false);
+});
+
+test('the caught-up message only applies to an exhausted unfiltered unread list', () => {
+  const {state} = reader(undefined, {read: true});
+  assert.equal(state.caughtUp(), true);
+  state.pickFilter = 'quality';
+  assert.equal(state.caughtUp(), false);
+  state.pickFilter = 'all';
+  state.searchQuery = 'unmatched';
+  assert.equal(state.caughtUp(), false);
 });

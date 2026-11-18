@@ -225,6 +225,19 @@
       modal: false,
       activePage: 'stats',
       pageTitle: '数据统计',
+      routeQuery: '',
+      routeScope: 'all',
+      filterStats(directory, query, scope) {
+        const term = query.trim().toLowerCase();
+        let found = 0;
+        for (const row of directory.querySelectorAll('tr[data-route]')) {
+          const matches = row.dataset.route.toLowerCase().includes(term)
+            && (scope === 'all' || row.dataset[scope] === 'true');
+          row.hidden = !matches;
+          if (matches) found += 1;
+        }
+        return found;
+      },
       sbOpen: false,
       isMobile: mobileQuery.matches,
       init() {
@@ -269,6 +282,17 @@
         if (hash === 'main-content') return;
         let key = hash || 'stats';
         let page = Object.hasOwn(pages, key) ? pages[key] : null;
+        if (hash.startsWith('items=')) {
+          try {
+            const path = decodeURIComponent(hash.slice(6));
+            if (path.startsWith('/')) {
+              page = ['/index/items?' + new URLSearchParams({path}), '已存条目'];
+              key = 'items';
+            }
+          } catch (_) {
+            window.FetchNewsUI.notify('条目链接无效，已返回数据统计。', 'error');
+          }
+        }
         if (hash.startsWith('cat=')) {
           try {
             const category = decodeURIComponent(hash.slice(4));

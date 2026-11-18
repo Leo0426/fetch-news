@@ -98,6 +98,46 @@
     link.href = target.pathname + target.search;
   }
 
+  function initializeOutline(article) {
+    const outline = document.querySelector('[data-article-outline]');
+    const headings = [...article.querySelectorAll('.article-prose :is(h2, h3, h4, h5, h6)')]
+      .filter(heading => heading.textContent.trim());
+    if (!outline || headings.length < 2) return;
+
+    const list = outline.querySelector('ol');
+    headings.forEach((heading, index) => {
+      heading.id = 'article-section-' + (index + 1);
+      heading.tabIndex = -1;
+      const link = document.createElement('a');
+      link.href = '#' + heading.id;
+      link.textContent = heading.textContent.trim();
+      const item = document.createElement('li');
+      item.append(link);
+      list.append(item);
+    });
+    outline.hidden = false;
+    list.addEventListener('click', event => {
+      const link = event.target.closest('a');
+      if (!link || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
+      event.preventDefault();
+      outline.open = false;
+      const heading = document.getElementById(link.hash.slice(1));
+      heading.focus({preventScroll: true});
+      heading.scrollIntoView({block: 'start'});
+    });
+    document.addEventListener('click', event => {
+      if (outline.open && !outline.contains(event.target)) outline.open = false;
+    });
+    outline.addEventListener('focusout', event => {
+      if (event.relatedTarget && !outline.contains(event.relatedTarget)) outline.open = false;
+    });
+    outline.addEventListener('keydown', event => {
+      if (event.key !== 'Escape' || !outline.open) return;
+      outline.open = false;
+      outline.querySelector('summary').focus();
+    });
+  }
+
   function initializeArticleSummary(article) {
     const region = article.querySelector('[data-article-summary]');
     if (!region) return;
@@ -144,7 +184,7 @@
       check.textContent = request && !request.submit ? '正在查看…' : '查看状态';
       check.setAttribute('aria-busy', String(!!request && !request.submit));
       controls.hidden = generate.hidden && check.hidden;
-      settings.hidden = state === 'success' || (aiEnabled && state !== 'error' && !uncertain);
+      if (settings) settings.hidden = state === 'success' || (aiEnabled && state !== 'error' && !uncertain);
       if (controls.contains(focused) && focused.hidden) {
         (!check.hidden ? check : !generate.hidden ? generate : message).focus({preventScroll: true});
       }
@@ -228,6 +268,7 @@
       if (!document.body.hasAttribute('data-reader')) restorePosition();
       return;
     }
+    initializeOutline(article);
     initializeArticleSummary(article);
     const ui = window.FetchNewsUI;
     const markButton = article.querySelector('[data-article-mark-read]');

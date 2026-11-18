@@ -8,11 +8,64 @@
 
 .reader-page { --control-height: 44px; --control-font-size: 14px; }
 .ui-icon { display: inline-block; width: 18px; height: 18px; flex: 0 0 18px; vertical-align: middle; pointer-events: none; }
+.reader-nav {
+  display: flex; align-items: center; gap: clamp(12px, 3vw, 44px);
+  border-bottom: 1px solid var(--line-strong);
+  font-size: 14px;
+}
+.reader-nav a, .reader-tools summary {
+  display: inline-flex; align-items: center; gap: 7px;
+  min-height: 44px; color: var(--ink-soft); text-decoration: none;
+}
+.reader-nav .reader-brand {
+  flex: none; gap: 9px; color: var(--ink); font: 700 24px/1 var(--font-latin);
+  letter-spacing: -1.3px;
+}
+.reader-destinations { align-self: stretch; display: flex; gap: 2px; }
+.reader-destinations a {
+  justify-content: center; padding: 12px 10px; position: relative;
+  font-weight: 500; white-space: nowrap;
+}
+.reader-destinations a[aria-current="page"] { color: var(--accent-dk); font-weight: 700; }
+.reader-destinations a[aria-current="page"]::after {
+  content: ''; position: absolute; bottom: -1px; inset-inline: 10px; height: 3px; background: var(--accent);
+}
+.reader-destinations a:hover, .reader-nav summary:hover, .reader-nav .reader-account:hover { color: var(--accent-dk); }
+.reader-nav .ui-icon { width: 16px; height: 16px; flex: 0 0 16px; }
+.reader-tools, .reader-account { margin-left: auto; }
+.reader-tools { position: relative; }
+.reader-tools summary { cursor: pointer; list-style: none; font-size: 13px; padding: 6px; }
+.reader-tools summary::-webkit-details-marker { display: none; }
+.reader-tools summary::after {
+  content: ''; width: 6px; height: 6px; margin: -3px 3px 0 1px;
+  border: solid currentColor; border-width: 0 1.5px 1.5px 0; transform: rotate(45deg);
+}
+.reader-tools[open] summary::after { transform: rotate(225deg); margin-top: 4px; }
+.reader-tools-panel {
+  position: absolute; right: 0; top: calc(100% + 3px); z-index: 30; width: 190px; max-width: 85vw;
+  padding: 5px; border: 1px solid var(--line); border-radius: var(--r); background: var(--paper-soft);
+  box-shadow: 0 8px 28px rgba(41, 41, 34, .14);
+}
+.reader-tools-panel a { display: flex; padding: 8px 12px; border-radius: 5px; gap: 10px; }
+.reader-tools-panel a:hover, .reader-tools-panel a:focus-visible { background: var(--paper-deep); }
+.reader-tools-panel a span, .reader-account span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.reader-account { min-width: 0; max-width: 13em; }
+@media (max-width: 800px) {
+  .reader-nav { display: grid; grid-template-columns: 1fr auto; gap: 3px 12px; }
+  .reader-brand { justify-self: start; }
+  .reader-destinations { grid-column: 1 / -1; grid-row: 2; display: grid; grid-template-columns: repeat(5, 1fr); }
+  .reader-destinations a { padding: 8px 0; font-size: 13px; }
+  .reader-tools, .reader-account { grid-area: 1 / 2; }
+  .reader-account { max-width: 38vw; }
+}
+@media (max-width: 540px) {
+  .reader-destinations .ui-icon { display: none; }
+  .reader-nav .reader-brand { font-size: 22px; }
+  .reader-brand img { width: 26px; height: 26px; }
+}
+
 .nav-item { gap: 10px; }
 .nav-item .ui-icon { width: 16px; height: 16px; flex-basis: 16px; }
-.reader-nav { flex-wrap: wrap; }
-.reader-nav a { gap: 6px; line-height: 1.4; }
-.reader-nav .ui-icon { width: 16px; height: 16px; flex-basis: 16px; }
 :is(.btn, .btn-small, .rd-search-submit, .rd-mark-all, .reader-empty-action) { gap: 7px; }
 :is(.btn, .btn-small, .rd-search-submit, .rd-mark-all) .ui-icon { width: 16px; height: 16px; flex-basis: 16px; }
 .rd-mark-all > span { display: inline-flex; align-items: center; gap: 6px; }
@@ -113,10 +166,6 @@
   .credential-row .field > span { position: static; width: auto; height: auto; overflow: visible; clip-path: none; white-space: normal; }
   .credential-row .credential-cookie { grid-column: 1 / -1; grid-row: 2; }
   .credential-row .ui-icon-button { align-self: end; }
-  .reader-nav { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
-  .reader-nav::before { grid-column: 1 / -1; margin-bottom: 6px; }
-  .reader-nav a { min-width: 0; min-height: 44px; padding: 7px 6px; }
-  .reader-nav .reader-nav-admin { margin-left: 0; }
 }
 @media (max-width: 600px) {
   :root { --control-height: 44px; --control-height-compact: 44px; --control-font-size: 16px; }

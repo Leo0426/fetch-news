@@ -1,88 +1,95 @@
-<!-- summary cards -->
-<div class="stats-row" style="grid-template-columns:repeat(4,1fr)">
-  <div class="stat-card">
-    <div class="stat-label">路由总数</div>
-    <div class="stat-value" th:text="${#lists.size(routes)}">0</div>
-  </div>
-  <div class="stat-card">
-    <div class="stat-label">已启用</div>
-    <div class="stat-value" th:text="${enabledCount}">0</div>
-  </div>
-  <div class="stat-card">
-    <div class="stat-label">定时抓取</div>
-    <div class="stat-value" th:text="${scheduledCount}">0</div>
-  </div>
-  <div class="stat-card">
-    <div class="stat-label">运行时间</div>
-    <div class="stat-value" th:text="${uptime}">—</div>
-  </div>
-</div>
+<div class="console-overview">
+  <dl class="console-metrics" aria-label="运行概况">
+    <div>
+      <dt>路由总数</dt><dd th:text="${#lists.size(routes)}">0</dd>
+    </div>
+    <div>
+      <dt>已启用</dt><dd th:text="${enabledCount}">0</dd>
+    </div>
+    <div>
+      <dt>已启用定时抓取</dt><dd th:text="${scheduledCount}">0</dd>
+    </div>
+    <div>
+      <dt>运行时间</dt><dd th:text="${uptime}">—</dd>
+    </div>
+  </dl>
 
-<!-- empty state guidance -->
-<div th:if="${!hasData}"
-     style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r);
-            padding:20px 24px;display:flex;align-items:center;gap:16px;box-shadow:var(--sh);">
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)"
-       stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;">
-    <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/>
-    <line x1="12" y1="16" x2="12.01" y2="16"/>
-  </svg>
-  <div style="font-size:13px;color:var(--muted);line-height:1.6;">
-    暂无抓取数据。前往<a href="/index#subscriptions" style="color:var(--text);">订阅来源</a>，
-    选择频率并订阅，完成后进入速览。
-  </div>
-</div>
+  <p th:if="${!hasData}" class="console-start">
+    <svg th:replace="~{shared/icons :: icon('rss')}"></svg>
+    <span>暂无抓取数据，订阅一个来源即可开始收集文章。</span>
+    <a href="/index#subscriptions">订阅来源 →</a>
+  </p>
 
-<!-- per-route metrics table -->
-<div class="card" style="padding:0;overflow-x:auto;">
-  <div class="card-head" style="padding:14px 20px;">
-    <span class="card-title">路由数据</span>
-  </div>
-  <table class="rtable" style="margin:0;">
-    <thead>
-      <tr>
-        <th style="padding-left:20px;">路径</th>
-        <th>分类</th>
-        <th>状态</th>
-        <th>已存条目</th>
-        <th>最后抓取</th>
-        <th>定时</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr th:each="stat : ${routeStats}">
-        <td class="path-cell" style="padding-left:20px;">
-          <!-- concrete paths link to items browser -->
-          <a th:if="${!#strings.contains(stat.config.path, ':')}"
-             class="stats-path-link"
-             th:hx-vals="${'{&quot;path&quot;:&quot;' + stat.config.path + '&quot;}'}"
-             hx-get="/index/items"
-             hx-target="#main-content"
-             hx-swap="innerHTML"
-             th:text="${stat.config.path}">path</a>
-          <span th:if="${#strings.contains(stat.config.path, ':')}"
-                class="stats-path-tpl"
-                th:text="${stat.config.path}">path</span>
-        </td>
-        <td>
-          <span class="cat-chip" th:text="${stat.category}">—</span>
-        </td>
-        <td>
-          <span th:class="${stat.config.enabled} ? 'pill on' : 'pill off'"
-                th:text="${stat.config.enabled} ? '开' : '关'">开</span>
-        </td>
-        <td>
-          <span th:if="${stat.itemCount > 0}" class="stats-num" th:text="${stat.itemCount}">0</span>
-          <span th:if="${stat.itemCount == 0}" class="stats-dash">—</span>
-        </td>
-        <td class="stats-time" th:text="${stat.lastFetched}">—</td>
-        <td>
-          <span th:if="${stat.config.scheduleMinutes > 0}"
-                class="pill sched"
-                th:text="'⏱ ' + ${stat.config.scheduleMinutes} + 'm'"></span>
-          <span th:if="${stat.config.scheduleMinutes == 0}" class="stats-dash">—</span>
-        </td>
-      </tr>
-    </tbody>
-  </table>
+  <section class="route-directory" aria-labelledby="directory-title" x-data="{ found: 0 }"
+           x-effect="found = filterStats($el, routeQuery, routeScope)">
+    <header class="directory-head">
+      <h2 id="directory-title">路由数据</h2>
+      <span role="status" aria-live="polite" aria-atomic="true" class="directory-count"
+            th:text="|共 ${#lists.size(routes)} 个路由|" x-text="'共 ' + found + ' 个路由'"></span>
+      <button id="refresh-stats" class="btn directory-refresh" type="button" hx-get="/index/stats"
+              hx-target="#main-content" hx-swap="innerHTML" hx-sync="#main-content:replace"
+              hx-disabled-elt="this" aria-label="刷新路由统计">
+        <svg th:replace="~{shared/icons :: icon('refresh')}"></svg>刷新
+      </button>
+    </header>
+    <div class="directory-tools" role="search" aria-label="查找路由" x-cloak>
+      <label class="directory-search">
+        <svg th:replace="~{shared/icons :: icon('search')}"></svg>
+        <input type="search" class="ui-control" x-model="routeQuery" x-ref="routeSearch"
+               aria-label="搜索路径、别名或分类" placeholder="搜索路径、别名或分类">
+      </label>
+      <select class="ui-control" x-model="routeScope" aria-label="筛选路由状态">
+        <option value="all">全部路由</option>
+        <option value="enabled">已启用</option>
+        <option value="saved">有已存条目</option>
+      </select>
+    </div>
+    <div class="directory-table-wrap">
+      <table class="rtable directory-table" aria-labelledby="directory-title"
+             x-show="found > 0">
+        <thead>
+          <tr>
+            <th scope="col">路径</th>
+            <th scope="col">分类</th>
+            <th scope="col">状态</th>
+            <th scope="col">已存条目</th>
+            <th scope="col">最后抓取</th>
+            <th scope="col">更新计划</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr th:each="stat : ${routeStats}"
+              th:with="cfg=${stat.config},template=${templateRoutes.contains(cfg.path)}"
+              th:attr="data-route=|${cfg.displayName()} ${cfg.path} ${stat.category}|,data-enabled=${cfg.enabled and !template},data-saved=${stat.itemCount > 0}">
+            <td class="directory-path">
+              <a th:unless="${template}" class="stats-path-link"
+                 th:href="|/index#items=${#uris.escapeQueryParam(cfg.path)}|">
+                <span th:if="${cfg.alias != null}" class="directory-alias" th:text="${cfg.alias}"></span>
+                <span th:text="${cfg.path}"></span>
+              </a>
+              <span th:if="${template}" class="stats-path-tpl" th:text="${cfg.path}"></span>
+            </td>
+            <td class="directory-category"><span class="cat-chip" th:text="${stat.category}"></span></td>
+            <td class="directory-state">
+              <span th:if="${template}" class="directory-template">模板</span>
+              <span th:unless="${template}" th:class="${cfg.enabled ? 'pill on' : 'pill off'}"
+                    th:text="${cfg.enabled ? '已启用' : '未启用'}"></span>
+            </td>
+            <td data-label="已存条目"><span class="stats-num" th:text="${stat.itemCount}"></span></td>
+            <td data-label="最后抓取" class="stats-time" th:text="${stat.lastFetched}"></td>
+            <td data-label="更新计划">
+              <span th:if="${!template and cfg.hasSchedule()}"
+                    th:text="${cfg.scheduleCron != null ? cfg.scheduleCron : cfg.scheduleMinutes + ' 分钟'}"></span>
+              <span th:if="${template or !cfg.hasSchedule()}" class="stats-dash">—</span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="directory-empty" x-show="found === 0" x-cloak>
+      <p>没有符合条件的路由</p>
+      <button class="btn" type="button" x-show="routeScope !== 'all' || routeQuery"
+              @click="routeQuery = ''; routeScope = 'all'; $refs.routeSearch.focus()">清除筛选</button>
+    </div>
+  </section>
 </div>

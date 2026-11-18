@@ -16,7 +16,7 @@
   <link rel="stylesheet" href="/ui-controls.css">
 </head>
 <body class="reader-page article-page">
-<a class="skip-link" href="#article-content">跳到文章正文</a>
+<a class="skip-link" th:href="${page.item() != null and page.error() == null} ? '#article-body' : '#article-content'">跳到文章正文</a>
 <div class="rd-progress-bar" id="rd-progress-bar" aria-hidden="true"></div>
 
 <main class="article-shell">
@@ -26,7 +26,14 @@
       返回列表
     </a>
     <span class="article-nav-label">站内阅读</span>
-    <a th:if="${page.originalUrl() != null}" class="article-original" th:href="${page.originalUrl()}" target="_blank" rel="noopener noreferrer">打开原文 <span aria-hidden="true">↗</span></a>
+    <div class="article-nav-actions">
+      <details class="article-outline" data-article-outline hidden>
+        <summary><svg th:replace="~{shared/icons :: icon('list')}"></svg>目录</summary>
+        <ol aria-label="文章章节"></ol>
+      </details>
+      <a th:if="${page.originalUrl() != null}" class="article-original" th:href="${page.originalUrl()}"
+         target="_blank" rel="noopener noreferrer">打开原文 <svg th:replace="~{shared/icons :: icon('external')}"></svg></a>
+    </div>
   </nav>
 
   <section th:if="${page.error() != null}" id="article-content" class="article-empty" tabindex="-1" aria-labelledby="article-error-title">
@@ -63,7 +70,7 @@
       </div>
       <div class="article-save-controls">
         <button type="button" class="article-button article-bookmark" data-article-bookmark th:attr="aria-pressed=${page.bookmarked()}">
-          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m19 21-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2Z"/></svg>
+          <svg th:replace="~{shared/icons :: icon('bookmark')}"></svg>
           <span data-article-bookmark-label th:text="${page.bookmarked()} ? '已收藏' : '收藏'">收藏</span>
         </button>
         <button type="button" class="article-button" data-article-mark-read th:disabled="${page.read()}" th:text="${page.read()} ? '已标为已读' : '标为已读'">标为已读</button>
@@ -71,10 +78,15 @@
     </div>
     <noscript><p class="article-noscript">正文可以直接阅读。启用 JavaScript 后，可调整字号、收藏或标为已读。</p></noscript>
 
-    <section class="article-summary" aria-labelledby="article-summary-title" data-article-summary
+    <details class="article-summary" data-article-summary
              th:with="summaryState=${page.summaryProgress().state()}"
-             th:attr="data-summary-state=${summaryState},data-ai-enabled=${page.aiEnabled()}">
-      <h2 id="article-summary-title"><span aria-hidden="true">✧</span> AI 摘要</h2>
+             th:attr="data-summary-state=${summaryState},data-ai-enabled=${page.aiEnabled()},open=${page.aiEnabled() or summaryState != 'none'} ? 'open' : null">
+      <summary>
+        <svg th:replace="~{shared/icons :: icon('ai')}"></svg>
+        <span>AI 摘要</span>
+        <small th:if="${!page.aiEnabled() and summaryState == 'none'}">未启用</small>
+        <span class="article-disclosure-arrow" aria-hidden="true"></span>
+      </summary>
       <p data-article-summary-text th:hidden="${!page.item().hasSummary()}" th:text="${page.item().summary()}">摘要</p>
       <div class="article-summary-feedback" role="status" aria-live="polite" aria-atomic="true">
         <p class="article-summary-message" data-article-summary-message tabindex="-1"
@@ -91,22 +103,22 @@
       <a th:if="${viewer == null or viewer.admin()}" href="/index#ai" class="article-text-link article-summary-settings" data-article-summary-settings
          th:hidden="${summaryState == 'success' or (page.aiEnabled() and summaryState != 'error')}">配置 AI 摘要 <span aria-hidden="true">→</span></a>
       <noscript th:if="${!page.item().hasSummary()}"><p class="article-summary-message">启用 JavaScript 后可生成摘要并查看进度，正文仍可直接阅读。</p></noscript>
-    </section>
+    </details>
 
     <div class="article-content-note" th:if="${!page.content().isEmpty()}">
       <span class="article-note-mark" aria-hidden="true"></span>
       <span th:text="${page.content().kind() == 'extract'} ? '提取并保存的内容，可能是节选' : '订阅中保存的内容，可能是节选'">订阅中保存的内容，可能是节选</span>
     </div>
-    <div th:if="${!page.content().isEmpty()}" class="article-prose" th:utext="${page.content().html()}"></div>
-    <section th:if="${page.content().isEmpty()}" class="article-content-empty" aria-labelledby="article-empty-title">
+    <div th:if="${!page.content().isEmpty()}" id="article-body" class="article-prose" tabindex="-1"
+         th:utext="${page.content().html()}"></div>
+    <section th:if="${page.content().isEmpty()}" id="article-body" tabindex="-1"
+             class="article-content-empty" aria-labelledby="article-empty-title">
       <h2 id="article-empty-title">暂无已保存内容</h2>
       <p>当前订阅没有提供可展示的正文，可前往原文继续阅读。</p>
       <a th:if="${page.originalUrl() != null}" class="article-text-link" th:href="${page.originalUrl()}" target="_blank" rel="noopener noreferrer">前往原文继续阅读 <span aria-hidden="true">↗</span></a>
     </section>
 
     <footer class="article-footer">
-      <div class="article-end-mark" aria-hidden="true">· · ·</div>
-      <p class="article-end-note">按自己的节奏，读完这一篇。</p>
       <div class="article-footer-actions">
         <a th:href="${page.returnUrl()}" class="article-button" data-article-return>返回列表</a>
         <button type="button" class="article-button article-button--primary" data-article-finish data-article-control hidden>完成阅读并返回 <span aria-hidden="true">→</span></button>

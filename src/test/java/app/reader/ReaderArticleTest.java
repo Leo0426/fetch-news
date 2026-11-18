@@ -188,6 +188,7 @@ class ReaderArticleTest {
                 assertEquals("Original saved body", page.select(".article-prose").text());
                 assertEquals(state, page.select("[data-summary-state]").attr("data-summary-state"));
                 assertEquals(Boolean.toString(enabled), page.select("[data-ai-enabled]").attr("data-ai-enabled"));
+                assertEquals(enabled || !state.equals("none"), page.selectFirst("details.article-summary").hasAttr("open"));
                 if (state.equals("success")) assertTrue(page.text().contains("Cached <script>summary</script>"));
                 if (state.equals("error")) assertTrue(page.text().contains("AI Provider"));
                 assertTrue(page.select(".article-summary script").isEmpty());

@@ -1,34 +1,3 @@
-.reader-page[data-reader] .rd-wrap { width: min(100%, 1760px); }
-.reader-page[data-reader] .rd-grid:not(.rd-list) {
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
-  gap: 18px;
-}
-.reader-page[data-reader] .rd-grid:not(.rd-list) .rd-card { padding: 18px; min-height: 230px; }
-.reader-page[data-reader] .rd-card-cover {
-  margin: -18px -18px 14px;
-  height: auto;
-  flex-shrink: 0;
-}
-.reader-page[data-reader] .rd-card-cover img { height: auto; max-height: 240px; object-fit: cover; }
-.reader-page[data-reader] .rd-card-title {
-  font-size: 15px;
-  line-height: 1.65;
-  margin-bottom: 10px;
-}
-.reader-page[data-reader] .rd-summary {
-  font-size: 13px;
-  line-height: 1.75;
-  -webkit-line-clamp: 4;
-}
-.reader-page[data-reader] .rd-section-name { font-size: 13px; }
-.reader-page[data-reader] .rd-grid:not(.rd-list) .rd-card-meta {
-  display: grid;
-  gap: 10px;
-  padding-top: 12px;
-}
-.reader-page[data-reader] .reader-article-info { gap: 4px 8px; }
-.reader-page[data-reader] .rd-grid:not(.rd-list) .reader-card-actions { justify-self: end; }
-
 .rd-bookmark-btn {
   width: 40px;
   height: 40px;
@@ -253,77 +222,6 @@
 }
 .rd-progress-bar.done { opacity: 0; }
 
-/* ── Reader two-column layout with TOC ─────────────────────── */
-.rd-layout {
-  display: grid;
-  grid-template-columns: 152px minmax(0, 1fr);
-  gap: 24px;
-  align-items: start;
-}
-
-.rd-toc {
-  position: sticky;
-  top: 88px;
-  max-height: calc(100vh - 110px);
-  overflow-y: auto;
-  scrollbar-width: none;
-}
-.rd-toc::-webkit-scrollbar { display: none; }
-
-.rd-toc-label {
-  margin-bottom: 12px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid var(--line);
-  font-family: var(--font-latin);
-  font-size: 9px;
-  font-weight: 900;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  color: var(--ink-faint);
-}
-
-.rd-toc-group {
-  margin: 14px 0 4px;
-  padding-left: 10px;
-  font-family: var(--font-ui);
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--ink-soft);
-}
-.rd-toc-label + .rd-toc-group { margin-top: 0; }
-
-.rd-toc-link {
-  display: block;
-  padding: 5px 8px;
-  margin: 1px 0;
-  border-left: 2px solid transparent;
-  border-radius: 0 3px 3px 0;
-  color: var(--ink-faint);
-  font-family: var(--font-ui);
-  font-size: 12px;
-  line-height: 1.35;
-  text-decoration: none;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  transition: color var(--t-base) var(--ease), border-color var(--t-base) var(--ease),
-              background var(--t-base) var(--ease), transform var(--t-base) var(--ease-spring);
-}
-.rd-toc-link:hover {
-  color: var(--ink);
-  border-left-color: var(--line-strong);
-  background: rgba(21, 19, 15, 0.04);
-  transform: translateX(2px);
-}
-.rd-toc-group ~ .rd-toc-link { padding-left: 16px; }
-.rd-toc-link.active {
-  color: var(--black);
-  border-left-color: var(--accent);
-  background: var(--accent-bg);
-  font-weight: 700;
-  transform: translateX(2px);
-}
-
 /* ── Scroll reveal ─────────────────────────────────────────── */
 .reveal {
   opacity: 1;
@@ -375,20 +273,6 @@
   opacity: 1;
   transform: translateY(0);
   transition: opacity var(--t-slow) var(--ease), transform var(--t-slow) var(--ease-spring);
-}
-
-@media (max-width: 1100px) {
-  .rd-layout {
-    grid-template-columns: 148px 1fr;
-    gap: 24px;
-  }
-}
-
-@media (max-width: 860px) {
-  .rd-layout {
-    display: block;
-  }
-  .rd-toc { display: none; }
 }
 
 /* ── Daily Briefing (.bf-*) ────────────────────────────────── */

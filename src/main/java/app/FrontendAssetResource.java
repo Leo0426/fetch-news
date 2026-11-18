@@ -25,10 +25,11 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 public class FrontendAssetResource {
     /** Asset files served below; they are reachable without signing in. */
-    public static final Set<String> ASSETS = Set.of("admin.css", "ai-settings.js", "reader-page.js", "admin-controls.css", "admin-views.css", "reader.css", "briefing.css", "htmx.min.js", "alpine.min.js", "ui.js",
-            "reader.js", "admin.js", "search.css", "article.css", "article.js",
-            "compact-summary.js", "radar.css", "radar.js", "radar-community.js",
-            "ui-controls.css");
+    public static final Set<String> ASSETS = Set.of(
+            "admin.css", "admin-controls.css", "admin-stats.css", "admin-views.css", "admin.js",
+            "ai-settings.js", "alpine.min.js", "article.css", "article.js", "briefing.css",
+            "compact-summary.js", "digest.css", "htmx.min.js", "radar.css", "radar.js", "radar-community.js",
+            "reader.css", "reader.js", "reader-page.js", "search.css", "ui-controls.css", "ui.js");
 
     private final Map<String, Asset> cache = new ConcurrentHashMap<>();
 
@@ -37,9 +38,14 @@ public class FrontendAssetResource {
         return serve("favicon.svg", MediaType.valueOf("image/svg+xml"));
     }
 
-    @GetMapping({"/{file:admin\\.css}", "/{file:ai-settings\\.js}", "/{file:reader-page\\.js}", "/{file:admin-controls\\.css}", "/{file:admin-views\\.css}", "/{file:reader\\.css}", "/{file:briefing\\.css}", "/{file:htmx\\.min\\.js}", "/{file:alpine\\.min\\.js}",
-            "/{file:ui\\.js}", "/{file:reader\\.js}", "/{file:admin\\.js}",
-            "/{file:search\\.css}", "/{file:article\\.css}", "/{file:article\\.js}", "/{file:compact-summary\\.js}", "/{file:radar\\.css}", "/{file:radar\\.js}", "/{file:radar-community\\.js}", "/{file:ui-controls\\.css}"})
+    @GetMapping({
+            "/{file:admin\\.css}", "/{file:admin-controls\\.css}", "/{file:admin-stats\\.css}",
+            "/{file:admin-views\\.css}", "/{file:admin\\.js}", "/{file:ai-settings\\.js}",
+            "/{file:alpine\\.min\\.js}", "/{file:article\\.css}", "/{file:article\\.js}",
+            "/{file:briefing\\.css}", "/{file:compact-summary\\.js}", "/{file:digest\\.css}",
+            "/{file:htmx\\.min\\.js}", "/{file:radar\\.css}", "/{file:radar\\.js}",
+            "/{file:radar-community\\.js}", "/{file:reader\\.css}", "/{file:reader\\.js}",
+            "/{file:reader-page\\.js}", "/{file:search\\.css}", "/{file:ui-controls\\.css}", "/{file:ui\\.js}"})
     public ResponseEntity<String> asset(@PathVariable String file) {
         MediaType mediaType = file.endsWith(".css")
                 ? MediaType.valueOf("text/css")

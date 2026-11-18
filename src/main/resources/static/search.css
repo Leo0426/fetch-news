@@ -14,22 +14,17 @@
 .search-excerpt-label { display: block; margin-bottom: 5px; color: var(--ink-faint); font-size: 10px; letter-spacing: 0.05em; }
 .search-excerpt-text { color: var(--ink-soft); font-size: 14px; line-height: 1.9; overflow-wrap: anywhere; }
 .search-result .rd-card-meta { margin-top: 2px; }
-.search-original-hint { margin-left: auto; color: var(--ink-faint); font-size: 11px; }
 .search-limit-note { margin-top: 22px; padding: 15px 18px; border: 1px solid var(--line); border-radius: 8px; color: var(--ink-soft); background: var(--paper-deep); font-size: 13px; line-height: 1.8; }
-.search-empty-symbol { display: block; margin-bottom: 8px; color: var(--accent); font-size: 38px; line-height: 1; }
-.search-empty-note { color: var(--ink-faint); font-size: 12px; }
+.search-welcome { color: var(--ink-soft); font-size: 13px; }
 .search-error { border-color: var(--warn); }
 .search-error p { overflow-wrap: anywhere; }
 .search-page .reader-empty-action:hover { color: var(--accent-dk); border-color: var(--accent); }
 @media (max-width: 620px) {
   .search-head { margin: 20px 0; padding-bottom: 18px; }
-  .search-head .page-eyebrow { display: none; }
   .search-head .rd-date { margin-top: 8px; font-size: 12px; }
   .search-results .search-result { padding: 18px; }
   .search-result .rd-card-title { font-size: 17px; }
   .search-excerpt-text { font-size: 13px; }
   .search-result .rd-card-meta { gap: 6px 8px; }
-  .search-original-hint { display: none; }
   .search-page .reader-empty-action { min-height: 44px; }
-  .search-welcome strong { display: block; font-size: 17px; }
 }

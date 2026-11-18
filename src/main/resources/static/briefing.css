@@ -182,27 +182,6 @@ input, select, textarea { accent-color: var(--accent); }
   transform: translateY(-160%);
 }
 .skip-link:focus { transform: none; }
-.reader-nav {
-  display: flex; align-items: center; gap: 6px;
-  padding: 2px 0 20px; border-bottom: 1px solid var(--line);
-  font-size: 13px;
-}
-.reader-nav::before {
-  content: 'fetch-news';
-  margin-right: auto;
-  padding-left: 30px;
-  background: url('/favicon.svg') no-repeat left center / 22px;
-  font-family: var(--font-latin); font-size: 19px; font-weight: 650; letter-spacing: -0.6px;
-}
-.reader-nav a {
-  display: inline-flex; align-items: center; justify-content: center;
-  min-height: 38px; padding: 7px 12px;
-  color: var(--ink-soft); border-radius: 8px; text-decoration: none;
-  transition: color var(--t-base), background var(--t-base);
-}
-.reader-nav a:hover { color: var(--ink); background: var(--paper-deep); }
-.reader-nav a[aria-current='page'] { color: var(--accent-dk); background: var(--accent-bg); font-weight: 600; }
-.reader-nav .reader-nav-admin { margin-left: 10px; border: 1px solid var(--line); }
 .page-eyebrow {
   margin-bottom: 10px;
   color: var(--accent); font-size: 11px; font-weight: 600; letter-spacing: 0.14em;
@@ -318,16 +297,11 @@ h2.modal-ttl { margin: 0; font-weight: 650; }
 }
 @media (max-width: 860px) {
   .sidebar-close { display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; margin: 12px 12px 0 auto; border: 1px solid #5f6257; border-radius: 8px; background: transparent; color: var(--paper); cursor: pointer; }
-  .reader-nav a { padding: 7px 10px; }
   .rd-layout--single { display: block; }
   .content { padding: 20px; }
 }
 @media (max-width: 620px) {
   .rd-wrap, .bm-wrap, .bf-wrap { padding: 16px 16px 48px; }
-  .reader-nav { flex-wrap: wrap; gap: 4px; padding-bottom: 14px; }
-  .reader-nav::before { flex-basis: 100%; margin: 0 0 10px; min-height: 30px; }
-  .reader-nav a { flex: 1; padding: 7px 6px; font-size: 12px; white-space: nowrap; }
-  .reader-nav .reader-nav-admin { margin-left: 0; }
   .rd-head, .bm-head, .bf-header { margin: 24px 0; gap: 16px; padding-bottom: 20px; }
   .rd-date { font-size: 12px; line-height: 1.9; letter-spacing: 0; }
   .reader-digest-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px; margin: 20px 0; padding-bottom: 18px; }
