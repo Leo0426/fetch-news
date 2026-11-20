@@ -37,6 +37,7 @@ public record ReaderGroup(String name, String tag, List<ReaderItem> items) {
                     return new ReaderGroup(name, topicOf.apply(entry.getKey()), entry.getValue());
                 })
                 .sorted(Comparator.comparingInt(ReaderGroup::topicRank)
+                        .thenComparing(ReaderGroup::tag, Comparator.nullsLast(Comparator.naturalOrder()))
                         .thenComparing(group -> group.items().getFirst().firstSeenAt(),
                                 Comparator.nullsLast(Comparator.reverseOrder())))
                 .toList();

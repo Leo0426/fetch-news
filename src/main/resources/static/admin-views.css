@@ -464,3 +464,21 @@
 .rd-age,
 .bm-date { font-family: var(--font-ui); font-size: 11px; }
 
+
+.user-content-view .card-title { margin: 0 auto 0 0; overflow-wrap: anywhere; }
+.user-content-controls, .user-content-add, .user-content-list > li, .user-content-actions {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px;
+}
+.user-content-controls, .user-content-add { padding: 12px 18px; border-bottom: 1px solid var(--line); }
+.user-content-controls { justify-content: space-between; }
+.user-content-controls nav, .user-content-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.user-content-controls > span, .user-content-item small { font-size: 12px; color: var(--ink-soft); }
+.user-content-add { align-items: end; }
+.user-content-add .field { flex: 1 1 230px; min-width: 0; }
+.user-content-add input { width: 100%; }
+.user-content-list { list-style: none; margin: 0; padding: 0; }
+.user-content-list > li { padding: 12px 18px; border-bottom: 1px solid var(--line); }
+.user-content-item { display: grid; gap: 4px; flex: 1 1 220px; min-width: 0; overflow-wrap: anywhere; }
+.user-content-item small > span + span { margin-inline-start: 8px; }
+.user-content-title { font-weight: 650; line-height: 1.55; }
+.user-content-empty, .user-content-view .form-msg { margin: 12px 18px; }

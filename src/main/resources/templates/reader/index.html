@@ -66,54 +66,56 @@
             th:text="'近 30 天你反馈 ' + ${picks.feedbackCount()} + ' 条，准确 ' + ${picks.accuracyPercent()} + '%'"
             title="点标签旁的「准 / 不准」反馈，AI 之后挑选时会参考">近 30 天准确率</span>
     </div>
-    <details class="reader-refinements">
-      <summary>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M7 12h10M10 17h4"/></svg>
-        <span>筛选与操作</span>
-        <span class="reader-filter-overview"><span th:text="${hours == 24 ? '近 24 小时' : hours == 72 ? '近 3 天' : hours == 168 ? '近 7 天' : '近 ' + hours + ' 小时'}">今天</span><span aria-hidden="true"> · </span><span x-text="activeTag === 'all' ? '全部分类' : activeTag">全部分类</span></span>
-        <svg class="reader-disclosure-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
-      </summary>
-      <div class="reader-refinements-body">
-        <div class="reader-filter-group">
-          <span class="reader-filter-label">时间范围</span>
-          <nav class="rd-tabs" aria-label="时间范围">
-            <a href="/reader?hours=24" class="rd-tab" th:classappend="${hours == 24} ? ' active'" th:attr="aria-current=${hours == 24 ? 'page' : null}">24 小时</a>
-            <a href="/reader?hours=48" class="rd-tab" th:classappend="${hours == 48} ? ' active'" th:attr="aria-current=${hours == 48 ? 'page' : null}">48 小时</a>
-            <a href="/reader?hours=72" class="rd-tab" th:classappend="${hours == 72} ? ' active'" th:attr="aria-current=${hours == 72 ? 'page' : null}">3 天</a>
-            <a href="/reader?hours=168" class="rd-tab" th:classappend="${hours == 168} ? ' active'" th:attr="aria-current=${hours == 168 ? 'page' : null}">7 天</a>
-          </nav>
-        </div>
-        <div class="reader-filter-group" th:if="${#lists.size(uniqueTags) > 1}">
-          <span class="reader-filter-label">来源分类</span>
-          <div class="rd-tabs reader-category-tabs" role="group" aria-label="来源分类">
-            <button type="button" class="rd-tab" :class="activeTag === 'all' && 'active'" :aria-pressed="activeTag === 'all'" @click="activeTag = 'all'">全部分类</button>
-            <button th:each="tag : ${uniqueTags}" type="button" class="rd-tab" th:attr="data-tag=${tag}"
-                    :class="activeTag === $el.dataset.tag && 'active'" :aria-pressed="activeTag === $el.dataset.tag"
-                    @click="activeTag = $el.dataset.tag" th:text="${tag}">分类</button>
+    <div class="reader-toolbar-foot">
+      <details class="reader-refinements">
+        <summary>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M7 12h10M10 17h4"/></svg>
+          <span>筛选与操作</span>
+          <span class="reader-filter-overview" :class="activeTag !== 'all' && 'has-tag'"><span th:text="${hours == 24 ? '近 24 小时' : hours == 72 ? '近 3 天' : hours == 168 ? '近 7 天' : '近 ' + hours + ' 小时'}">今天</span><span aria-hidden="true"> · </span><span x-text="activeTag === 'all' ? '全部分类' : activeTag">全部分类</span></span>
+          <svg class="reader-disclosure-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+        </summary>
+        <div class="reader-refinements-body">
+          <div class="reader-filter-group">
+            <span class="reader-filter-label">时间范围</span>
+            <nav class="rd-tabs" aria-label="时间范围">
+              <a href="/reader?hours=24" class="rd-tab" th:classappend="${hours == 24} ? ' active'" th:attr="aria-current=${hours == 24 ? 'page' : null}">24 小时</a>
+              <a href="/reader?hours=48" class="rd-tab" th:classappend="${hours == 48} ? ' active'" th:attr="aria-current=${hours == 48 ? 'page' : null}">48 小时</a>
+              <a href="/reader?hours=72" class="rd-tab" th:classappend="${hours == 72} ? ' active'" th:attr="aria-current=${hours == 72 ? 'page' : null}">3 天</a>
+              <a href="/reader?hours=168" class="rd-tab" th:classappend="${hours == 168} ? ' active'" th:attr="aria-current=${hours == 168 ? 'page' : null}">7 天</a>
+            </nav>
+          </div>
+          <div class="reader-filter-group" th:if="${#lists.size(uniqueTags) > 1}">
+            <span class="reader-filter-label">来源分类</span>
+            <div class="rd-tabs reader-category-tabs" role="group" aria-label="来源分类">
+              <button type="button" class="rd-tab" :class="activeTag === 'all' && 'active'" :aria-pressed="activeTag === 'all'" @click="activeTag = 'all'">全部分类</button>
+              <button th:each="tag : ${uniqueTags}" type="button" class="rd-tab" th:attr="data-tag=${tag}"
+                      :class="activeTag === $el.dataset.tag && 'active'" :aria-pressed="activeTag === $el.dataset.tag"
+                      @click="activeTag = $el.dataset.tag" th:text="${tag}">分类</button>
+            </div>
+          </div>
+          <button type="button" class="rd-mark-all" @click="resetFilters()" x-show="filter !== 'all' || activeTag !== 'all' || pickFilter !== 'all' || searchQuery" x-cloak>重置筛选</button>
+          <div class="reader-bulk-action" th:if="${totalCount > 0}">
+            <button type="button" class="rd-mark-all" @click="markAllRead()" :disabled="anyReadPending() || unreadCount() === 0"
+                    :aria-busy="readAllPending" aria-describedby="reader-bulk-hint"
+                    x-text="readAllPending ? '正在保存…' : '本页全部标为已读'">本页全部标为已读</button>
+            <span id="reader-bulk-hint" th:text="'将本页加载的 ' + ${totalCount} + ' 条内容标为已读，包含被筛选隐藏的文章。'">包含被筛选隐藏的文章。</span>
           </div>
         </div>
-        <div class="reader-bulk-action" th:if="${totalCount > 0}">
-          <button type="button" class="rd-mark-all" @click="markAllRead()" :disabled="anyReadPending() || unreadCount() === 0"
-                  :aria-busy="readAllPending" aria-describedby="reader-bulk-hint"
-                  x-text="readAllPending ? '正在保存…' : '本页全部标为已读'">本页全部标为已读</button>
-          <span id="reader-bulk-hint" th:text="'将本页加载的 ' + ${totalCount} + ' 条内容标为已读，包含被筛选隐藏的文章。'">包含被筛选隐藏的文章。</span>
+      </details>
+      <div class="reader-result-line" th:if="${totalCount > 0}">
+        <span role="status" aria-live="polite" aria-atomic="true">显示 <strong x-text="visibleCount()" th:text="${totalCount}">0</strong> / <span th:text="${totalCount}">0</span> 条</span>
+        <div class="digest-view-switch" role="group" aria-label="文章布局" x-cloak>
+          <button type="button" :aria-pressed="!listView" @click="setListView(false)" title="卡片视图">
+            <svg th:replace="~{shared/icons :: icon('grid')}"></svg><span>卡片</span>
+          </button>
+          <button type="button" :aria-pressed="listView" @click="setListView(true)" title="列表视图">
+            <svg th:replace="~{shared/icons :: icon('list')}"></svg><span>列表</span>
+          </button>
         </div>
-      </div>
-    </details>
+        <details class="reader-shortcuts"><summary id="reader-shortcuts">键盘快捷键 <kbd>?</kbd></summary><p><kbd>j</kbd> / <kbd>k</kbd> 上下移动 · <kbd>o</kbd> 原文 · <kbd>i</kbd> 站内阅读 · <kbd>b</kbd> 收藏 · <kbd>r</kbd> 已读 · <kbd>/</kbd> 筛选标题</p></details>
+    </div>
+    </div>
   </section>
-  <div class="reader-result-line" th:if="${totalCount > 0}">
-      <span role="status" aria-live="polite" aria-atomic="true">显示 <strong x-text="visibleCount()" th:text="${totalCount}">0</strong> / <span th:text="${totalCount}">0</span> 条</span>
-      <button type="button" class="rd-mark-all" @click="resetFilters()" x-show="filter !== 'all' || activeTag !== 'all' || pickFilter !== 'all' || searchQuery" x-cloak>重置筛选</button>
-      <div class="digest-view-switch" role="group" aria-label="文章布局" x-cloak>
-        <button type="button" :aria-pressed="!listView" @click="setListView(false)" title="卡片视图">
-          <svg th:replace="~{shared/icons :: icon('grid')}"></svg><span>卡片</span>
-        </button>
-        <button type="button" :aria-pressed="listView" @click="setListView(true)" title="列表视图">
-          <svg th:replace="~{shared/icons :: icon('list')}"></svg><span>列表</span>
-        </button>
-      </div>
-      <details class="reader-shortcuts"><summary id="reader-shortcuts">键盘快捷键 <kbd>?</kbd></summary><p><kbd>j</kbd> / <kbd>k</kbd> 上下移动 · <kbd>o</kbd> 打开 · <kbd>b</kbd> 收藏 · <kbd>r</kbd> 已读 · <kbd>/</kbd> 筛选标题</p></details>
-  </div>
 
   <div th:if="${groups.isEmpty()}" class="rd-empty" id="rd-main" tabindex="-1">
     <strong>这段时间还没有新文章</strong>
@@ -131,7 +133,7 @@
   </div>
   <div class="rd-layout" th:if="${!groups.isEmpty()}">
 
-    <nav class="rd-toc" id="rd-toc" aria-label="来源目录" hidden
+    <nav class="rd-toc" id="rd-toc" aria-label="来源目录"
          :class="sourceMenuOpen && 'is-open'" @click.outside="sourceMenuOpen = false"
          @keydown.escape="if (sourceMenuOpen) { sourceMenuOpen = false; $refs.sourceToggle.focus() }"
          @focusout="if (!$el.contains($event.relatedTarget)) sourceMenuOpen = false">
@@ -149,7 +151,7 @@
         <th:block th:each="group, gs : ${groups}">
           <div class="rd-toc-group" th:if="${gs.first or group.tag() != groups[gs.index - 1].tag()}"
                th:text="${group.tag() ?: '未分类'}">分类</div>
-          <a class="rd-toc-link" th:href="'#sec-' + ${gs.index}" @click.prevent="goToSource($el.hash)">
+          <a class="rd-toc-link" th:href="'#sec-' + ${gs.index}" th:title="${group.name()}" @click.prevent="goToSource($el.hash)">
             <span th:text="${group.name()}">来源</span><small th:text="${group.items().size()}">0</small>
           </a>
         </th:block>

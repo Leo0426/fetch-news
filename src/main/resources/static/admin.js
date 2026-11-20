@@ -5,7 +5,7 @@
     stats: ['/index/stats', '数据统计'],
     subscriptions: ['/index/subscriptions', '订阅来源'],
     ai: ['/index/ai', 'AI 设置'],
-    users: ['/index/users', '访问令牌'],
+    users: ['/index/users', '用户管理'],
     credentials: ['/index/credentials', '凭据配置'],
     feishu: ['/index/feishu', '飞书推送'],
     health: ['/index/health', 'Feed 健康'],
@@ -225,6 +225,11 @@
       modal: false,
       activePage: 'stats',
       pageTitle: '数据统计',
+      get pageGroup() {
+        if (['health', 'logs', 'stats'].includes(this.activePage)) return '运行监控';
+        if (this.activePage.startsWith('cat:') || ['items', 'subscriptions'].includes(this.activePage)) return '来源管理';
+        return '系统设置';
+      },
       routeQuery: '',
       routeScope: 'all',
       filterStats(directory, query, scope) {

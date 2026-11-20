@@ -9,7 +9,18 @@ import java.time.Instant;
  * The feed key is a separate, read-only secret meant for RSS reader URLs.
  */
 public record UserAccount(long id, String name, Role role, String feedKey,
-                          Instant createdAt, Instant lastSeenAt, boolean disabled, boolean hasToken) {
+                          Instant createdAt, Instant lastSeenAt, boolean disabled, boolean hasToken,
+                          boolean hasPassword) {
+
+    public UserAccount(long id, String name, Role role, String feedKey, Instant createdAt,
+                       Instant lastSeenAt, boolean disabled, boolean hasToken) {
+        this(id, name, role, feedKey, createdAt, lastSeenAt, disabled, hasToken, false);
+    }
+
+    @Override
+    public String toString() {
+        return "UserAccount[id=" + id + ", role=" + role + ", disabled=" + disabled + "]";
+    }
 
     /** Pre-existing single-user data is migrated to this account. */
     public static final long OWNER_ID = 1;

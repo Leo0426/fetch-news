@@ -1,5 +1,6 @@
 package app.reader;
 
+import app.support.FeedBody;
 import app.support.HtmlImages;
 import java.net.URI;
 import org.jsoup.Jsoup;
@@ -17,7 +18,7 @@ public record ArticleContent(String html, String kind) {
             .addProtocols("img", "src", "http", "https");
 
     public static ArticleContent from(String description, String extract, String baseUrl) {
-        description = HtmlImages.unwrapBody(description);
+        description = FeedBody.forReading(description, baseUrl);
         var source = Jsoup.parseBodyFragment(description);
         boolean plainText = source.body().getAllElements().stream().skip(1)
                 .noneMatch(element -> element.tag().isKnownTag());

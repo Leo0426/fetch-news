@@ -1,5 +1,6 @@
 package app.radar;
 
+import app.ai.AiProviderFailure;
 import app.ai.OllamaClient;
 import app.radar.RadarTypes.Analysis;
 import app.radar.RadarTypes.Event;
@@ -88,6 +89,7 @@ public class EventDeduplicator {
                     } catch (InterruptedException e) {
                         throw e;
                     } catch (Exception e) {
+                        if (e instanceof AiProviderFailure provider && provider.affectsEveryArticle()) throw provider;
                         warning.accept("Deduplication unavailable for " + item.link() + ": "
                                 + e.getClass().getSimpleName());
                         break;

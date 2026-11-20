@@ -1,0 +1,89 @@
+<div id="users-view" class="user-admin" hx-history="false" hx-swap="innerHTML show:#main-content:top">
+  <nav class="account-back">
+    <a href="/index#users" hx-get="/index/users" hx-target="#main-content">
+      <svg th:replace="~{shared/icons :: icon('left')}"></svg>返回账户列表
+    </a>
+  </nav>
+  <div th:replace="~{index/user-notice :: notice}"></div>
+  <section class="card account-section">
+    <div class="account-heading">
+      <div>
+        <h2 th:text="${account.name()}"></h2>
+        <p class="account-meta">
+          <span th:text="${account.role().label()}"></span> ·
+          <span th:text="${account.disabled()} ? '已停用' : '已启用'"></span>
+        </p>
+      </div>
+      <button class="btn" type="button" th:attr="hx-get='/index/users/' + ${account.id()} + '/content'"
+              hx-target="#main-content">管理内容</button>
+    </div>
+    <dl class="account-dates">
+      <div><dt>创建时间（UTC）</dt><dd th:text="${account.createdAt() == null ? '—' : #strings.substring(account.createdAt().toString(), 0, 16).replace('T', ' ')}"></dd></div>
+      <div><dt>最近访问（UTC）</dt><dd th:text="${account.lastSeenAt() == null ? '从未' : #strings.substring(account.lastSeenAt().toString(), 0, 16).replace('T', ' ')}"></dd></div>
+    </dl>
+  </section>
+  <section class="card account-section" aria-labelledby="password-title">
+    <h2 id="password-title">登录密码</h2>
+    <p class="account-meta" th:text="${account.hasPassword()} ? '已设置密码' : '尚未设置密码'"></p>
+    <p class="account-meta" th:unless="${account.admin()}">保存新密码后，成员需要重新登录。</p>
+    <a class="btn" th:if="${account.admin()}" href="/account">在个人账户页管理密码</a>
+    <form th:unless="${account.admin()}" class="account-inline"
+          th:attr="hx-post='/index/users/' + ${account.id()} + '/password'"
+          hx-target="#main-content" hx-disabled-elt="find button">
+      <label class="field"><span>新密码</span>
+        <input class="ui-control" name="password" type="password" required minlength="8" maxlength="128"
+               autocomplete="new-password" placeholder="8–128 个字符">
+      </label>
+      <button class="btn" type="submit" th:text="${account.hasPassword()} ? '重置密码' : '设置密码'"></button>
+    </form>
+  </section>
+  <section class="card account-section" aria-labelledby="tokens-title">
+    <h2 id="tokens-title">登录令牌</h2>
+    <p class="account-meta">每个应用或设备可单独使用一个令牌。</p>
+    <ul class="account-tokens" th:unless="${tokens.isEmpty()}">
+      <li data-account-token th:each="token : ${tokens}">
+        <span><strong th:text="${token.name()}"></strong>
+          <small th:if="${token.protectedByEnvironment()}">环境变量管理</small>
+          <small th:if="${token.primary() && !token.protectedByEnvironment()}">主令牌</small>
+          <small th:if="${token.createdAt() != null}"
+                 th:text="|创建于 ${#strings.substring(token.createdAt().toString(), 0, 10)}|"></small>
+        </span>
+        <button th:unless="${token.protectedByEnvironment()}" class="btn-small" type="button"
+                th:attr="hx-delete='/index/users/' + ${account.id()} + '/tokens/' + ${token.id()},
+                         aria-label='撤销令牌 ' + ${token.name()}"
+                hx-target="#main-content" hx-disabled-elt="this"
+                th:hx-confirm="'撤销“' + ${token.name()} + '”？该令牌及其关联的登录将立即失效。'">撤销</button>
+      </li>
+    </ul>
+    <form class="account-inline" th:attr="hx-post='/index/users/' + ${account.id()} + '/tokens'"
+          hx-target="#main-content" hx-sync="this:drop" hx-disabled-elt="find button">
+      <label class="field"><span>新令牌名称</span>
+        <input class="ui-control" name="name" required placeholder="例如：手机阅读器" autocomplete="off">
+      </label>
+      <button class="btn" type="submit">创建令牌</button>
+    </form>
+    <button th:unless="${protectedPrimary}" class="account-link" type="button"
+            th:attr="hx-post='/index/users/' + ${account.id()} + '/token'" hx-target="#main-content"
+            hx-disabled-elt="this" hx-confirm="生成新主令牌？旧主令牌及其关联的登录将立即失效。">生成新主令牌</button>
+  </section>
+  <section class="card account-section" aria-labelledby="account-controls-title">
+    <h2 id="account-controls-title">账户与订阅</h2>
+    <p class="account-meta">重置订阅密钥后，成员需在 RSS 阅读器中更新订阅地址。</p>
+    <div class="account-actions">
+      <button class="btn" type="button" th:attr="hx-post='/index/users/' + ${account.id()} + '/feed-key'"
+              hx-target="#main-content" hx-disabled-elt="this" hx-confirm="重置订阅密钥？旧订阅地址将立即失效。">
+        重置订阅密钥
+      </button>
+      <th:block th:unless="${account.admin()}">
+        <form th:attr="hx-post='/index/users/' + ${account.id()} + '/disabled'"
+              hx-target="#main-content" hx-disabled-elt="find button">
+          <input type="hidden" name="disabled" th:value="${!account.disabled()}">
+          <button class="btn" type="submit" th:text="${account.disabled()} ? '启用账户' : '停用账户'"></button>
+        </form>
+        <button class="btn account-danger" type="button" th:attr="hx-delete='/index/users/' + ${account.id()}"
+                hx-target="#main-content" hx-disabled-elt="this"
+                th:hx-confirm="'永久删除“' + ${account.name()} + '”及其收藏、已读和精选反馈记录？此操作不可撤销。'">删除账户</button>
+      </th:block>
+    </div>
+  </section>
+</div>

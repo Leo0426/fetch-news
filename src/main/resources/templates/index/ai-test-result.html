@@ -1,55 +1,15 @@
-<!-- Inline connectivity test result, swapped into #ai-test-result -->
-<div style="border:1px solid var(--border);border-radius:var(--r);padding:14px 16px;display:grid;gap:10px;background:var(--surface2);">
-
-  <!-- server row -->
-  <div style="display:flex;align-items:center;gap:8px;font-size:13px;">
-    <span th:if="${status.serverReachable()}"
-          style="color:var(--green);font-weight:700;">✓</span>
-    <span th:unless="${status.serverReachable()}"
-          style="color:var(--warn);font-weight:700;">✗</span>
-    <span th:if="${status.serverReachable()}">
-      服务器可达
-      <code style="background:var(--border);padding:1px 5px;border-radius:3px;font-size:11px;"
-            th:text="${status.serverVersion()}">v?</code>
-    </span>
-    <span th:unless="${status.serverReachable()}"
-          style="color:var(--warn);"
-          th:text="'服务器不可达：' + ${status.error()}">—</span>
-  </div>
-
-  <!-- model row (only when server is up) -->
-  <div th:if="${status.serverReachable() && status.modelListSupported()}"
-       style="display:flex;align-items:flex-start;gap:8px;font-size:13px;">
-    <span th:if="${status.modelAvailable()}"
-          style="color:var(--green);font-weight:700;">✓</span>
-    <span th:unless="${status.modelAvailable()}"
-          style="color:var(--warn);font-weight:700;">✗</span>
-    <div style="display:grid;gap:6px;">
-      <span th:if="${status.modelAvailable()}"
-            th:text="'模型 ' + ${configuredModel} + ' 已列出'">—</span>
-      <span th:unless="${status.modelAvailable()}"
-            style="color:var(--warn);"
-            th:text="'模型 ' + ${configuredModel} + ' 未找到'">—</span>
-
-      <!-- available models list -->
-      <div th:if="${!status.availableModels().isEmpty()}"
-           style="display:flex;flex-wrap:wrap;gap:4px;">
-        <span style="color:var(--subtle);font-size:11px;align-self:center;">可用：</span>
-        <th:block th:each="m : ${status.availableModels()}">
-          <code th:text="${m}"
-                th:style="${m == configuredModel or #strings.startsWith(m, configuredModel + ':')}
-                           ? 'background:var(--accent-bg);color:var(--accent);padding:1px 6px;border-radius:3px;font-size:11px;border:1px solid var(--accent)'
-                           : 'background:var(--border);padding:1px 6px;border-radius:3px;font-size:11px;'">model</code>
-        </th:block>
-      </div>
-      <div th:if="${status.availableModels().isEmpty() && status.serverVersion()!='openai' && status.serverVersion()!='anthropic'}"
-           style="font-size:11px;color:var(--subtle);">
-        服务器上暂无已下载模型，请先运行
-        <code style="background:var(--border);padding:1px 5px;border-radius:3px;"
-              th:text="'ollama pull ' + ${configuredModel}">ollama pull llama3.2</code>
-      </div>
-    </div>
-  </div>
-
-  <p th:if="${status.serverReachable() && status.error()!=null}" th:text="${status.error()}" style="font-size:13px;"></p>
+<div class="ai-connection-status" th:classappend="${status.serverReachable()} ? 'is-ok' : 'is-error'">
+  <strong th:text="${status.serverReachable()} ? '服务器可达' : '连接失败'"></strong>
+  <span th:if="${status.serverVersion() != null}" class="ai-protocol" th:text="${status.serverVersion()}"></span>
+  <p th:if="${status.serverReachable() && status.modelListSupported()}"
+     th:text="${status.modelAvailable()} ? '模型 ' + ${configuredModel} + ' 已列出' : '模型列表中未找到 ' + ${configuredModel}"></p>
+  <p th:if="${status.error() != null}" th:text="${status.error()}"></p>
+  <details th:if="${!status.availableModels().isEmpty()}" class="ai-discovered-list">
+    <summary th:text="'查看 ' + ${status.availableModels().size()} + ' 个可用模型'"></summary>
+    <ul><li th:each="model : ${status.availableModels()}"><code th:text="${model}"></code></li></ul>
+  </details>
+  <p th:if="${status.serverReachable() && status.modelListSupported() && status.availableModels().isEmpty()
+             && status.serverVersion() != 'openai' && status.serverVersion() != 'anthropic' && status.serverVersion() != 'gemini'}">
+    暂无本地模型，可运行 <code th:text="'ollama pull ' + ${configuredModel}"></code> 下载。
+  </p>
 </div>

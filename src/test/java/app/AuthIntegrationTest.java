@@ -10,6 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import app.auth.AuthFilter;
+import app.auth.AuthTokens;
 import app.auth.UserAccount;
 import app.core.FeedItem;
 import app.core.RouteConfig;
@@ -21,6 +22,7 @@ import java.util.List;
 import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import org.jsoup.Jsoup;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -72,31 +74,93 @@ class AuthIntegrationTest {
         assertEquals("/reader", response.header("Location"));
         assertTrue(response.header("Set-Cookie").contains("HttpOnly"));
         assertTrue(response.header("Set-Cookie").contains("SameSite=Lax"));
-        given().cookie(AuthFilter.COOKIE, ADMIN_TOKEN).when().get("/index").then().statusCode(200);
-        given().cookie(AuthFilter.COOKIE, ADMIN_TOKEN).redirects().follow(false).when().get("/")
+        String session = response.cookie(AuthFilter.COOKIE);
+        given().cookie(AuthFilter.COOKIE, session).when().get("/index").then().statusCode(200);
+        given().cookie(AuthFilter.COOKIE, session).redirects().follow(false).when().get("/")
                 .then().statusCode(302).header("Location", "/reader");
-        given().cookie(AuthFilter.COOKIE, ADMIN_TOKEN).redirects().follow(false).when().get("/admin")
+        given().cookie(AuthFilter.COOKIE, session).redirects().follow(false).when().get("/admin")
                 .then().statusCode(302).header("Location", "/index");
+    }
+
+    @Test
+    void existingTokenOwnerCanSetAPasswordAndUseAnIndependentBrowserSession() {
+        String name = "existing-" + shortId();
+        String oldToken = createAccount(name, "MEMBER");
+        String password = "a-test-password-for-the-same-account";
+        given().header("Authorization", "Bearer " + oldToken).redirects().follow(false)
+                .formParam("newPassword", password).when().post("/account/password")
+                .then().statusCode(303);
+        Response response = given().redirects().follow(false).formParam("username", name)
+                .formParam("password", password).formParam("next", "/account").when().post("/login");
+        assertEquals(303, response.statusCode());
+        assertEquals("/account", response.header("Location"));
+        String session = response.cookie(AuthFilter.COOKIE);
+        assertNotNull(session);
+        assertFalse(session.equals(oldToken));
+        given().cookie(AuthFilter.COOKIE, session).when().get("/account").then().statusCode(200)
+                .body(containsString(name));
+        given().header("Authorization", "Bearer " + oldToken).when().get("/account").then().statusCode(200);
+        given().cookie(AuthFilter.COOKIE, session).redirects().follow(false).when().post("/logout")
+                .then().statusCode(303);
+        given().cookie(AuthFilter.COOKIE, session).redirects().follow(false).when().get("/account")
+                .then().statusCode(302);
+    }
+
+    @Test
+    void eachTokenBelongsToOneAccountAndRevokingItEndsOnlyItsOwnAccess() {
+        String member = createAccount("devices-" + shortId(), "MEMBER");
+        String other = createAccount("other-" + shortId(), "MEMBER");
+        Response first = given().header("Authorization", "Bearer " + member).formParam("name", "phone")
+                .when().post("/account/tokens");
+        first.then().statusCode(200).header("Cache-Control", "no-store");
+        String phone = Jsoup.parse(first.asString()).selectFirst(".acct-banner.token code").text();
+        String revoke = Jsoup.parse(first.asString()).selectFirst("li:has(strong:containsOwn(phone)) form").attr("action");
+        Response second = given().header("Authorization", "Bearer " + member).formParam("name", "laptop")
+                .when().post("/account/tokens");
+        String laptop = Jsoup.parse(second.then().statusCode(200).extract().asString())
+                .selectFirst(".acct-banner.token code").text();
+        String session = given().redirects().follow(false).formParam("token", phone).when().post("/login")
+                .then().statusCode(303).extract().cookie(AuthFilter.COOKIE);
+        String article = "https://example.com/devices/" + UUID.randomUUID();
+        saveItem(article);
+        given().header("Authorization", "Bearer " + phone).formParam("link", article).formParam("bookmarked", true)
+                .when().put("/reader/article/bookmark").then().statusCode(200);
+        given().header("Authorization", "Bearer " + laptop).when().get("/reader/bookmarks")
+                .then().statusCode(200).body(containsString(article));
+        given().header("Authorization", "Bearer " + other).when().get("/reader/bookmarks")
+                .then().statusCode(200).body(not(containsString(article)));
+        given().header("Authorization", "Bearer " + other).redirects().follow(false).when().post(revoke)
+                .then().statusCode(303);
+        given().cookie(AuthFilter.COOKIE, session).when().get("/account").then().statusCode(200)
+                .body(not(containsString(phone))).body(not(containsString(laptop)));
+        given().header("Authorization", "Bearer " + laptop).redirects().follow(false).when().post(revoke)
+                .then().statusCode(303);
+        given().cookie(AuthFilter.COOKIE, session).redirects().follow(false).when().get("/account")
+                .then().statusCode(302);
+        given().header("Authorization", "Bearer " + phone).redirects().follow(false).when().get("/account")
+                .then().statusCode(302);
+        given().header("Authorization", "Bearer " + laptop).when().get("/account").then().statusCode(200);
     }
 
     @Test
     void membersReadWithTheirOwnStateButCannotAdminister() {
         String member = createAccount("member-" + shortId(), "MEMBER");
+        String session = loginWithToken(member);
         String link = "https://example.com/auth/" + UUID.randomUUID();
         saveItem(link);
 
-        given().cookie(AuthFilter.COOKIE, member).when().get("/reader").then().statusCode(200)
+        given().cookie(AuthFilter.COOKIE, session).when().get("/reader").then().statusCode(200)
                 .body(not(containsString("href=\"/index\"")));
-        given().cookie(AuthFilter.COOKIE, member).redirects().follow(false).when().get("/index")
+        given().cookie(AuthFilter.COOKIE, session).redirects().follow(false).when().get("/index")
                 .then().statusCode(302).header("Location", "/reader");
-        given().cookie(AuthFilter.COOKIE, member).header("HX-Request", "true").when().get("/index/users")
+        given().cookie(AuthFilter.COOKIE, session).header("HX-Request", "true").when().get("/index/users")
                 .then().statusCode(403);
-        given().cookie(AuthFilter.COOKIE, member).when().post("/reader/radar/runs").then().statusCode(403);
+        given().cookie(AuthFilter.COOKIE, session).when().post("/reader/radar/runs").then().statusCode(403);
 
-        given().cookie(AuthFilter.COOKIE, member).header("Origin", "http://localhost:" + port)
+        given().cookie(AuthFilter.COOKIE, session).header("Origin", "http://localhost:" + port)
                 .formParam("link", link).formParam("read", true).when().put("/reader/read")
                 .then().statusCode(200).body(equalTo("read"));
-        given().cookie(AuthFilter.COOKIE, member).header("Origin", "http://localhost:" + port)
+        given().cookie(AuthFilter.COOKIE, session).header("Origin", "http://localhost:" + port)
                 .formParam("link", link).formParam("bookmarked", true).when().put("/reader/article/bookmark")
                 .then().statusCode(200);
 
@@ -112,6 +176,7 @@ class AuthIntegrationTest {
     @Test
     void feedKeysOnlyUnlockFeeds() {
         String member = createAccount("feeds-" + shortId(), "MEMBER");
+        String session = loginWithToken(member);
         String key = accountFor(member).feedKey();
         runtime.routeConfigStore().save(new RouteConfig("/solidot/news", true, 300, 1800));
 
@@ -121,9 +186,9 @@ class AuthIntegrationTest {
         given().queryParam("key", "fk_wrong").when().get("/no-such-feed").then().statusCode(401);
         given().redirects().follow(false).queryParam("key", key).when().get("/reader")
                 .then().statusCode(302).header("Location", containsString("/login"));
-        given().cookie(AuthFilter.COOKIE, member).when().get("/account").then().statusCode(200)
+        given().cookie(AuthFilter.COOKIE, session).when().get("/account").then().statusCode(200)
                 .body(containsString(key));
-        given().cookie(AuthFilter.COOKIE, member).when().get("/account/opml").then().statusCode(200)
+        given().cookie(AuthFilter.COOKIE, session).when().get("/account/opml").then().statusCode(200)
                 .body(containsString("/solidot/news?key=" + key));
         runtime.routeConfigStore().remove("/solidot/news");
     }
@@ -132,19 +197,25 @@ class AuthIntegrationTest {
     void revokedTokensAndCrossSiteWritesAreRejected() {
         String name = "revoked-" + shortId();
         String member = createAccount(name, "MEMBER");
+        String session = loginWithToken(member);
         long id = accountFor(member).id();
 
-        given().cookie(AuthFilter.COOKIE, member).header("Origin", "https://evil.example")
+        given().cookie(AuthFilter.COOKIE, session).header("Origin", "https://evil.example")
                 .formParam("links", "https://example.com/x").when().post("/reader/read-all")
                 .then().statusCode(403);
-        given().cookie(AuthFilter.COOKIE, member).redirects().follow(false).when().get("/index;x=1/users")
+        given().cookie(AuthFilter.COOKIE, session).redirects().follow(false).when().get("/index;x=1/users")
                 .then().statusCode(400);
 
         adminPost("/index/users/" + id + "/disabled?disabled=true").then().statusCode(200);
-        given().redirects().follow(false).cookie(AuthFilter.COOKIE, member).when().get("/reader")
+        given().redirects().follow(false).cookie(AuthFilter.COOKIE, session).when().get("/reader")
                 .then().statusCode(302).header("Set-Cookie", containsString("Max-Age=0"));
         adminPost("/index/users/" + UserAccount.OWNER_ID + "/disabled?disabled=true")
                 .then().statusCode(200).body(containsString("不能停用当前登录的账户"));
+    }
+
+    private String loginWithToken(String token) {
+        return given().redirects().follow(false).formParam("token", token).when().post("/login")
+                .then().statusCode(303).extract().cookie(AuthFilter.COOKIE);
     }
 
     private String createAccount(String name, String role) {
@@ -153,7 +224,7 @@ class AuthIntegrationTest {
                 .when().post("/index/users")
                 .then().statusCode(200).extract().asString();
         Matcher matcher = ISSUED_TOKEN.matcher(html);
-        assertTrue(matcher.find(), () -> "issued token is shown once: " + html);
+        assertTrue(matcher.find(), "a newly issued access token must be displayed");
         return matcher.group(1);
     }
 
@@ -167,7 +238,7 @@ class AuthIntegrationTest {
 
     private UserAccount accountFor(String token) {
         try {
-            UserAccount user = store.accounts().findUserByTokenHash(app.auth.AuthTokens.hash(token));
+            UserAccount user = store.accounts().findUserByTokenHash(AuthTokens.hash(token));
             assertNotNull(user);
             return user;
         } catch (Exception e) {

@@ -18,10 +18,9 @@ import org.springframework.web.bind.annotation.ResponseBody;
 import org.thymeleaf.TemplateEngine;
 import org.thymeleaf.context.Context;
 
-/**
- * Admin section for issuing and revoking access tokens, loaded into {@code /index#users}.
- */
+/** Owner-only account management in the admin console. */
 @Controller
+@ResponseBody
 @RequestMapping(value = "/index/users", produces = "text/html;charset=UTF-8")
 public class UserAdminResource {
     private static final Logger log = LoggerFactory.getLogger(UserAdminResource.class);
@@ -35,57 +34,80 @@ public class UserAdminResource {
     }
 
     @GetMapping
-    @ResponseBody
     public ResponseEntity<String> list() {
-        return section(null, null, null);
+        return section(null, null, null, null);
+    }
+
+    @GetMapping("/{id}/access")
+    public ResponseEntity<String> access(@PathVariable long id) {
+        return section(id, null, null, null);
     }
 
     @PostMapping(consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE)
-    @ResponseBody
     public ResponseEntity<String> create(@RequestParam(defaultValue = "") String name,
-                                         @RequestParam(defaultValue = "MEMBER") String role) {
-        Role parsed = "ADMIN".equals(role) ? Role.ADMIN : Role.MEMBER;
-        return act(() -> {
-            IssuedToken issued = auth.createUser(name, parsed);
-            log.info("issued {} token for account '{}'", parsed, issued.user().name());
-            return section("已创建账户“" + issued.user().name() + "”。", null, issued);
+                                         @RequestParam(defaultValue = "MEMBER") String role,
+                                         @RequestParam(required = false) String loginMode,
+                                         @RequestParam(required = false) String password) {
+        if (!"MEMBER".equals(role)) return forbidden("只有初始账号可担任管理员。");
+        return act(null, () -> {
+            String mode = loginMode != null ? loginMode : (password == null ? "token" : "password");
+            if ("password".equals(mode)) {
+                var member = auth.createUser(name, password);
+                return section(member.id(), "已创建成员，可使用账号名称和密码登录。", null, null);
+            }
+            if (!"token".equals(mode)) throw new IllegalArgumentException("请选择密码或令牌登录。");
+            var issued = auth.createUser(name, Role.MEMBER);
+            return section(issued.user().id(), "已创建成员及其主令牌。", null, issued);
+        });
+    }
+
+    @PostMapping("/{id}/password")
+    public ResponseEntity<String> password(@PathVariable long id, @RequestParam(defaultValue = "") String password) {
+        return act(id, () -> {
+            auth.resetPassword(CurrentUser.id(), id, password);
+            return section(id, "已重置成员密码，请将新密码交给本人。", null, null);
+        });
+    }
+
+    @PostMapping("/{id}/tokens")
+    public ResponseEntity<String> createToken(@PathVariable long id, @RequestParam(defaultValue = "") String name) {
+        return act(id, () -> section(id, "已创建登录令牌。", null, auth.createToken(id, name)));
+    }
+
+    @DeleteMapping("/{id}/tokens/{tokenId}")
+    public ResponseEntity<String> revokeToken(@PathVariable long id, @PathVariable long tokenId) {
+        return act(id, () -> {
+            auth.revokeToken(id, tokenId);
+            return section(id, "已撤销令牌，使用该令牌的登录已失效。", null, null);
         });
     }
 
     @PostMapping("/{id}/token")
-    @ResponseBody
     public ResponseEntity<String> resetToken(@PathVariable long id) {
-        return act(() -> {
-            IssuedToken issued = auth.resetToken(id);
-            log.info("reset login token for account '{}'", issued.user().name());
-            return section("已为“" + issued.user().name() + "”生成新令牌，旧令牌立即失效。", null, issued);
-        });
+        return act(id, () -> section(id, "已生成新的主令牌。", null, auth.resetToken(id)));
     }
 
     @PostMapping("/{id}/feed-key")
-    @ResponseBody
     public ResponseEntity<String> resetFeedKey(@PathVariable long id) {
-        return act(() -> {
-            UserAccount user = auth.resetFeedKey(id);
-            return section("已更新“" + user.name() + "”的订阅密钥，旧订阅地址立即失效。", null, null);
+        return act(id, () -> {
+            auth.resetFeedKey(id);
+            return section(id, "已更新订阅密钥。请让成员在自己的账户页复制新地址。", null, null);
         });
     }
 
     @PostMapping("/{id}/disabled")
-    @ResponseBody
     public ResponseEntity<String> setDisabled(@PathVariable long id, @RequestParam boolean disabled) {
-        return act(() -> {
+        return act(id, () -> {
             auth.setDisabled(CurrentUser.id(), id, disabled);
-            return section(disabled ? "账户已停用，其令牌和订阅地址立即失效。" : "账户已启用。", null, null);
+            return section(id, disabled ? "已停用账户，登录与订阅地址均已停用。" : "已启用账户。", null, null);
         });
     }
 
     @DeleteMapping("/{id}")
-    @ResponseBody
     public ResponseEntity<String> delete(@PathVariable long id) {
-        return act(() -> {
+        return act(id, () -> {
             auth.delete(CurrentUser.id(), id);
-            return section("账户及其收藏、已读记录已删除。", null, null);
+            return section(null, "已删除成员账户及其个人阅读记录。", null, null);
         });
     }
 
@@ -94,34 +116,54 @@ public class UserAdminResource {
         ResponseEntity<String> run() throws SQLException;
     }
 
-    private ResponseEntity<String> act(Action action) {
-        if (!auth.enabled()) return section(null, "认证未启用，无法管理令牌。", null);
+    private ResponseEntity<String> act(Long id, Action action) {
+        if (CurrentUser.id() != UserAccount.OWNER_ID) return forbidden("需要管理员权限。");
+        if (!auth.enabled()) return section(null, null, "认证未启用，无法管理账户。", null);
         try {
             return action.run();
         } catch (IllegalArgumentException e) {
-            return section(null, e.getMessage(), null);
+            return section(id, null, e.getMessage(), null);
         } catch (SQLException e) {
-            log.warn("account update failed: {}", e.getMessage());
-            return section(null, "保存失败，请稍后重试。", null);
+            log.warn("account change failed (SQL code {})", e.getErrorCode());
+            return section(id, null, "保存失败，请稍后重试。", null);
         }
     }
 
-    private ResponseEntity<String> section(String message, String error, IssuedToken issued) {
-        List<UserAccount> users = List.of();
-        try {
-            users = auth.listUsers();
-        } catch (SQLException e) {
-            log.warn("failed to list accounts: {}", e.getMessage());
-            error = "账户列表暂时无法加载。";
-        }
+    private ResponseEntity<String> section(Long id, String message, String error, IssuedToken issued) {
+        if (CurrentUser.id() != UserAccount.OWNER_ID) return forbidden("需要管理员权限。");
         Context ctx = new Context();
-        ctx.setVariable("users", users);
-        ctx.setVariable("currentUserId", CurrentUser.id());
+        String template = "index/users";
+        int status = 200;
+        try {
+            if (id != null && auth.enabled()) {
+                var account = auth.findUser(id);
+                if (account == null) {
+                    status = 404;
+                    error = "账户不存在。";
+                } else {
+                    var tokens = auth.listTokens(id);
+                    ctx.setVariable("account", account);
+                    ctx.setVariable("tokens", tokens);
+                    ctx.setVariable("protectedPrimary", tokens.stream().anyMatch(AccountToken::protectedByEnvironment));
+                    template = "index/user-access";
+                }
+            }
+            if (template.equals("index/users"))
+                ctx.setVariable("users", auth.enabled() ? auth.listUsers() : List.of());
+        } catch (SQLException e) {
+            log.warn("account lookup failed (SQL code {})", e.getErrorCode());
+            ctx.setVariable("users", List.of());
+            error = "账户信息暂时无法加载。";
+        }
         ctx.setVariable("authEnabled", auth.enabled());
         ctx.setVariable("message", message);
         ctx.setVariable("error", error);
         ctx.setVariable("issued", issued);
-        return ResponseEntity.ok().header(HttpHeaders.CACHE_CONTROL, "no-store")
-                .body(engine.process("index/users", ctx));
+        return ResponseEntity.status(status).header(HttpHeaders.CACHE_CONTROL, "no-store")
+                .body(engine.process(template, ctx));
+    }
+
+    private static ResponseEntity<String> forbidden(String message) {
+        return ResponseEntity.status(403).header(HttpHeaders.CACHE_CONTROL, "no-store").body(message);
     }
 }

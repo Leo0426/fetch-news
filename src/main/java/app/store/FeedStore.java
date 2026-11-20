@@ -58,6 +58,7 @@ public class FeedStore implements Closeable {
 
     private final SummaryQueue summaryQueue = new SummaryQueue(this);
     private final PickStore picks = new PickStore(this);
+    private final UserContentStore userContent = new UserContentStore(this);
     private final AccountStore accounts = new AccountStore(this);
     private final ReadingState reading = new ReadingState(this);
     private final RadarStore radar = new RadarStore(this);
@@ -76,6 +77,10 @@ public class FeedStore implements Closeable {
     /** Accounts and their credentials; shares this store's connection and lock. */
     public AccountStore accounts() {
         return accounts;
+    }
+
+    public UserContentStore userContent() {
+        return userContent;
     }
 
     /** Each reader's bookmarks and read state; shares this store's connection and lock. */

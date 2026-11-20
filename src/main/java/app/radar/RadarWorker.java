@@ -1,6 +1,8 @@
 package app.radar;
 
 import app.ai.AiConfigStore;
+import app.ai.AiFailureMessages;
+import app.ai.AiProviderFailure;
 import app.ai.ArticleExtractor;
 import app.ai.OllamaClient;
 import app.radar.RadarTypes.Analysis;
@@ -173,6 +175,7 @@ public class RadarWorker implements AutoCloseable {
                 } catch (SQLException e) {
                     throw e;
                 } catch (Exception e) {
+                    if (e instanceof AiProviderFailure provider && provider.affectsEveryArticle()) throw provider;
                     guard(run, start, prior, false);
                     analysis = new Analysis(
                             candidate.link(),
@@ -238,6 +241,7 @@ public class RadarWorker implements AutoCloseable {
                     guard(run, start, prior, false);
                     story = new ReportStory(event, e.blocks(), message(e));
                 } catch (Exception e) {
+                    if (e instanceof AiProviderFailure provider && provider.affectsEveryArticle()) throw provider;
                     guard(run, start, prior, false);
                     story = new ReportStory(event, Map.of(), message(e));
                 }
@@ -356,6 +360,8 @@ public class RadarWorker implements AutoCloseable {
     }
 
     private String message(Exception e) {
+        String guidance = AiFailureMessages.forDetail(e.getMessage());
+        if (guidance != null) return guidance;
         return RadarJson.truncate(e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage(), 400);
     }
 

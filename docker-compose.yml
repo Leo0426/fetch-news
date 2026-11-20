@@ -18,7 +18,7 @@ services:
       TZ: "Asia/Shanghai"
 
       # ── Access control ──────────────────────────────────────────────────────
-      # Token auth is on by default. The admin token is printed once in the logs
+      # Account login is on by default. The first admin token is printed once in the logs
       # on first start; set this to pin it or to reset a lost one (≥16 chars).
       # FETCH_NEWS_ADMIN_TOKEN: ""
       # Only for a trusted LAN — never when exposed through frp or similar:

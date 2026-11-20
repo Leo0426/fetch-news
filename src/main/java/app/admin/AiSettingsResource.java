@@ -2,6 +2,7 @@ package app.admin;
 
 import app.ai.AiConfig;
 import app.ai.AiConfigStore;
+import app.ai.AiFailureMessages;
 import app.ai.AiModelList;
 import app.ai.AiProviderForm;
 import app.ai.AiSettingsPage;
@@ -57,7 +58,12 @@ public class AiSettingsResource {
             @RequestParam(required = false) List<String> modelIds,
             @RequestParam(defaultValue = "false") boolean activate) {
         try {
-            String id=aiConfigStore.saveProfile(form.profileId(),form.name(),form.resolve(aiConfigStore),activate,modelIds);
+            var overrides = form.overrides(modelIds);
+            String id;
+            synchronized (aiConfigStore) {
+                var config = form.resolve(aiConfigStore, overrides);
+                id = aiConfigStore.saveProfile(form.profileId(), form.name(), config, activate, modelIds, overrides);
+            }
             return ResponseEntity.ok(renderAiSettings(id,activate ? "已保存并启用此提供商" : "已保存提供商配置"));
         } catch(IllegalArgumentException | NoSuchElementException e) { return aiFormError(e.getMessage(),400); }
         catch(UncheckedIOException e) { return aiFormError("保存失败，原配置未改变",500); }
@@ -123,11 +129,34 @@ public class AiSettingsResource {
 
     @PostMapping(value = "/ai/test", consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE, produces = "text/html;charset=UTF-8")
     @ResponseBody
-    public ResponseEntity<String> testAiProvider(@ModelAttribute AiProviderForm form) {
+    public ResponseEntity<String> testAiProvider(@ModelAttribute AiProviderForm form,
+                                                 @RequestParam(required = false) String editModel) {
         try {
-            AiConfig config = form.resolve(aiConfigStore);
+            AiConfig config = form.resolveForDiscovery(aiConfigStore).withModel(
+                    editModel == null || editModel.isBlank() ? form.model() : editModel);
             return ResponseEntity.ok(templates.aiTestResult(ollamaClient.checkConnection(config), config.model()));
         } catch (IllegalArgumentException | NoSuchElementException e) { return aiFormError(e.getMessage(), 400); }
+    }
+
+    @PostMapping(value = "/ai/test-generation", consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE,
+            produces = "text/html;charset=UTF-8")
+    @ResponseBody
+    public ResponseEntity<String> testGeneration(@ModelAttribute AiProviderForm form,
+                                                 @RequestParam(required = false) String editModel) {
+        AiConfig config;
+        try {
+            config = form.resolveForTest(aiConfigStore, editModel);
+        } catch (IllegalArgumentException | NoSuchElementException e) {
+            return aiFormError(e.getMessage(), 400);
+        }
+        try {
+            ollamaClient.verifyGeneration(config);
+            return ResponseEntity.ok("<div class=\"form-msg ok\">模型 " + HtmlUtils.htmlEscape(config.model())
+                    + " 已成功完成测试生成。</div>");
+        } catch (Exception e) {
+            if (e instanceof InterruptedException) Thread.currentThread().interrupt();
+            return aiFormError("模型 " + config.model() + " 生成测试失败。" + AiFailureMessages.describe(e), 200);
+        }
     }
 
     @PostMapping(value = "/ai/models", consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)

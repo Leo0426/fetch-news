@@ -14,6 +14,7 @@ import app.ai.AiConfig;
 import app.ai.AiConfigStore;
 import app.ai.OllamaClient;
 import app.core.RouteConfigStore;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpServer;
 import java.net.InetSocketAddress;
@@ -21,6 +22,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.jsoup.Jsoup;
@@ -186,6 +188,102 @@ class AdminAiSettingsTest {
             assertEquals("saved-key", config.profile(id).config().apiKey());
             assertEquals("saved-model", config.profile(id).config().model());
             assertEquals("default", config.settings().activeProfile());
+        } finally { server.stop(0); }
+    }
+
+    @Test void savesAndRendersEachModelsCapabilitiesWithoutChangingTheDefault() throws Exception {
+        String capabilities = """
+                {"primary":{"maxTokens":512,"jsonMode":true,"tokenLimitParameter":"auto","apiStyle":"chat"},
+                 "secondary":{"maxTokens":8192,"jsonMode":false,"apiStyle":"responses",
+                              "parameters":{"reasoning":{"effort":"low"},"stream":true}}}
+                """;
+        String html = mvc.perform(post("/index/ai").contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                .param("name", "Relay").param("host", "https://relay.test/v1").param("protocol", "openai")
+                .param("activate", "true").param("model", "primary").param("modelIds", "primary", "secondary")
+                .param("editModel", "secondary").param("modelCapabilities", capabilities))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
+        var document = Jsoup.parse(html);
+        var rendered = new ObjectMapper().readTree(document.selectFirst("[data-saved-capabilities]").data());
+        assertEquals("primary", document.select("input[name=model]").val());
+        assertEquals(512, rendered.path("primary").path("maxTokens").asInt());
+        assertEquals("responses", rendered.path("secondary").path("apiStyle").asText());
+        assertTrue(rendered.path("secondary").path("parameters").path("stream").asBoolean());
+        assertEquals("primary", config.get().model());
+        assertEquals("chat", config.get().apiStyle());
+        assertFalse(document.select("option[value=gemini]").isEmpty());
+        var saved = config.settings();
+        String invalid = "{\"primary\":{\"parameters\":{\"private-key-data\":\"redacted-fixture\"}}}";
+        String error = mvc.perform(post("/index/ai").contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                .param("profileId", saved.activeProfile()).param("name", "Relay").param("model", "primary")
+                .param("protocol", "openai").param("host", "https://relay.test/v1").param("modelCapabilities", invalid))
+                .andExpect(status().isBadRequest()).andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
+        assertFalse(error.contains("redacted-fixture"));
+        assertFalse(error.contains("private-key-data"));
+        assertEquals(saved, config.settings());
+    }
+
+    @Test void capabilityErrorsIdentifyTheModelFieldOrSyntaxPositionAndKeepSubmittedValuesPrivate() throws Exception {
+        var drafts = List.of(
+                "{\"draft\":{\"parameters\":{\"stream\":\"private-value\"}}}",
+                "{\"draft\":{\"maxTokens\":\"private-value\"}}",
+                "{\"draft\":{\"parameters\":[\"private-value\"]}}",
+                "{\"draft\":{\"private-field\":\"private-value\"}}",
+                "{\"private-field\":{\"parameters\":{\"stream\":\"private-value\"}}}",
+                "{\n\"draft\":{\"parameters\":{\"private-field\":private-value}}}");
+        var expected = List.of("模型 draft：模型参数 stream", "模型 draft：maxTokens 必须是", "模型 draft：附加生成参数",
+                "模型 draft：模型配置包含不支持的字段", "模型配置：模型参数 stream", "JSON 语法无效（第 2 行，第 ");
+        for (int i = 0; i < drafts.size(); i++) {
+            var response = mvc.perform(post("/index/ai/test-generation")
+                    .contentType(MediaType.APPLICATION_FORM_URLENCODED).param("model", "primary")
+                    .param("editModel", "draft").param("host", "https://relay.test/v1").param("protocol", "openai")
+                    .param("apiKey", "test-secret").param("modelCapabilities", drafts.get(i)))
+                    .andExpect(status().isBadRequest()).andReturn().getResponse();
+            String error = Jsoup.parse(response.getContentAsString(StandardCharsets.UTF_8)).text();
+            assertTrue(error.contains(expected.get(i)), error);
+            assertFalse(error.contains("private-field"));
+            assertFalse(error.contains("private-value"));
+            assertFalse(error.contains("test-secret"));
+        }
+        assertFalse(Files.exists(directory.resolve("ai.json")));
+    }
+
+    @Test void testsEditedModelGenerationWhileAiIsOffAndKeepsUpstreamErrorsPrivate() throws Exception {
+        var mapper = new ObjectMapper();
+        var request = new AtomicReference<JsonNode>();
+        var upstreamStatus = new AtomicInteger(200);
+        var server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/v1/chat/completions", exchange -> {
+            request.set(mapper.readTree(exchange.getRequestBody()));
+            byte[] body = upstreamStatus.get() == 200 ? mapper.writeValueAsBytes(
+                    Map.of("choices", List.of(Map.of("message", Map.of("content", "{\"ok\":true}")))))
+                    : "private-key-data".getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(upstreamStatus.get(), body.length);
+            try (var out = exchange.getResponseBody()) { out.write(body); }
+        });
+        server.start();
+        try {
+            String capabilities = """
+                    {"primary":{"maxTokens":500}, "draft":{"apiStyle":"chat","maxTokens":256,
+                    "tokenLimitParameter":"max_completion_tokens","parameters":{"temperature":0.4}}}
+                    """;
+            var form = post("/index/ai/test-generation").contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                    .param("host", "http://127.0.0.1:" + server.getAddress().getPort() + "/v1")
+                    .param("protocol", "openai").param("model", "primary").param("editModel", "draft")
+                    .param("apiKey", "test-key").param("modelCapabilities", capabilities);
+            String result = mvc.perform(form).andExpect(status().isOk())
+                    .andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
+            assertTrue(Jsoup.parse(result).select(".form-msg.ok").text().contains("draft"));
+            assertEquals("draft", request.get().path("model").asText());
+            assertEquals(256, request.get().path("max_completion_tokens").asInt());
+            assertEquals(0.4, request.get().path("temperature").asDouble());
+            upstreamStatus.set(401);
+            String failed = mvc.perform(form).andExpect(status().isOk())
+                    .andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
+            assertTrue(Jsoup.parse(failed).select(".form-msg.err").text().contains("401"));
+            assertFalse(failed.contains("private-key-data"));
+            assertFalse(failed.contains("test-key"));
+            assertFalse(config.get().enabled());
+            assertFalse(Files.exists(directory.resolve("ai.json")));
         } finally { server.stop(0); }
     }
 

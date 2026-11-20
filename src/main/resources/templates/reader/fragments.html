@@ -21,9 +21,9 @@
        th:hidden="${!item.hasSummary()}" th:text="${item.summary()}"></div>
   <p class="rd-summarize-err" data-compact-summary-error
      th:hidden="${item.hasSummary() or status == null or !status.error()}"
-     th:text="${!item.hasSummary() and status != null and status.error()} ? ${status.errorMessage()} : ''"></p>
+     th:text="${!item.hasSummary() and status != null and status.error()} ? ${status.readerErrorMessage()} : ''"></p>
   <button type="button" class="rd-summarize-retry" data-compact-summary-check hidden>重新查看状态</button>
-  <a class="reader-article-link" data-compact-summary-recovery data-article-link
+  <a class="reader-article-link" data-compact-summary-recovery th:data-article-title="${item.title()}" data-article-link
      th:hidden="${item.hasSummary() or status == null or !status.error()}"
      th:href="${'/reader/article?link=' + #uris.escapeQueryParam(item.link())}">查看文章与摘要 →</a>
   <noscript th:if="${!item.hasSummary() and status != null and (status.queued() or status.running())}">
@@ -53,7 +53,7 @@
 <div th:fragment="articleCard(item, aiEnabled)"
      class="rd-card reveal"
      th:with="status=${item.summaryStatus()},pick=${picks != null ? picks.label(item.link()) : null}"
-     th:attr="data-picks=${pick == null ? '' : (pick.mustKnow() ? 'must ' : '') + (pick.quality() ? 'quality' : '')},data-verdict-must=${pick == null ? '' : picks.verdict(item.link(), 'must')},data-verdict-quality=${pick == null ? '' : picks.verdict(item.link(), 'quality')},data-link=${item.link()},data-title=${item.title()},data-route-path=${item.routePath()},data-summary-state=${item.hasSummary() ? 'success' : (status != null ? status.status() : 'none')},data-summary-error=${status != null and status.error() ? status.errorMessage() : ''},data-ai-enabled=${aiEnabled}"
+     th:attr="data-picks=${pick == null ? '' : (pick.mustKnow() ? 'must ' : '') + (pick.quality() ? 'quality' : '')},data-verdict-must=${pick == null ? '' : picks.verdict(item.link(), 'must')},data-verdict-quality=${pick == null ? '' : picks.verdict(item.link(), 'quality')},data-link=${item.link()},data-title=${item.title()},data-route-path=${item.routePath()},data-summary-state=${item.hasSummary() ? 'success' : (status != null ? status.status() : 'none')},data-summary-error=${status != null and status.error() ? status.readerErrorMessage() : ''},data-ai-enabled=${aiEnabled}"
      x-data="{ link: $el.dataset.link, cardTitle: $el.dataset.title, routePath: $el.dataset.routePath }"
      :class="{'rd-card--read': isRead(link), 'rd-card--bookmarked': isBookmarked(link)}"
      x-show="itemVisible($el)">
@@ -62,113 +62,123 @@
     <img th:src="${item.image()}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer"
          onerror="this.parentElement.remove()">
   </div>
-  <a class="rd-card-title"
-     th:href="${item.link()}"
-     th:text="${item.title()}"
-     @click="markRead(link)"
-     target="_blank" rel="noopener noreferrer">标题</a>
+  <h3 class="reader-story-heading">
+    <a class="rd-card-title" th:href="${item.link()}" th:text="${item.title()}" title="打开原文（新窗口）"
+       @click="markRead(link)" @auxclick="if ($event.button === 1) markRead(link)"
+       target="_blank" rel="noopener noreferrer">标题</a>
+  </h3>
 
   <div th:if="${pick != null}" class="rd-picks">
     <th:block th:if="${pick.mustKnow()}"><p th:replace="~{reader/fragments :: pickLine('must', '必知', ${pick.mustKnowReason()})}"></p></th:block>
     <th:block th:if="${pick.quality()}"><p th:replace="~{reader/fragments :: pickLine('quality', '精选', ${pick.qualityReason()})}"></p></th:block>
   </div>
 
-  <th:block th:if="${item.hasSummary()}">
-    <th:block th:replace="~{reader/fragments :: summaryStatus(${item})}"></th:block>
-  </th:block>
-  <p th:if="${item.hasSummary()}"
-     class="rd-summary"
-     th:text="${item.summary()}"></p>
+  <details class="reader-story-preview" open :open="!listView"
+           th:if="${item.hasSummary() or item.hasSummaryStatus() or item.hasExcerpt() or aiEnabled}">
+    <summary><span th:text="${item.hasSummary() or item.hasSummaryStatus() or aiEnabled} ? '预览与摘要' : '文章预览'">文章预览</span></summary>
+    <div class="reader-preview-body">
+      <th:block th:if="${item.hasSummary()}">
+        <th:block th:replace="~{reader/fragments :: summaryStatus(${item})}"></th:block>
+      </th:block>
+      <p th:if="${item.hasSummary()}"
+         class="rd-summary"
+         th:text="${item.summary()}"></p>
 
-  <p th:if="${!item.hasSummary() and item.hasExcerpt()}"
-     class="rd-summary rd-excerpt"
-     x-show="!summary(link)"
-     th:text="${item.excerpt()}"></p>
-  <div th:if="${!item.hasSummary()}" class="rd-summarize-wrap"
-       x-show="aiEnabled[link] || summaryState(link) !== 'none' || aiUncertain[link]">
-    <div class="reader-summary-status" role="status" aria-live="polite" aria-atomic="true"
-         x-show="summaryLabel(link)"
-         :class="{'running': isSummarizing(link) && !aiUncertain[link], 'err': summaryState(link) === 'error' || aiUncertain[link]}"
-         th:style="${status == null} ? 'display:none' : null">
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-           stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <path d="m12 3 2.7 6.3L21 12l-6.3 2.7L12 21l-2.7-6.3L3 12l6.3-2.7Z"/>
-      </svg>
-      <span x-text="summaryLabel(link)"
-            th:text="${status != null and status.queued()} ? '已加入队列 · 排队中' : (${status != null and status.running()} ? '正在生成摘要' : (${status != null and status.error()} ? '摘要生成失败' : ''))"></span>
+      <p th:if="${!item.hasSummary() and item.hasExcerpt()}"
+         class="rd-summary rd-excerpt"
+         x-show="!summary(link)"
+         th:text="${item.excerpt()}"></p>
+      <div th:if="${!item.hasSummary()}" class="rd-summarize-wrap"
+           x-show="aiEnabled[link] || summaryState(link) !== 'none' || aiUncertain[link]">
+        <div class="reader-summary-status" role="status" aria-live="polite" aria-atomic="true"
+             x-show="summaryLabel(link)"
+             :class="{'running': isSummarizing(link) && !aiUncertain[link], 'err': summaryState(link) === 'error' || aiUncertain[link]}"
+             th:style="${status == null} ? 'display:none' : null">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="m12 3 2.7 6.3L21 12l-6.3 2.7L12 21l-2.7-6.3L3 12l6.3-2.7Z"/>
+          </svg>
+          <span x-text="summaryLabel(link)"
+                th:text="${status != null and status.queued()} ? '已加入队列 · 排队中' : (${status != null and status.running()} ? '正在生成摘要' : (${status != null and status.error()} ? '摘要生成失败' : ''))"></span>
+        </div>
+        <p x-show="summary(link)"
+           x-text="summary(link) || ''"
+           class="rd-summary" style="display:none"></p>
+        <p x-show="['queued', 'running'].includes(summaryState(link)) && !aiUncertain[link]"
+           x-text="!aiEnabled[link] && summaryState(link) === 'queued' ? 'AI 已关闭，任务保留在队列中。' : '可以继续阅读，完成后自动显示。'"
+           class="rd-summarize-loading" style="display:none"></p>
+        <div x-show="aiUncertain[link]"
+             class="rd-summarize-err" role="alert" style="display:none">
+          <span>暂时无法连接，可重新查看任务状态。</span>
+          <button type="button" @click.stop="checkSummary(link)"
+                  :disabled="!!summarizing[link]"
+                  class="rd-summarize-retry"
+                  x-text="summarizing[link] ? '查询中…' : '重新查看状态'">重新查看状态</button>
+        </div>
+        <div x-show="summaryError(link) && !aiUncertain[link]"
+             class="rd-summarize-err" role="alert" style="display:none">
+          <span x-text="summaryError(link) || ''"></span>
+          <button th:if="${aiEnabled}" type="button"
+                  @click.stop="summarize(link, cardTitle)"
+                  :disabled="isSummarizing(link)"
+                  class="rd-summarize-retry">重试生成</button>
+        </div>
+        <button th:if="${aiEnabled}" type="button"
+                x-show="summaryState(link) === 'none'
+                     && !isSummarizing(link)
+                     && !aiUncertain[link]"
+                @click.stop="summarize(link, cardTitle)"
+                :disabled="isSummarizing(link)"
+                class="rd-summarize-btn">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true"
+               stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+            <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+          </svg>
+          AI 摘要
+        </button>
+      </div>
     </div>
-    <p x-show="summary(link)"
-       x-text="summary(link) || ''"
-       class="rd-summary" style="display:none"></p>
-    <p x-show="['queued', 'running'].includes(summaryState(link)) && !aiUncertain[link]"
-       x-text="!aiEnabled[link] && summaryState(link) === 'queued' ? 'AI 已关闭，任务保留在队列中。' : '可以继续阅读，完成后自动显示。'"
-       class="rd-summarize-loading" style="display:none"></p>
-    <div x-show="aiUncertain[link]"
-         class="rd-summarize-err" role="alert" style="display:none">
-      <span>暂时无法连接，可重新查看任务状态。</span>
-      <button type="button" @click.stop="checkSummary(link)"
-              :disabled="!!summarizing[link]"
-              class="rd-summarize-retry"
-              x-text="summarizing[link] ? '查询中…' : '重新查看状态'">重新查看状态</button>
-    </div>
-    <div x-show="summaryError(link) && !aiUncertain[link]"
-         class="rd-summarize-err" role="alert" style="display:none">
-      <span x-text="summaryError(link) || ''"></span>
-      <button th:if="${aiEnabled}" type="button"
-              @click.stop="summarize(link, cardTitle)"
-              :disabled="isSummarizing(link)"
-              class="rd-summarize-retry">重试生成</button>
-    </div>
-    <button th:if="${aiEnabled}" type="button"
-            x-show="summaryState(link) === 'none'
-                 && !isSummarizing(link)
-                 && !aiUncertain[link]"
-            @click.stop="summarize(link, cardTitle)"
-            :disabled="isSummarizing(link)"
-            class="rd-summarize-btn">
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true"
-           stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-        <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
-      </svg>
-      AI 摘要
-    </button>
-  </div>
+  </details>
 
   <div class="rd-card-meta">
     <div class="reader-article-info">
       <span class="rd-src" th:text="${sourceLabels != null and sourceLabels[item.routePath()] != null ? sourceLabels[item.routePath()] : item.sourceLabel()}">来源</span>
-      <span class="rd-age" th:text="'获取 ' + ${item.formattedFetchedAt()}">获取 —</span>
-      <span class="rd-age" th:text="'发布 ' + ${item.formattedPublishedAt()}">发布 —</span>
+      <time th:if="${item.pubDate() != null}" class="rd-age" th:datetime="${item.pubDate()}"
+            th:text="'发布 ' + ${item.formattedPublishedAt()}">发布时间</time>
+      <time th:if="${item.firstSeenAt() != null}" class="rd-age" th:datetime="${item.firstSeenAt()}"
+            th:text="'获取 ' + ${item.formattedFetchedAt()}">获取时间</time>
     </div>
     <div class="reader-card-actions">
-    <a class="reader-article-link" th:href="${'/reader/article?link=' + #uris.escapeQueryParam(item.link())}" data-article-link>站内阅读</a>
-    <button type="button" class="rd-bookmark-btn"
-            :disabled="!!bookmarkPending[link]"
-            :aria-busy="!!bookmarkPending[link]"
-            :aria-pressed="isBookmarked(link)"
-            :aria-label="isBookmarked(link) ? '取消收藏' : '收藏文章'"
-            :class="isBookmarked(link) && 'bookmarked'"
-            :title="isBookmarked(link) ? '取消收藏' : '收藏'"
-            @click.stop="toggleBookmark(link, cardTitle, routePath)">
-      <svg width="12" height="12" viewBox="0 0 24 24"
-           stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-           :fill="isBookmarked(link) ? 'currentColor' : 'none'">
-        <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
-      </svg>
-    </button>
-    <button type="button" class="rd-read-dot"
-            :disabled="readBusy(link)"
-            :aria-busy="readBusy(link)"
-            :aria-pressed="isRead(link)"
-            :aria-label="isRead(link) ? '标为未读' : '标为已读'"
-            @click.stop="toggleRead(link)"
-            :title="isRead(link) ? '标为未读' : '标为已读'">
-      <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
-        <circle class="reader-unread-mark" cx="12" cy="12" r="4" fill="currentColor"/>
-        <path class="reader-read-mark" d="m5 12 4 4L19 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-      </svg>
-      <span x-text="readBusy(link) ? '保存中' : (isRead(link) ? '已读' : '未读')">未读</span>
-    </button>
+      <a class="reader-article-link" th:href="${'/reader/article?link=' + #uris.escapeQueryParam(item.link())}" th:data-article-title="${item.title()}" data-article-link>
+        <svg th:replace="~{shared/icons :: icon('book')}"></svg><span>站内阅读</span>
+      </a>
+      <button type="button" class="rd-bookmark-btn"
+              :disabled="!!bookmarkPending[link]"
+              :aria-busy="!!bookmarkPending[link]"
+              :aria-pressed="isBookmarked(link)"
+              :aria-label="isBookmarked(link) ? '取消收藏' : '收藏文章'"
+              :class="isBookmarked(link) && 'bookmarked'"
+              :title="isBookmarked(link) ? '取消收藏' : '收藏'"
+              @click.stop="toggleBookmark(link, cardTitle, routePath)">
+        <svg width="12" height="12" viewBox="0 0 24 24"
+             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+             :fill="isBookmarked(link) ? 'currentColor' : 'none'">
+          <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+        </svg>
+      </button>
+      <button type="button" class="rd-read-dot"
+              :disabled="readBusy(link)"
+              :aria-busy="readBusy(link)"
+              :aria-pressed="isRead(link)"
+              :aria-label="isRead(link) ? '标为未读' : '标为已读'"
+              @click.stop="toggleRead(link)"
+              :title="isRead(link) ? '标为未读' : '标为已读'">
+        <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+          <circle class="reader-unread-mark" cx="12" cy="12" r="4" fill="currentColor"/>
+          <path class="reader-read-mark" d="m5 12 4 4L19 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <span x-text="readBusy(link) ? '保存中' : (isRead(link) ? '已读' : '未读')">未读</span>
+      </button>
     </div>
   </div>
 </div>

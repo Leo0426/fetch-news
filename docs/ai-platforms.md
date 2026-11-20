@@ -1,53 +1,44 @@
 # AI 平台与模型配置
 
-在 `/index` → **AI 设置** 中管理多个平台配置。摘要、全文提取和精选日报共用“当前使用”的平台及一个生成并发许可；默认仍为关闭的 Ollama 配置。
+在管理后台的「AI 设置」添加提供商。一个提供商共用 API 基础地址和密钥，可以保存多个模型 ID。每个模型有独立的生成接口、输出上限和附加参数。摘要、全文提取、必知 / 精选和精选日报使用当前提供商的默认模型，输入与结果都是文字。
 
-## 设置流程
+## 添加并验证模型
 
-1. 点击“添加自定义提供商”，填写名称、API 协议、API 基础地址和密钥。OpenAI/Anthropic 兼容服务填写到 `/v1`，例如 `https://relay.example/v1`；Ollama 填写服务根地址。同一服务也可保存多套配置。
-2. 每个提供商有独立的模型列表。点击“添加模型”打开弹窗，手动填写模型 ID，或点击“获取模型列表”后从“可用模型”中选择，再点击“添加到列表”。首个模型自动成为默认模型；列表中可选择其他默认模型、删除非默认模型。重复模型不能添加，取消或按 Escape 关闭弹窗不会添加模型。
-3. 按提供商要求在“高级选项”中调整最大输出 Token、输出上限字段及 JSON 模式。
-4. 模型添加、删除和默认模型更改随提供商表单一起保存。点击“保存提供商”只保存配置，不切换当前提供商；“保存并启用”同时保存和切换。编辑当前提供商后保存立即生效。每个提供商至少保留一个模型，删除默认模型前需先选择其他模型。
-5. 用列表中的“启用此提供商”切换已保存的配置。AI 功能开关独立于提供商表单，保存、测试和切换配置都会保留此开关。当前提供商不能直接删除，先切换到另一提供商。
+1. 点击「添加自定义提供商」，选择 API 协议，填写名称、基础地址和密钥。
+2. 点击「添加模型」，可以直接填写模型 ID，也可以先获取平台的模型列表。第一个模型会成为默认模型。
+3. 在「配置与测试的模型」选择要编辑的模型，展开「模型高级选项」。更换正在编辑的模型会保留其他模型的草稿。列表里的默认模型决定新闻任务实际使用哪个模型。
+4. 「测试连接」读取模型列表。「测试模型生成」会用当前表单、所选模型和实际生成参数发送一条简短请求，校验返回的 JSON，可能产生少量费用。两项测试均可在保存前和全局 AI 关闭时使用。
+5. 点击「保存提供商」保存整份表单，或点击「保存并启用」同时切换当前提供商。已启用提供商的设置保存后立即生效。第一次使用时，在页面上方开启「AI 功能」。
 
-“测试此配置”使用**正在编辑的表单**，可以在保存前测试；不会保存、切换提供商或进行模型推理。编辑已有配置时密钥留空会沿用其已保存密钥；更换协议或目标服务器时需重新输入或显式清除。Ollama 查询版本与模型；远程协议查询模型列表。列表包含模型不代表实际生成一定成功；404/405 表示平台没有提供该接口，可继续手动填写模型 ID。
+平台未实现模型列表接口时，可手动填写 ID 后直接测试生成。模型能列出、能按指令输出 JSON、能在给定额度内完成一篇长文分析，分别需要相应请求来验证。
 
-弹窗内“获取模型列表”使用同样的密钥保留规则，无需先填写提供商名称或模型，不会自动添加、保存或切换模型。OpenAI/Anthropic 兼容接口读取 `/models`，Ollama 读取 `/api/tags`；接口不支持、鉴权失败或列表为空时会显示提示，模型 ID 始终可以手动输入。更改地址、协议或密钥后会清除接口获取结果，已经添加的模型列表保留。
+## 协议和参数示例
 
-交互参考 [CC Switch 的提供商配置](https://github.com/farion1231/cc-switch/blob/main/docs/user-manual/en/2-providers/2.1-add.md)：以命名提供商管理地址、密钥、模型和 API 协议。本项目通过表单配置，不导入 CC Switch 的 JSON/TOML 文件。
+| API 协议 | 基础地址示例 | 文本生成接口 | 附加生成参数示例 |
+|---|---|---|---|
+| OpenAI 兼容 | `https://api.openai.com/v1` | Chat Completions 或 Responses | `{"reasoning_effort":"low","verbosity":"low"}` |
+| Anthropic 兼容 | `https://api.anthropic.com/v1` | Messages | `{"thinking":{"type":"enabled","budget_tokens":1024}}` |
+| Gemini | `https://generativelanguage.googleapis.com/v1beta` | generateContent 或 streamGenerateContent | `{"thinkingConfig":{"thinkingBudget":1024}}` |
+| Ollama | `http://localhost:11434` | /api/generate | `{"temperature":0.4,"num_ctx":8192,"think":false}` |
 
-## 协议与地址
+参数支持情况取决于具体模型。选项可以留空，使用平台默认值。最大输出 Token、原生 JSON 和 OpenAI 接口类型在表单中配置。附加参数使用 JSON 对象，可填写采样、推理、停止序列等协议原生字段。流式模型可设 `{"stream":true}`，服务端收齐并验证结果后再保存。工具调用、文件上传、模型输入、认证和地址由应用控制。
 
-| 协议 | 地址示例 | 调用及认证 |
-|---|---|---|
-| Ollama | `http://localhost:11434` | `/api/generate`；沿用现有行为 |
-| OpenAI Chat Completions | `https://api.openai.com/v1` 或第三方 `https://relay.example/prefix/v1` | `/chat/completions`，`Authorization: Bearer …` |
-| Anthropic Messages | `https://api.anthropic.com/v1` 或第三方 `https://relay.example/prefix/v1` | `/messages`，`x-api-key` 与 `anthropic-version: 2023-06-01` |
+OpenAI、Anthropic 的基础地址可以带中转服务的路径前缀，根地址默认补 `/v1`。Gemini 根地址默认补 `/v1beta`。完整生成地址会归一化为基础地址。Ollama 使用服务根地址，Docker 中的 `localhost` 指运行本应用的容器。只有 Ollama 配置受 `OLLAMA_HOST` 影响。
 
-远程协议统一展示和保存 API 基础地址，由系统追加 `/models`、`/chat/completions` 或 `/messages`。兼容粘贴旧的完整生成地址，例如 `https://relay.example/v1/chat/completions`、`https://relay.example/v1/messages`：读取或保存时会去掉接口后缀，归一化为 `https://relay.example/v1`。根地址 `https://relay.example` 默认补 `/v1`；有自定义路径时保留该前缀。已有配置读取后立即使用基础地址，下次保存时更新配置文件。请使用平台实际提供的地址和模型 ID，不需要在项目中预先登记模型。
+## 兼容与错误处理
 
-OpenAI 兼容协议支持 `max_tokens` 或 `max_completion_tokens`，默认前者；按平台/模型要求选择。需要后者的模型可以在设置页切换。Anthropic 使用必需的 `max_tokens`。Ollama 沿用原有生成请求，不应用此远程 Token 选项。
+- OpenAI 选「自动选择」会先使用 Chat Completions。如果平台明确提示端点不适用，或端点不存在，会在同一地址尝试 Responses。也可以为模型指定固定接口。
+- 对于 Chat 输出上限，自动模式优先发送 `max_completion_tokens`。平台明确拒绝上限字段时，会尝试另一种拼写，并保留该模型的输出额度。Responses 使用 `max_output_tokens`，Anthropic 使用 `max_tokens`，Gemini 使用 `maxOutputTokens`，Ollama 使用 `num_predict`。
+- 结构化任务会提示模型返回 JSON。启用原生 JSON 的接口还会发送协议对应的格式参数。平台明确拒绝这个格式参数时，会继续通过提示词请求 JSON，日报仍会校验结果的字段和类型。
+- 自动协商只调整同一模型的传输细节。成功的组合在内存中暂存，缓存按平台、模型、参数和凭据隔离。模型明确拒绝用户填写的生成参数时，会提示调整该参数。
+- 向量、图像和音频模型可能也出现在模型列表里。如果接口拒绝文本任务或只返回其他类型的结果，任务会报告原因。账号权限、额度、输出截断、拒答、没有正文或连接中断也会产生相应错误。阅读页可以在修正配置后重试。
+- 平台的原始错误可能包含文章或认证信息，页面和任务记录使用本地错误说明。已识别的 HTTP 错误显示状态码、原因，以及平台指出的生成字段。平台未提供可识别原因时，显示可确认的状态和排查方向。
 
-若 OpenAI 兼容响应以 `length` 结束，摘要会显示输出额度不足，保留失败状态供手动重试，不保存截断文本或自动增加额度。部分推理模型可能在输出正文之前就耗尽预算。对于网页中已有明确正文的文章，系统会直接提取并缓存正文，只调用模型生成摘要；无法定位正文时才使用模型辅助提取。
+## 密钥、历史数据与任务恢复
 
-OpenAI 的原生 JSON 模式会发送 `response_format: {"type":"json_object"}`；不支持该字段的平台可关闭。Anthropic 使用明确的 JSON 提示词，不发送 OpenAI 特有字段。精选日报对结果始终严格校验，非法 JSON、截断响应、拒绝或需要工具调用的响应不会成为正常分析结果。目前是非流式单轮文本调用，不含工具执行、多模态输入或自动平台回退。
+- API Key 存在服务端的 `ai-config.json`。编辑时密钥留空表示沿用原密钥，也可以勾选清除。更换协议或服务器 origin 时需重新输入密钥或明确清除。文件原子替换，在支持 POSIX 的系统上权限为 `0600`。
+- 配置使用 `activeProfile`、全局 `enabled` 和 `profiles`。每个提供商的 `models` 保存 ID 列表，`config.model` 指定默认模型，`modelCapabilities` 按模型 ID 保存参数。旧版提供商级选项会分配给原来的每个模型，更早的单一 host/model 配置按 Ollama 读取。下次保存时写入新格式。
+- 精选日报保存无密钥的配置快照。切换平台、模型或生成设置会使进行中的日报暂停，分析缓存也会区分这些设置。轮换密钥可以沿用原模型身份。已成功生成的文章摘要继续复用。
+- 可通过 `-Dfetch-news.ai-config=/path/ai-config.json` 指定文件；Docker 继续使用 `/data/ai-config.json`。
 
-## 密钥、迁移与任务恢复
-
-- API Key 保存在服务端的 `ai-config.json`，页面只显示“已配置”，不会回填原密钥。编辑留空表示保留，勾选“清除已保存密钥”才能清除。
-- 改协议或目标 origin（协议/主机/端口）时，需重新输入密钥或显式清除；不会将原平台密钥自动带到新平台。
-- 密钥只允许可用于 HTTP 头的可打印 ASCII，保存前会拒绝隐藏字符。错误内容不包含密钥或平台返回的原始错误响应。
-- 支持 POSIX 权限的系统将配置文件保存为 `0600`；配置保存为原子替换，写盘失败不改变正在使用的设置。配置文件已经在 `.gitignore` 中。
-- 旧 `{host, model, enabled}` 配置在读取时作为一个名为 Ollama 的默认平台，首次保存写为多平台格式。旧三参数 Java 构造器仍可用。
-- `OLLAMA_HOST` 只覆盖当前 Ollama 平台的地址，不影响 OpenAI/Anthropic 平台。
-- 精选日报仅保存去除密钥的协议、地址、模型及生成选项快照。API Key 不进入日报快照或分析缓存键。
-- 切换协议、地址、模型或生成选项会使未完成的精选日报暂停，并隔离后续分析缓存。恢复原配置后可继续，或生成新版本；已发出的请求仍使用发送时的配置。单纯轮换密钥不改变模型身份。
-- 原有成功摘要继续复用，不因切换平台而自动重新生成。全局 AI 关闭后，已有内容仍可阅读，队列暂停新推理。
-
-新配置格式包含 `activeProfile`、全局 `enabled` 和 `profiles` 数组，每个平台包含 `id`、`name`、`config` 和 `models`。`models` 保存模型 ID 列表，`config.model` 指定其中的默认模型。没有 `models` 的旧配置自动以当前模型作为列表唯一条目，下一次保存时写入。可继续通过 `-Dfetch-news.ai-config=/path/ai-config.json` 指定文件。Docker 继续使用现有 `/data/ai-config.json` 挂载，不需要新增密钥文件。回退到只认识旧格式的版本前应保留新配置和数据库备份。
-
-## 验证
-
-本功能使用本地假 HTTP 平台与临时 SQLite 验证协议 payload、基础地址归一化、路径前缀/完整 endpoint、认证头、响应截断、密钥脱敏、多平台迁移/保存/切换/删除、配置保存失败，以及两种远程协议的完整精选日报流程。浏览器验证新增、切换、连接测试、留空保留密钥和修改目标后的错误提示，并检查 320/390/768/1440 宽度。自动化测试只使用虚拟密钥和本地服务；第三方平台的实际兼容性需另行通过模型发现和生成请求验证。
-
-协议依据：[OpenAI Chat Completions API](https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create)、[Anthropic 官方 Messages 示例](https://github.com/anthropics/anthropic-sdk-python#getting-started)、[Anthropic 官方认证头实现](https://github.com/anthropics/anthropic-sdk-python/blob/main/src/anthropic/_client.py)。
+字段与事件格式见各平台文档。[OpenAI Chat Completions](https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create) · [OpenAI Responses](https://developers.openai.com/api/reference/resources/responses/streaming-events) · [Anthropic Messages](https://platform.claude.com/docs/en/build-with-claude/streaming) · [Gemini generateContent](https://ai.google.dev/api/generate-content) · [Ollama 流式响应](https://docs.ollama.com/api/streaming)

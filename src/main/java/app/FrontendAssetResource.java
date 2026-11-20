@@ -26,8 +26,9 @@ import org.springframework.web.bind.annotation.RestController;
 public class FrontendAssetResource {
     /** Asset files served below; they are reachable without signing in. */
     public static final Set<String> ASSETS = Set.of(
-            "admin.css", "admin-controls.css", "admin-stats.css", "admin-views.css", "admin.js",
-            "ai-settings.js", "alpine.min.js", "article.css", "article.js", "briefing.css",
+            "account.css", "admin.css", "admin-controls.css", "admin-stats.css", "admin-users.css", "admin-views.css",
+            "admin.js",
+            "ai-settings.css", "ai-settings.js", "alpine.min.js", "article.css", "article.js", "briefing.css",
             "compact-summary.js", "digest.css", "htmx.min.js", "radar.css", "radar.js", "radar-community.js",
             "reader.css", "reader.js", "reader-page.js", "search.css", "ui-controls.css", "ui.js");
 
@@ -39,8 +40,9 @@ public class FrontendAssetResource {
     }
 
     @GetMapping({
+            "/{file:account\\.css}", "/{file:admin-users\\.css}",
             "/{file:admin\\.css}", "/{file:admin-controls\\.css}", "/{file:admin-stats\\.css}",
-            "/{file:admin-views\\.css}", "/{file:admin\\.js}", "/{file:ai-settings\\.js}",
+            "/{file:admin-views\\.css}", "/{file:admin\\.js}", "/{file:ai-settings\\.css}", "/{file:ai-settings\\.js}",
             "/{file:alpine\\.min\\.js}", "/{file:article\\.css}", "/{file:article\\.js}",
             "/{file:briefing\\.css}", "/{file:compact-summary\\.js}", "/{file:digest\\.css}",
             "/{file:htmx\\.min\\.js}", "/{file:radar\\.css}", "/{file:radar\\.js}",

@@ -28,9 +28,9 @@ document.addEventListener('keydown', event => {
     cards[next].classList.add('fn-focused');
     cards[next].querySelector('.rd-card-title')?.focus({preventScroll: true});
     cards[next].scrollIntoView({block: 'nearest', behavior: window.FetchNewsUI.motionBehavior()});
-  } else if (index >= 0 && ['o', 'b', 'r'].includes(event.key)) {
+  } else if (index >= 0 && ['o', 'i', 'b', 'r'].includes(event.key)) {
     event.preventDefault();
-    const selector = {o: '.rd-card-title', b: '.rd-bookmark-btn', r: '.rd-read-dot'}[event.key];
+    const selector = {o: '.rd-card-title', i: '[data-article-link]', b: '.rd-bookmark-btn', r: '.rd-read-dot'}[event.key];
     cards[index].querySelector(selector)?.click();
   }
 });

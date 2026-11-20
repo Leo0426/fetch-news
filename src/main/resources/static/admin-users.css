@@ -1,0 +1,48 @@
+.user-admin { display: grid; gap: 16px; max-width: 1060px; }
+.user-admin :is(h2, strong, code, dd) { overflow-wrap: anywhere; }
+.user-admin h2 { font-size: 18px; font-weight: 700; }
+.user-admin .account-count { margin-inline-start: 6px; font-size: 13px; color: var(--ink-soft); }
+.account-section { display: grid; gap: 12px; justify-items: start; padding: clamp(15px, 2.4vw, 24px); }
+.account-meta, .account-section p, .account-dates dt { font-size: 13px; color: var(--ink-soft); }
+.accounts-list, .account-tokens { margin: 0; list-style: none; padding: 0; }
+.account-row { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr) auto; align-items: center;
+  gap: 10px 16px; padding: 13px clamp(15px, 2.4vw, 24px); }
+.account-row + .account-row, .account-tokens li + li { border-top: 1px solid var(--line); }
+.account-identity, .account-actions, .account-inline, .account-heading, .account-dates {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; min-width: 0;
+}
+.account-identity { gap: 5px 8px; }
+.account-heading, .account-tokens { width: 100%; }
+.account-heading { justify-content: space-between; }
+.account-heading h2 { font-size: 22px; }
+.account-inline { width: 100%; align-items: end; }
+.account-inline .field { width: min(100%, 340px); min-width: 0; }
+.account-create { width: 100%; display: grid; align-items: end; gap: 12px;
+  grid-template-columns: minmax(100px, 1fr) minmax(130px, .8fr) minmax(130px, 1fr) auto; }
+.account-dates { gap: 10px 24px; border-top: 1px solid var(--line); padding-top: 10px; width: 100%; }
+.account-dates dd { font: 13px/1.8 var(--font-mono); color: var(--ink); }
+.account-back a, .account-link { color: var(--accent-dk); font-size: 13px; font-weight: 600; }
+.account-back a { display: inline-flex; align-items: center; gap: 5px; min-height: 36px; text-decoration: none; }
+.account-link { min-height: 34px; border: 0; background: transparent; cursor: pointer; }
+.account-link:hover, .account-back a:hover { text-decoration: underline; }
+.account-tokens li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 0; }
+.account-tokens li > span { min-width: 0; }
+.account-tokens small { margin-inline-start: 5px; font-size: 12px; color: var(--ink-soft); }
+.account-actions .account-danger { color: var(--warn); }
+.account-notice { padding: 10px 14px; border-radius: var(--r); }
+.account-notice.ok { background: var(--green-bg); }
+.account-notice.err { background: var(--warn-bg); }
+.account-issued { border-color: var(--accent); }
+.account-issued code { user-select: all; font: 14px/1.7 var(--font-mono); }
+@media (max-width: 920px) {
+  .account-create { grid-template-columns: repeat(2, minmax(0,1fr)); }
+  .account-row { grid-template-columns: minmax(0,1fr) auto; gap: 4px 12px; }
+  .account-row .account-actions { grid-column: 2; grid-row: 1 / span 2; }
+}
+@media (max-width: 560px) {
+  .account-create { grid-template-columns: 1fr; }
+  .account-row { display: flex; align-items: flex-start; flex-direction: column; gap: 6px; }
+  .account-inline .field { flex-basis: 100%; width: 100%; }
+  .user-admin :is(.btn, .btn-small, .account-link, .account-back a) { min-height: 44px; }
+  .user-admin .ui-control { --control-height: 44px; }
+}

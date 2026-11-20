@@ -5,6 +5,7 @@ import app.ai.AiConfigStore;
 import app.ai.OllamaClient;
 import app.core.FeedItem;
 import app.store.FeedStore;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpServer;
 import java.net.InetSocketAddress;
@@ -40,26 +41,15 @@ public final class RadarTestEnvironment implements AutoCloseable {
         server.createContext("/", e -> {
             requests.incrementAndGet();
             var input = mapper.readTree(e.getRequestBody());
-            String prompt = input.has("messages")
-                    ? input.path("messages").path(0).path("content").asText()
-                    : input.path("prompt").asText();
+            String prompt = prompt(input);
             String output = prompt.startsWith("TASK: score")
                     ? scoring.apply(prompt)
                     : prompt.startsWith("TASK: dedup")
                             ? "{\"match\":\"distinct\"}"
                             : prompt.startsWith("TASK: route") ? "{\"profile\":\"tech-news\"}" : blocksResponse;
+            if (prompt.startsWith("你是一位新闻编辑")) output = "新闻摘要已生成。";
             if (prompt.startsWith("TASK: blocks")) onBlocks.run();
-            Object envelope = input.has("messages")
-                    ? e.getRequestURI().getPath().endsWith("messages")
-                            ? Map.of(
-                                    "content",
-                                    List.of(Map.of("type", "text", "text", output)),
-                                    "stop_reason",
-                                    "end_turn")
-                            : Map.of(
-                                    "choices",
-                                    List.of(Map.of("message", Map.of("content", output), "finish_reason", "stop")))
-                    : Map.of("response", output);
+            Object envelope = response(e.getRequestURI().getPath(), output);
             byte[] body = mapper.writeValueAsBytes(envelope);
             e.sendResponseHeaders(200, body.length);
             try (var out = e.getResponseBody()) {
@@ -71,6 +61,31 @@ public final class RadarTestEnvironment implements AutoCloseable {
         var client = new OllamaClient(ai, mapper);
         service = new RadarService(store, config, profiles, ai, () -> Map.of("/a", "AI"));
         worker = new RadarWorker(store, config, ai, client, null, mapper, Clock.systemUTC());
+    }
+
+    private static String prompt(JsonNode input) {
+        if (input.has("messages")) return input.at("/messages/0/content").asText();
+        if (input.has("contents")) return input.at("/contents/0/parts/0/text").asText();
+        return input.path(input.has("input") ? "input" : "prompt").asText();
+    }
+
+    private static Object response(String path, String output) {
+        if (path.endsWith("/messages")) {
+            return Map.of("content", List.of(Map.of("type", "text", "text", output)), "stop_reason", "end_turn");
+        }
+        if (path.endsWith("/chat/completions")) {
+            return Map.of("choices", List.of(Map.of("message", Map.of("content", output), "finish_reason", "stop")));
+        }
+        if (path.endsWith("/responses")) {
+            var block = Map.of("type", "output_text", "text", output);
+            return Map.of("status", "completed", "output", List.of(
+                    Map.of("type", "message", "status", "completed", "content", List.of(block))));
+        }
+        if (path.endsWith(":generateContent")) {
+            var content = Map.of("role", "model", "parts", List.of(Map.of("text", output)));
+            return Map.of("candidates", List.of(Map.of("content", content, "finishReason", "STOP")));
+        }
+        return Map.of("response", output, "done", true);
     }
 
     public void save(String link) throws Exception {

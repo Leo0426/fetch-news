@@ -4,44 +4,49 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 
 import app.ai.AiConfig;
+import app.ai.ArticleSummarizer;
+import app.ai.OllamaClient;
 import app.radar.RadarTestEnvironment;
-import java.nio.file.Files;
+import app.reader.ReaderSummaryResource;
 import java.nio.file.Path;
 import java.time.LocalDate;
 import java.time.ZoneId;
-import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 class AiProviderRadarTest {
     @TempDir
     Path directory;
 
-    @Test
-    void bothRemoteProtocolsRunRadarWithoutPersistingCredentials() throws Exception {
-        for (String protocol : List.of("openai", "anthropic")) {
-            Path root = directory.resolve(protocol);
-            Files.createDirectories(root);
-            try (var env = new RadarTestEnvironment(root, "{\"enabled\":true}")) {
-                env.ai.save(new AiConfig(
-                        "http://127.0.0.1:" + env.server.getAddress().getPort() + "/v1",
-                        "remote",
-                        true,
-                        protocol,
-                        "DO-NOT-PERSIST",
-                        2048,
-                        true,
-                        "max_tokens"));
-                env.save("https://example.test/article");
-                var run = env.service.submit(
-                        LocalDate.now(ZoneId.of("Asia/Shanghai")).toString(), "Asia/Shanghai", protocol);
-                assertEquals(
-                        "",
-                        env.store.radar().loadRun(run.runId()).request().ai().apiKey());
-                env.worker.processNext();
-                assertEquals("success", env.service.status(run.runId()).state());
-                assertFalse(env.store.radar().loadMarkdown(run.runId()).contains("DO-NOT-PERSIST"));
+    @ParameterizedTest
+    @CsvSource({"ollama,auto", "openai,chat", "openai,responses", "anthropic,auto", "gemini,auto"})
+    void selectedModelGeneratesReaderSummaryAndRadarWithoutPersistingCredentials(String protocol, String apiStyle) throws Exception {
+        try (var env = new RadarTestEnvironment(directory, "{\"enabled\":true}")) {
+            String host = "http://127.0.0.1:" + env.server.getAddress().getPort() + "/v1";
+            var config = new AiConfig(host, "custom-model", true, protocol, "DO-NOT-PERSIST", 2048, true,
+                    "auto", apiStyle, Map.of("temperature", 0.5));
+            env.ai.save(config);
+            String link = "https://example.test/article";
+            env.save(link);
+            try (var summaries = new ArticleSummarizer(new OllamaClient(env.ai, env.mapper), env.store, null, env.ai)) {
+                var reader = new ReaderSummaryResource(env.store, summaries, env.ai);
+                assertEquals(202, reader.summarize(link, "").getStatusCode().value());
+                summaries.processNext();
+                var progress = reader.summaryStatus(link).getBody();
+                assertEquals("success", progress.state());
+                assertEquals("新闻摘要已生成。", progress.summary());
             }
+            var run = env.service.submit(
+                    LocalDate.now(ZoneId.of("Asia/Shanghai")).toString(), "Asia/Shanghai", protocol);
+            var snapshot = env.store.radar().loadRun(run.runId()).request().ai();
+            assertEquals("", snapshot.apiKey());
+            assertEquals(config.identity(), snapshot.identity());
+            env.worker.processNext();
+            assertEquals("success", env.service.status(run.runId()).state());
+            assertFalse(env.store.radar().loadMarkdown(run.runId()).contains("DO-NOT-PERSIST"));
         }
     }
 

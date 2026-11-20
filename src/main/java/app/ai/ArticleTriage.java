@@ -5,6 +5,8 @@ import app.store.ItemPick;
 import app.store.PickFeedback;
 import app.store.PickKind;
 import app.store.StoredItem;
+import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Clock;
@@ -202,15 +204,16 @@ public class ArticleTriage implements AutoCloseable {
     }
 
     Picks parsePicks(String text, List<Candidate> batch) {
-        int start = text == null ? -1 : text.indexOf('{');
-        int end = text == null ? -1 : text.lastIndexOf('}');
-        if (start < 0 || end < start) throw new IllegalArgumentException("Model returned no JSON object");
+        if (text == null || text.isBlank()) throw new IllegalArgumentException("Model returned no JSON object");
         JsonNode root;
         try {
-            root = mapper.readTree(text.substring(start, end + 1));
+            root = mapper.reader().with(DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
+                    .with(JsonParser.Feature.STRICT_DUPLICATE_DETECTION)
+                    .readTree(ModelOutput.normalize(text, true));
         } catch (Exception e) {
-            throw new IllegalArgumentException("Model returned invalid JSON");
+            throw new IllegalArgumentException("Model returned invalid structured JSON");
         }
+        if (root == null || !root.isObject()) throw new IllegalArgumentException("Model returned no JSON object");
         return new Picks(readPicks(root.path("mustKnow"), batch), readPicks(root.path("quality"), batch));
     }
 

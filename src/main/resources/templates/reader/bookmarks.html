@@ -58,7 +58,7 @@
         <span class="bm-date" th:text="${item.formattedAge()}">收藏时间</span>
         <span class="bm-date" data-bookmark-read-state role="status" aria-live="polite"
               th:text="${readStateAvailable ? (#lists.contains(readLinks, item.link()) ? '已读' : '未读') : '状态待确认'}">未读</span>
-        <a class="reader-article-link" th:href="${'/reader/article?link=' + #uris.escapeQueryParam(item.link())}" data-article-link>站内阅读</a>
+        <a class="reader-article-link" th:href="${'/reader/article?link=' + #uris.escapeQueryParam(item.link())}" th:data-article-title="${item.title()}" data-article-link>站内阅读</a>
         <form style="display:contents">
           <input type="hidden" name="link" th:value="${item.link()}">
           <button type="button" class="bm-remove"

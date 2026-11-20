@@ -60,13 +60,18 @@ public class AuthFilter extends OncePerRequestFilter {
         }
         Access access = classify(path, request.getMethod());
         if (access == Access.PUBLIC) {
+            if (("POST".equals(request.getMethod()) && ("/login".equals(path) || "/logout".equals(path)))
+                    && !sameOrigin(request)) {
+                response.sendError(403, "跨站请求已拒绝");
+                return;
+            }
             chain.doFilter(request, response);
             return;
         }
 
         Authenticated authenticated;
         try {
-            authenticated = authenticate(request, access == Access.FEED);
+            authenticated = authenticate(request, response, access == Access.FEED);
         } catch (SQLException e) {
             log.warn("authentication lookup failed: {}", e.getMessage());
             response.sendError(503, "认证服务暂时不可用");
@@ -78,7 +83,7 @@ public class AuthFilter extends OncePerRequestFilter {
             return;
         }
         UserAccount user = authenticated.user();
-        if (authenticated.viaCookie() && !isSafe(request.getMethod()) && !sameOrigin(request)) {
+        if (authenticated.browserCredential() && !isSafe(request.getMethod()) && !sameOrigin(request)) {
             response.sendError(403, "跨站请求已拒绝");
             return;
         }
@@ -142,9 +147,10 @@ public class AuthFilter extends OncePerRequestFilter {
         return Access.FEED;
     }
 
-    private record Authenticated(UserAccount user, boolean viaCookie) {}
+    private record Authenticated(UserAccount user, boolean browserCredential) {}
 
-    private Authenticated authenticate(HttpServletRequest request, boolean feed) throws SQLException {
+    private Authenticated authenticate(HttpServletRequest request, HttpServletResponse response, boolean feed)
+            throws SQLException {
         String header = request.getHeader("Authorization");
         if (header != null) {
             if (header.regionMatches(true, 0, "Bearer ", 0, 7)) {
@@ -154,13 +160,23 @@ public class AuthFilter extends OncePerRequestFilter {
                 String secret = basicPassword(header.substring(6));
                 UserAccount user = auth.authenticateToken(secret);
                 if (user == null && feed && isSafe(request.getMethod())) user = auth.authenticateFeedKey(secret);
-                return wrap(user, false);
+                // Browsers can silently attach cached Basic credentials, just as they attach cookies.
+                return wrap(user, true);
             }
         }
         String cookie = cookieValue(request);
         if (cookie != null) {
-            UserAccount user = auth.authenticateToken(cookie);
+            UserAccount user = auth.authenticateSession(cookie);
             if (user != null) return new Authenticated(user, true);
+            if (!isSafe(request.getMethod()) && !sameOrigin(request)) {
+                return wrap(auth.authenticateToken(cookie), true);
+            }
+            AuthService.IssuedSession migrated = auth.exchangeLegacyCookie(cookie);
+            if (migrated != null) {
+                response.addHeader("Set-Cookie", cookieHeader(request, migrated.secret(),
+                        AuthService.SESSION_LIFETIME.toSeconds()));
+                return new Authenticated(migrated.user(), true);
+            }
         }
         if (feed && isSafe(request.getMethod())) {
             return wrap(auth.authenticateFeedKey(request.getParameter(FEED_KEY_PARAM)), false);
@@ -168,8 +184,8 @@ public class AuthFilter extends OncePerRequestFilter {
         return null;
     }
 
-    private static Authenticated wrap(UserAccount user, boolean viaCookie) {
-        return user == null ? null : new Authenticated(user, viaCookie);
+    private static Authenticated wrap(UserAccount user, boolean browserCredential) {
+        return user == null ? null : new Authenticated(user, browserCredential);
     }
 
     private static String basicPassword(String encoded) {
@@ -218,39 +234,40 @@ public class AuthFilter extends OncePerRequestFilter {
         return "GET".equals(method) || "HEAD".equals(method) || "OPTIONS".equals(method);
     }
 
-    /**
-     * Rejects cookie-authenticated writes coming from another site. The login cookie is
-     * SameSite=Lax as well; this covers browsers or proxies where that is not enough.
-     */
+    /** Compares browser origins against the externally visible scheme, hostname and port. */
     static boolean sameOrigin(HttpServletRequest request) {
         String source = request.getHeader("Origin");
-        if (source == null || source.isBlank() || "null".equals(source)) source = request.getHeader("Referer");
+        if ("null".equals(source)) return false;
+        if (source == null || source.isBlank()) source = request.getHeader("Referer");
         if (source == null || source.isBlank()) return true;
-        String sourceHost;
+        String host = firstHeader(request, "X-Forwarded-Host", request.getHeader("Host"));
+        if (host == null || host.isBlank()) return false;
+        String scheme = firstHeader(request, "X-Forwarded-Proto", request.getScheme());
+        if (!"https".equalsIgnoreCase(scheme) && !"http".equalsIgnoreCase(scheme)) return false;
         try {
-            URI uri = URI.create(source.strip());
-            if (uri.getHost() == null) return false;
-            sourceHost = uri.getHost().toLowerCase(Locale.ROOT) + (uri.getPort() < 0 ? "" : ":" + uri.getPort());
+            URI target = URI.create(scheme + "://" + host);
+            URI from = URI.create(source.strip());
+            if (!host.equals(target.getRawAuthority()) || target.getHost() == null
+                    || target.getUserInfo() != null || from.getUserInfo() != null) return false;
+            if (!scheme.equalsIgnoreCase(from.getScheme()) || !target.getHost().equalsIgnoreCase(from.getHost())) {
+                return false;
+            }
+            String forwardedPort = firstHeader(request, "X-Forwarded-Port", null);
+            int port = target.getPort() < 0 && forwardedPort != null ? Integer.parseInt(forwardedPort) : portOf(target);
+            return port == portOf(from);
         } catch (IllegalArgumentException e) {
             return false;
         }
-        for (String header : new String[] {"X-Forwarded-Host", "Host"}) {
-            String value = request.getHeader(header);
-            if (value == null) continue;
-            String host = value.split(",")[0].strip().toLowerCase(Locale.ROOT);
-            if (sameHost(sourceHost, host)) return true;
-        }
-        return false;
     }
 
-    private static boolean sameHost(String source, String host) {
-        if (source.equals(host)) return true;
-        // Default ports are omitted by one side but not always the other.
-        return stripDefaultPort(source).equals(stripDefaultPort(host));
+    private static int portOf(URI uri) {
+        if (uri.getPort() >= 0) return uri.getPort();
+        return "https".equalsIgnoreCase(uri.getScheme()) ? 443 : 80;
     }
 
-    private static String stripDefaultPort(String host) {
-        return host.endsWith(":80") || host.endsWith(":443") ? host.substring(0, host.lastIndexOf(':')) : host;
+    private static String firstHeader(HttpServletRequest request, String name, String fallback) {
+        String value = request.getHeader(name);
+        return value == null || value.isBlank() ? fallback : value.split(",", 2)[0].strip();
     }
 
     private static boolean hasCookie(HttpServletRequest request) {
@@ -269,7 +286,7 @@ public class AuthFilter extends OncePerRequestFilter {
     /** Builds the login cookie header value; {@code maxAgeSeconds = 0} deletes it. */
     public static String cookieHeader(HttpServletRequest request, String value, long maxAgeSeconds) {
         boolean secure = request.isSecure()
-                || "https".equalsIgnoreCase(request.getHeader("X-Forwarded-Proto"));
+                || "https".equalsIgnoreCase(firstHeader(request, "X-Forwarded-Proto", null));
         return COOKIE + "=" + value + "; Path=/; Max-Age=" + maxAgeSeconds + "; HttpOnly; SameSite=Lax"
                 + (secure ? "; Secure" : "");
     }

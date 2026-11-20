@@ -1,5 +1,6 @@
 package app.store;
 
+import app.ai.AiFailureMessages;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
@@ -26,13 +27,17 @@ public record SummaryStatus(
     public boolean error()   { return "error".equals(status); }
 
     public String errorMessage() {
+        return errorMessage(false);
+    }
+
+    public String readerErrorMessage() {
+        return errorMessage(true);
+    }
+
+    private String errorMessage(boolean reader) {
         if (!error()) return null;
-        if ("AI output token limit reached".equals(errorDetail)) {
-            return "模型输出额度已用尽，请在 AI 设置中提高最大输出 Token 或切换模型后重试。";
-        }
-        return errorDetail != null && errorDetail.contains("interrupted")
-                ? "上次摘要任务已中断，请重试。"
-                : "摘要生成失败，请检查 AI Provider 配置或文章内容后重试。";
+        String message = AiFailureMessages.summary(errorDetail, model, reader);
+        return message != null ? message : "摘要生成失败，请检查 AI Provider 配置或文章内容后重试。";
     }
 
     public String formattedStartedAt() {

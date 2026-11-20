@@ -101,6 +101,35 @@ class ArticleContentTest {
     }
 
     @Test
+    void dropsArchivedEscapedReadMoreFooterAndPreservesThePrecedingPlainParagraphs() {
+        String url = "https://sspai.com/post/114741";
+        String footer = "&lt;a href=\"" + url + "\" target=\"_blank\"&gt;查看全文&lt;/a&gt;";
+        var content = ArticleContent.from("第一段。\n\n文章代表作者个人观点 ..." + footer, null, url);
+        Document body = Jsoup.parseBodyFragment(content.html());
+        assertEquals("source", content.kind());
+        assertEquals(2, body.select("p").size());
+        assertEquals("第一段。 文章代表作者个人观点 ...", body.text());
+        assertTrue(body.select("a").isEmpty());
+    }
+
+    @Test
+    void keepsEscapedAnchorExamplesAndOnlyRecognizesTheArticleOwnTerminalFooter() {
+        String url = "https://sspai.com/post/114741";
+        String sample = "&lt;a href=\"https://example.test/example\"&gt;查看全文&lt;/a&gt;";
+        String footer = "&lt;a href=\"" + url + "\"&gt;查看全文&lt;/a&gt;";
+        var plain = ArticleContent.from("普通文字：&lt;b&gt;示例&lt;/b&gt; " + sample, null, url);
+        assertEquals("普通文字：<b>示例</b> <a href=\"https://example.test/example\">查看全文</a>",
+                Jsoup.parse(plain.html()).text());
+        var inline = ArticleContent.from("示例：" + footer + "。下面继续。", null, url);
+        assertTrue(Jsoup.parse(inline.html()).text().contains("<a href=\"" + url + "\">查看全文</a>"));
+        var html = ArticleContent.from("<p>链接示例：</p><pre><code>" + footer + "</code></pre>" + footer,
+                null, url);
+        Document body = Jsoup.parseBodyFragment(html.html());
+        assertEquals("<a href=\"" + url + "\">查看全文</a>", body.selectFirst("code").text());
+        assertEquals("链接示例： <a href=\"" + url + "\">查看全文</a>", body.text());
+    }
+
+    @Test
     void resolvesHttpLinksAndRemovesUnsafeDestinations() {
         ArticleContent content = ArticleContent.from("""
                 <p><a href="../guide?q=模型&amp;x=1#details" title="指南" onclick="alert(1)">相对地址</a>

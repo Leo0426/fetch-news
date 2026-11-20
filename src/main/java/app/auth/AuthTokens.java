@@ -20,6 +20,10 @@ public final class AuthTokens {
         return "fn_" + random(32);
     }
 
+    public static String newSession() {
+        return "fs_" + random(32);
+    }
+
     public static String newFeedKey() {
         return "fk_" + random(24);
     }

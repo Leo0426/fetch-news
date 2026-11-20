@@ -1,5 +1,8 @@
 package app.ai;
 
+import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -8,7 +11,9 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.UUID;
 
@@ -33,15 +38,7 @@ public class AiConfigStore {
                 .withEnabled(settings.enabled());
         String envHost = System.getenv("OLLAMA_HOST");
         if (selected.protocol().equals("ollama") && envHost != null && !envHost.isBlank())
-            return new AiConfig(
-                    envHost,
-                    selected.model(),
-                    selected.enabled(),
-                    selected.protocol(),
-                    selected.apiKey(),
-                    selected.maxTokens(),
-                    selected.jsonMode(),
-                    selected.tokenLimitParameter());
+            return selected.withHost(envHost);
         return selected;
     }
 
@@ -58,7 +55,7 @@ public class AiConfigStore {
 
     public synchronized AiConfig save(AiConfig config) {
         saveProfile(current.activeProfile(), profile(current.activeProfile()).name(), config, true);
-        return config;
+        return profile(current.activeProfile()).config().withEnabled(current.enabled());
     }
 
     public synchronized String saveProfile(String id, String name, AiConfig config, boolean activate) {
@@ -67,22 +64,41 @@ public class AiConfigStore {
 
     public synchronized String saveProfile(
             String id, String name, AiConfig config, boolean activate, List<String> models) {
+        return saveProfile(id, name, config, activate, models, null);
+    }
+
+    public synchronized String saveProfile(String id, String name, AiConfig config, boolean activate,
+                                           List<String> models, Map<String, ModelCapabilities> overrides) {
+        Provider previous = id == null || id.isBlank() ? null : profile(id);
         if (models == null) {
-            models = new ArrayList<>(
-                    id == null || id.isBlank() ? List.of() : profile(id).models());
+            models = new ArrayList<>(previous == null ? List.of() : previous.models());
             if (!models.contains(config.model())) models.add(config.model());
         }
-        if (id == null || id.isBlank()) id = UUID.randomUUID().toString();
-        else profile(id);
-        if (name == null || name.isBlank() || name.length() > 100)
+        if (name == null || name.isBlank() || name.length() > 100) {
             throw new IllegalArgumentException("Platform name must be 1–100 characters");
-        String profileId = id;
+        }
+        var options = new LinkedHashMap<String, ModelCapabilities>();
+        if (previous != null && previous.config().protocol().equals(config.protocol())) {
+            for (String model : models) {
+                if (model != null && previous.modelCapabilities().containsKey(model.strip())) {
+                    options.put(model.strip(), previous.modelCapabilities().get(model.strip()));
+                }
+            }
+        }
+        if (previous == null || previous.config().model().equals(config.model())
+                || !previous.config().capabilities().equals(config.capabilities())) {
+            options.put(config.model(), config.capabilities());
+        }
+        if (overrides != null) options.putAll(overrides);
+        String profileId = previous == null ? UUID.randomUUID().toString() : previous.id();
         List<Provider> providers = new ArrayList<>(current.profiles());
         providers.removeIf(p -> p.id().equals(profileId));
-        providers.add(new Provider(id, name.strip(), config.withEnabled(false), models));
+        providers.add(new Provider(profileId, name.strip(), config.withEnabled(false), models, options));
         persist(new Settings(
-                activate ? id : current.activeProfile(), activate ? config.enabled() : current.enabled(), providers));
-        return id;
+                activate ? profileId : current.activeProfile(),
+                activate ? config.enabled() : current.enabled(),
+                providers));
+        return profileId;
     }
 
     public synchronized void activate(String id) {
@@ -129,13 +145,22 @@ public class AiConfigStore {
 
     private Settings load() {
         if (!Files.exists(filePath)) return legacy(AiConfig.defaults());
-        try {
-            var node = mapper.readTree(filePath.toFile());
+        try (var input = Files.newInputStream(filePath)) {
+            var node = mapper.reader().with(DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
+                    .with(JsonParser.Feature.STRICT_DUPLICATE_DETECTION).readTree(input);
+            if (node == null || !node.isObject()) throw new IllegalStateException("AI 配置文件必须包含一个 JSON 对象。");
             return node.has("profiles")
                     ? mapper.treeToValue(node, Settings.class)
                     : legacy(mapper.treeToValue(node, AiConfig.class));
-        } catch (IOException | IllegalArgumentException e) {
-            throw new IllegalStateException("Invalid AI configuration; correct the configuration file");
+        } catch (JsonProcessingException e) {
+            if (e.getCause() instanceof ModelCapabilities.InvalidOption invalid)
+                throw new IllegalStateException("AI 配置文件无效。" + invalid.getMessage());
+            var location = e.getLocation();
+            String at = location == null || location.getLineNr() < 1 ? ""
+                    : "（第 " + location.getLineNr() + " 行，第 " + location.getColumnNr() + " 列）";
+            throw new IllegalStateException("AI 配置文件无效" + at + "，请检查 JSON 格式、提供商和模型配置。");
+        } catch (IOException e) {
+            throw new IllegalStateException("无法读取 AI 配置文件，请检查文件路径和读取权限。");
         }
     }
 
@@ -144,7 +169,12 @@ public class AiConfigStore {
                 "default", config.enabled(), List.of(new Provider("default", "Ollama", config.withEnabled(false))));
     }
 
-    public record Provider(String id, String name, AiConfig config, List<String> models) {
+    public record Provider(String id, String name, AiConfig config, List<String> models,
+                           Map<String, ModelCapabilities> modelCapabilities) {
+        public Provider(String id, String name, AiConfig config, List<String> models) {
+            this(id, name, config, models, null);
+        }
+
         public Provider(String id, String name, AiConfig config) {
             this(id, name, config, null);
         }
@@ -157,6 +187,22 @@ public class AiConfigStore {
                 throw new IllegalArgumentException("请至少添加一个模型，模型 ID 不能为空");
             models = models.stream().map(String::strip).distinct().toList();
             if (!models.contains(config.model())) throw new IllegalArgumentException("请从模型列表中选择默认模型");
+            Map<String, ModelCapabilities> saved = modelCapabilities == null ? Map.of() : modelCapabilities;
+            if (!models.containsAll(saved.keySet())) throw new IllegalArgumentException("模型选项只能用于此提供商的模型");
+            var resolved = new LinkedHashMap<String, ModelCapabilities>();
+            ModelCapabilities inherited = config.capabilities();
+            for (String model : models) {
+                ModelCapabilities options = saved.getOrDefault(model, inherited);
+                if (options == null) throw new IllegalArgumentException("模型选项不能为空");
+                try {
+                    options.validateProtocol(config.protocol());
+                } catch (ModelCapabilities.InvalidOption e) {
+                    throw new IllegalArgumentException("模型 " + model + "：" + e.getMessage());
+                }
+                resolved.put(model, options);
+            }
+            modelCapabilities = Map.copyOf(resolved);
+            config = config.withCapabilities(resolved.get(config.model()));
         }
 
         @Override

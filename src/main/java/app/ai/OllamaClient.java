@@ -1,16 +1,19 @@
 package app.ai;
 
+import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
+import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Shared generation client for Ollama and compatible hosted AI protocols.
@@ -24,6 +27,7 @@ public class OllamaClient {
             ThreadLocal.withInitial(() -> AiGenerationGate.Priority.BACKGROUND);
     private final HttpClient http;
     private final ObjectMapper mapper;
+    private final AiGenerationTransport transport;
     private final AiConfigStore configStore;
 
     public OllamaClient(AiConfigStore configStore, ObjectMapper mapper) {
@@ -31,6 +35,7 @@ public class OllamaClient {
         this.mapper = mapper;
         this.http =
                 HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
+        this.transport = new AiGenerationTransport(http, mapper);
     }
 
     /**
@@ -70,56 +75,34 @@ public class OllamaClient {
             throws Exception {
         try (var permit = gate.acquire(priority.get())) {
             AiConfig config = pinned == null ? configStore.get() : pinned;
-            if (!configStore.get().enabled() || !config.enabled()) throw new IllegalStateException("AI is disabled");
             GenerationScope context = scope.get();
             AiConfig locked = context == null ? expected : context.expected();
-            if (locked != null && !locked.sameModel(config))
-                throw new IllegalStateException(
-                        "AI configuration changed; resume with the original model or start a new run");
-            if (context != null) context.observer().before();
-            AiProtocol protocol = switch (config.protocol()) {
-                case "openai" -> new OpenAiChatProtocol();
-                case "anthropic" -> new AnthropicMessagesProtocol();
-                default -> new OllamaProtocol();
+            BeforeGeneration before = () -> {
+                AiConfig active = configStore.get();
+                if (!active.enabled() || !config.enabled()) throw new IllegalStateException("AI is disabled");
+                if ((locked != null && !locked.sameModel(config)) || (pinned == null && !active.equals(config)))
+                    throw new IllegalStateException(
+                            "AI configuration changed; resume with the original model or start a new run");
+                if (context != null) context.observer().before();
             };
-            HttpRequest request;
+            return transport.generate(config, prompt, json, before, context == null ? null : context.after());
+        }
+    }
+
+    public void verifyGeneration(AiConfig config) throws Exception {
+        try (var permit = gate.acquire(AiGenerationGate.Priority.INTERACTIVE)) {
+            String text = transport.generate(config,
+                    "Return exactly this JSON object: {\"ok\":true}", true, null, null).text();
+            JsonNode answer;
             try {
-                request = protocol.request(config, prompt, json, mapper);
-            } catch (IllegalArgumentException e) {
-                throw new IllegalStateException("Invalid AI endpoint or authentication header");
+                answer = mapper.reader().with(DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
+                        .with(JsonParser.Feature.STRICT_DUPLICATE_DETECTION).readTree(text);
+            } catch (IOException e) {
+                throw new IllegalStateException("AI platform returned unexpected verification content");
             }
-            long started = System.nanoTime();
-            GenerationMetrics metrics = null;
-            try {
-                HttpResponse<String> response = http.send(request, HttpResponse.BodyHandlers.ofString());
-                if (response.statusCode() != 200)
-                    throw new IllegalStateException(config.protocol() + " returned HTTP " + response.statusCode());
-                JsonNode node;
-                try {
-                    node = mapper.reader()
-                            .with(DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
-                            .readTree(response.body());
-                } catch (IOException e) {
-                    throw new IllegalStateException("AI platform returned invalid JSON");
-                }
-                if (node == null || node.has("error"))
-                    throw new IllegalStateException("AI platform returned an error response");
-                metrics = GenerationMetrics.from(
-                        config.protocol(), node, TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started));
-                String text = protocol.text(node);
-                if (text.isBlank()) throw new IllegalStateException("AI platform returned no text");
-                return new Generation(text, config.model(), metrics);
-            } finally {
-                if (context != null)
-                    context.after()
-                            .after(
-                                    metrics == null
-                                            ? new GenerationMetrics(
-                                                    null,
-                                                    null,
-                                                    TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started))
-                                            : metrics);
-            }
+            if (answer == null || !answer.isObject() || answer.size() != 1 || !answer.path("ok").isBoolean()
+                    || !answer.get("ok").booleanValue())
+                throw new IllegalStateException("AI platform returned unexpected verification content");
         }
     }
 
@@ -194,6 +177,7 @@ public class OllamaClient {
                         "HTTP " + response.statusCode() + "；请检查 API 地址、密钥及权限",
                         false);
             JsonNode node = mapper.readTree(response.body());
+            if (config.protocol().equals("gemini")) return geminiModels(config, node);
             if (!node.path("data").isArray())
                 return new ConnectionStatus(true, config.protocol(), false, List.of(), "平台未返回标准模型列表", false);
             List<String> models = new ArrayList<>();
@@ -205,6 +189,35 @@ public class OllamaClient {
             if (e instanceof InterruptedException) Thread.currentThread().interrupt();
             return new ConnectionStatus(false, config.protocol(), false, List.of(), "连接失败，请检查平台地址和网络", false);
         }
+    }
+
+    private ConnectionStatus geminiModels(AiConfig config, JsonNode page) throws Exception {
+        var models = new ArrayList<String>();
+        var seen = new HashSet<String>();
+        while (true) {
+            if (!page.path("models").isArray())
+                return new ConnectionStatus(true, "gemini", false, List.of(), "平台未返回标准模型列表", false);
+            for (var item : page.path("models")) {
+                JsonNode methods = item.path("supportedGenerationMethods");
+                boolean textGeneration = methods.isMissingNode();
+                for (var method : methods) {
+                    if (method.asText().equals("generateContent")) textGeneration = true;
+                }
+                if (textGeneration && item.path("name").isTextual())
+                    models.add(GeminiProtocol.modelId(item.get("name").textValue()));
+            }
+            String next = page.path("nextPageToken").asText("");
+            if (next.isEmpty()) break;
+            if (!seen.add(next) || seen.size() > 100) throw new IOException("Invalid model list pagination");
+            String operation = "models?pageToken=" + URLEncoder.encode(next, StandardCharsets.UTF_8);
+            var request = AiHttp.builder(config, operation).timeout(Duration.ofSeconds(5)).GET().build();
+            var response = http.send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() != 200)
+                throw new IOException("Model list returned HTTP " + response.statusCode());
+            page = mapper.readTree(response.body());
+        }
+        return new ConnectionStatus(true, "gemini", models.contains(GeminiProtocol.modelId(config.model())),
+                List.copyOf(models), null, true);
     }
 
     private String fetchVersion(AiConfig config) throws Exception {

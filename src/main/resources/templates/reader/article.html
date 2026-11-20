@@ -27,7 +27,15 @@
     </a>
     <span class="article-nav-label">站内阅读</span>
     <div class="article-nav-actions">
-      <details class="article-outline" data-article-outline hidden>
+      <details class="article-preferences" name="reading-menu" data-article-control hidden>
+        <summary aria-label="调整正文字号"><span aria-hidden="true" class="article-type-icon">Aa</span><span>字号</span></summary>
+        <div class="article-font-controls" role="group" aria-label="正文字号">
+          <button type="button" data-article-size="small" aria-pressed="false" aria-label="小字号">小</button>
+          <button type="button" data-article-size="standard" aria-pressed="true" aria-label="标准字号">标准</button>
+          <button type="button" data-article-size="large" aria-pressed="false" aria-label="大字号">大</button>
+        </div>
+      </details>
+      <details name="reading-menu" class="article-outline" data-article-outline hidden>
         <summary><svg th:replace="~{shared/icons :: icon('list')}"></svg>目录</summary>
         <ol aria-label="文章章节"></ol>
       </details>
@@ -51,31 +59,25 @@
         <span class="article-read-state" data-article-read-state th:text="${page.read()} ? '已读' : '未读'" th:classappend="${page.read()} ? ' is-read'">未读</span>
       </div>
       <h1 class="article-title" th:text="${page.item().title()}">文章标题</h1>
-      <div class="article-meta">
-        <span th:if="${!#strings.isEmpty(page.author())}" th:text="${page.author()}">作者</span>
-        <span th:if="${page.item().pubDate() != null}" th:text="'发布 ' + ${page.item().formattedPublishedAt()}">发布时间</span>
-        <span th:text="'保存 ' + ${page.item().formattedFetchedAt()}">保存时间</span>
+      <div class="article-byline">
+        <div class="article-meta">
+          <span th:if="${!#strings.isEmpty(page.author())}" th:text="${page.author()}">作者</span>
+          <span th:if="${page.item().pubDate() != null}" th:text="'发布 ' + ${page.item().formattedPublishedAt()}">发布时间</span>
+          <span th:if="${page.item().pubDate() == null}" th:text="'保存 ' + ${page.item().formattedFetchedAt()}">保存时间</span>
+        </div>
+        <div class="article-save-controls" data-article-control hidden>
+          <button type="button" class="article-button article-bookmark" data-article-bookmark th:attr="aria-pressed=${page.bookmarked()}">
+            <svg th:replace="~{shared/icons :: icon('bookmark')}"></svg>
+            <span data-article-bookmark-label th:text="${page.bookmarked()} ? '已收藏' : '收藏'">收藏</span>
+          </button>
+          <button type="button" class="article-button" data-article-mark-read th:disabled="${page.read()}" th:text="${page.read()} ? '已标为已读' : '标为已读'">标为已读</button>
+        </div>
       </div>
       <div th:if="${!page.categories().isEmpty()}" class="article-tags" aria-label="文章标签">
         <span th:each="category : ${page.categories()}" th:text="${category}">标签</span>
       </div>
     </header>
 
-    <div class="article-tools" data-article-control hidden>
-      <div class="article-font-controls" role="group" aria-label="正文字号">
-        <span class="article-tool-label" aria-hidden="true">字号</span>
-        <button type="button" data-article-size="small" aria-pressed="false" aria-label="小字号">小</button>
-        <button type="button" data-article-size="standard" aria-pressed="true" aria-label="标准字号">标准</button>
-        <button type="button" data-article-size="large" aria-pressed="false" aria-label="大字号">大</button>
-      </div>
-      <div class="article-save-controls">
-        <button type="button" class="article-button article-bookmark" data-article-bookmark th:attr="aria-pressed=${page.bookmarked()}">
-          <svg th:replace="~{shared/icons :: icon('bookmark')}"></svg>
-          <span data-article-bookmark-label th:text="${page.bookmarked()} ? '已收藏' : '收藏'">收藏</span>
-        </button>
-        <button type="button" class="article-button" data-article-mark-read th:disabled="${page.read()}" th:text="${page.read()} ? '已标为已读' : '标为已读'">标为已读</button>
-      </div>
-    </div>
     <noscript><p class="article-noscript">正文可以直接阅读。启用 JavaScript 后，可调整字号、收藏或标为已读。</p></noscript>
 
     <details class="article-summary" data-article-summary
@@ -105,10 +107,6 @@
       <noscript th:if="${!page.item().hasSummary()}"><p class="article-summary-message">启用 JavaScript 后可生成摘要并查看进度，正文仍可直接阅读。</p></noscript>
     </details>
 
-    <div class="article-content-note" th:if="${!page.content().isEmpty()}">
-      <span class="article-note-mark" aria-hidden="true"></span>
-      <span th:text="${page.content().kind() == 'extract'} ? '提取并保存的内容，可能是节选' : '订阅中保存的内容，可能是节选'">订阅中保存的内容，可能是节选</span>
-    </div>
     <div th:if="${!page.content().isEmpty()}" id="article-body" class="article-prose" tabindex="-1"
          th:utext="${page.content().html()}"></div>
     <section th:if="${page.content().isEmpty()}" id="article-body" tabindex="-1"
@@ -118,7 +116,17 @@
       <a th:if="${page.originalUrl() != null}" class="article-text-link" th:href="${page.originalUrl()}" target="_blank" rel="noopener noreferrer">前往原文继续阅读 <span aria-hidden="true">↗</span></a>
     </section>
 
+    <div class="article-content-note" th:if="${!page.content().isEmpty()}">
+      <span class="article-note-mark" aria-hidden="true"></span>
+      <span th:text="${page.content().kind() == 'extract'} ? '提取并保存的内容，可能是节选' : '订阅中保存的内容，可能是节选'">订阅中保存的内容，可能是节选</span>
+      <a th:if="${page.originalUrl() != null}" th:href="${page.originalUrl()}" target="_blank" rel="noopener noreferrer">继续阅读原文 <span aria-hidden="true">↗</span></a>
+    </div>
+
     <footer class="article-footer">
+      <button class="article-next" type="button" data-article-next hidden>
+        <span>标为已读，读下一篇</span><strong data-article-next-title></strong>
+        <svg th:replace="~{shared/icons :: icon('right')}"></svg>
+      </button>
       <div class="article-footer-actions">
         <a th:href="${page.returnUrl()}" class="article-button" data-article-return>返回列表</a>
         <button type="button" class="article-button article-button--primary" data-article-finish data-article-control hidden>完成阅读并返回 <span aria-hidden="true">→</span></button>

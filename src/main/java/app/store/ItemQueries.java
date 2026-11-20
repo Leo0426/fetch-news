@@ -1,5 +1,6 @@
 package app.store;
 
+import app.support.FeedBody;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -196,10 +197,11 @@ public final class ItemQueries {
                 for (int i = 0; i < links.size(); i++) ps.setString(i + 1, links.get(i));
                 try (ResultSet rs = ps.executeQuery()) {
                     while (rs.next()) {
-                        String text = Jsoup.parse(rs.getString("description")).text().strip();
+                        String link = rs.getString("item_link");
+                        String text = Jsoup.parse(FeedBody.forReading(rs.getString("description"), link)).text();
                         int length = text.codePointCount(0, text.length());
                         if (length < Math.max(minLength, 1)) continue;
-                        result.put(rs.getString("item_link"),
+                        result.put(link,
                                 text.substring(0, text.offsetByCodePoints(0, Math.min(maxLength, length))));
                     }
                 }

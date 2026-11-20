@@ -1,0 +1,60 @@
+<section class="card user-content-view" hx-target="#main-content" hx-history="false">
+  <header class="card-head">
+    <h2 class="card-title" th:text="${user.name() + '的阅读记录'}">阅读记录</h2>
+    <span th:if="${user.disabled()}" class="pill off">已停用</span>
+    <button class="btn-small" type="button" hx-get="/index/users">返回账户列表</button>
+  </header>
+  <div class="user-content-controls">
+    <nav aria-label="阅读记录类别">
+      <button class="btn-small" th:each="item : ${sections}" type="button"
+              th:classappend="${item == section} ? 'active'" th:aria-current="${item == section} ? 'page'"
+              th:hx-get="${base + '?tab=' + item.id()}" th:text="${item.label()}">收藏</button>
+    </nav>
+    <span th:text="${section.label() + ' · ' + page.total() + ' 条'}">收藏 · 0 条</span>
+  </div>
+  <form th:if="${section.id() != 'feedback'}" class="user-content-add" th:hx-post="${base + '/' + section.id()}">
+    <input type="hidden" name="action" value="add">
+    <input type="hidden" name="page" th:value="${page.number()}">
+    <label class="field">
+      <span>已收录文章的原文链接</span>
+      <input class="ui-control" type="url" name="link" placeholder="https://…" required>
+    </label>
+    <button type="submit" class="btn" th:text="${section.id() == 'bookmarks' ? '添加收藏' : '标为已读'}">添加收藏</button>
+  </form>
+  <p th:if="${message}" class="form-msg ok" role="status" th:text="${message}"></p>
+  <p th:if="${error}" class="form-msg err" role="alert" th:text="${error}"></p>
+  <p class="user-content-empty" th:if="${page.rows().isEmpty()}" th:text="${'暂无' + section.label() + '。'}">暂无记录。</p>
+  <ol class="user-content-list" th:unless="${page.rows().isEmpty()}">
+    <li data-content-row th:each="row : ${page.rows()}">
+      <div class="user-content-item">
+        <a class="user-content-title" th:if="${row.stored()}" target="_blank" rel="noopener"
+           th:href="${'/reader/article?link=' + #uris.escapeQueryParam(row.link())}" th:text="${row.title()}">文章标题</a>
+        <strong class="user-content-title" th:unless="${row.stored()}" th:text="${row.title()}">文章标题</strong>
+        <small th:if="${row.title() != row.link()}" th:text="${row.link()}">来源链接</small>
+        <small>
+          <span th:text="${row.time() + ' UTC'}">时间</span>
+          <span th:if="${row.kind() != null}" th:text="${(row.kind() == 'must' ? '必知' : '精选') + ' · '
+                + (row.verdict() == 'up' ? '准' : '不准')}">精选 · 准</span>
+        </small>
+      </div>
+      <form class="user-content-actions" th:hx-post="${base + '/' + section.id()}">
+        <input type="hidden" name="link" th:value="${row.link()}">
+        <input type="hidden" name="page" th:value="${page.number()}">
+        <th:block th:if="${row.kind() != null}">
+          <input type="hidden" name="kind" th:value="${row.kind()}">
+          <button class="btn-small" type="submit" name="action" th:value="${row.verdict() == 'up' ? 'down' : 'up'}"
+                  th:text="${row.verdict() == 'up' ? '改为不准' : '改为准'}">改为准</button>
+        </th:block>
+        <button class="btn-small" type="submit" name="action" value="remove"
+                th:text="${section.id() == 'bookmarks' ? '移除收藏' : (row.kind() == null ? '撤销已读' : '撤销反馈')}">移除收藏</button>
+      </form>
+    </li>
+  </ol>
+  <nav class="pager" aria-label="阅读记录分页" hx-swap="innerHTML show:#main-content:top" th:if="${page.pages() > 1}">
+    <button class="pager-btn" type="button" th:disabled="${page.number() == 1}"
+            th:hx-get="${base + '?tab=' + section.id() + '&amp;page=' + (page.number() - 1)}">上一页</button>
+    <span th:text="${page.number() + ' / ' + page.pages()}">1 / 2</span>
+    <button class="pager-btn" type="button" th:disabled="${page.number() == page.pages()}"
+            th:hx-get="${base + '?tab=' + section.id() + '&amp;page=' + (page.number() + 1)}">下一页</button>
+  </nav>
+</section>

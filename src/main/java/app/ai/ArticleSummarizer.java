@@ -4,6 +4,7 @@ import app.core.FeedItem;
 import app.store.FeedStore;
 import app.store.SummaryQueue;
 import app.store.SummaryStatus;
+import app.support.FeedBody;
 import java.io.IOException;
 import java.sql.SQLException;
 import java.time.Instant;
@@ -79,7 +80,7 @@ public class ArticleSummarizer implements AutoCloseable {
             if (summary == null || summary.isBlank()) throw new SQLException("Completed summary is missing");
             return new SummaryProgress("success", summary, null);
         }
-        return new SummaryProgress(status.status(), null, status.errorMessage());
+        return new SummaryProgress(status.status(), null, status.readerErrorMessage());
     }
 
     private void checkAvailable() {
@@ -115,7 +116,7 @@ public class ArticleSummarizer implements AutoCloseable {
     private void summarize(FeedItem item, Instant startedAt, String model) throws Exception {
         try {
             checkInterrupted();
-            String description = item.description() == null ? "" : Jsoup.parse(item.description()).text().strip();
+            String description = Jsoup.parse(FeedBody.forReading(item.description(), item.link())).text();
             String content = description.codePointCount(0, description.length()) >= 200
                     ? description : extractor.extract(item);
             checkInterrupted();
@@ -134,6 +135,7 @@ public class ArticleSummarizer implements AutoCloseable {
                 log.info("summary retry queued after transient failure: {}", e.toString());
                 return;
             }
+            if (e instanceof AiProviderFailure failure) model = failure.model();
             String error = e.getMessage();
             if (error == null || error.isBlank()) error = e.getClass().getSimpleName();
             store.summaryQueue().markFinished(item.link(), startedAt, Instant.now(), model, error);

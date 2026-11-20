@@ -46,6 +46,17 @@ class ReaderGroupTest {
                 groups.stream().map(group -> group.items().getFirst().routePath()).toList());
     }
 
+    @Test
+    void keepsEachCustomTopicTogetherInTheSourceDirectory() {
+        Instant now = Instant.parse("2026-10-24T08:00:00Z");
+        var topics = Map.of("/a", "Local", "/b", "Science", "/c", "Local");
+        var items = List.of(card("/a", "https://a", now), card("/b", "https://b", now.minusSeconds(60)),
+                card("/c", "https://c", now.minusSeconds(120)));
+
+        assertEquals(List.of("Local", "Local", "Science"), ReaderGroup.bySource(items, path -> null, topics::get)
+                .stream().map(ReaderGroup::tag).toList());
+    }
+
     private static ReaderItem card(String route, String link, Instant firstSeen) {
         return new ReaderItem(route, "Title", link, null, firstSeen, null, null);
     }

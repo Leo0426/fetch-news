@@ -1,0 +1,14 @@
+<th:block th:fragment="notice">
+  <p th:if="${message != null}" class="form-msg ok account-notice" role="status" th:text="${message}"></p>
+  <p th:if="${error != null}" class="form-msg err account-notice" role="alert" tabindex="-1" th:text="${error}"></p>
+  <section th:if="${issued != null}" class="card account-section account-issued" x-data="{ copied: false }"
+           aria-labelledby="issued-token-title" hx-history="false">
+    <h2 id="issued-token-title" th:text="${issued.user().name()} + ' 的新登录令牌'"></h2>
+    <p>此令牌只显示一次，请立即复制并交给账户本人。</p>
+    <div class="account-actions">
+      <code x-ref="token" data-issued-token th:text="${issued.token()}"></code>
+      <button class="btn" type="button" x-text="copied ? '已复制' : '复制令牌'"
+              @click="FetchNewsUI.copyText($refs.token.textContent.trim()).then(() => { copied = true }, () => FetchNewsUI.notify('请手动选中令牌复制', 'error'))">复制令牌</button>
+    </div>
+  </section>
+</th:block>

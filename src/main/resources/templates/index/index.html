@@ -17,6 +17,8 @@
   <script defer src="/alpine.min.js"></script>
   <link rel="stylesheet" href="/ui-controls.css">
   <link rel="stylesheet" href="/admin-stats.css">
+  <link rel="stylesheet" href="/ai-settings.css">
+  <link rel="stylesheet" href="/admin-users.css">
 </head>
 <body x-data="appShell()" th:attr="data-feed-key=${viewer != null ? viewer.feedKey() : null}">
   <a class="skip-link" href="#main-content">跳至主要内容</a>
@@ -37,59 +39,13 @@
 
       <button class="sidebar-close" type="button" @click="sbOpen = false" aria-label="关闭导航"><svg th:replace="~{shared/icons :: icon('close')}"></svg></button>
       <div class="sb-nav">
-        <div class="nav-label">概览</div>
+        <div class="nav-label">运行监控</div>
         <a class="nav-item" :class="{ active: activePage === 'stats' }"
            :aria-current="activePage === 'stats' ? 'page' : null"
            @click="navigate($event, 'stats')"
            href="/index#stats">
           <svg th:replace="~{shared/icons :: icon('chart')}"></svg>
           数据统计
-        </a>
-
-        <div class="nav-label" style="margin-top:10px;">阅读</div>
-        <a class="nav-item" :class="{ active: activePage === 'subscriptions' }"
-           :aria-current="activePage === 'subscriptions' ? 'page' : null"
-           @click="navigate($event, 'subscriptions')" href="/index#subscriptions">
-          <svg th:replace="~{shared/icons :: icon('rss')}"></svg>
-          订阅来源
-        </a>
-        <a class="nav-item" href="/reader">
-          <svg th:replace="~{shared/icons :: icon('book')}"></svg>
-          今日速览
-        </a>
-        <a class="nav-item" href="/reader/briefing">
-          <svg th:replace="~{shared/icons :: icon('news')}"></svg>
-          每日简报
-        </a>
-
-        <div class="nav-label" style="margin-top:10px;">工具</div>
-        <a class="nav-item" :class="{ active: activePage === 'ai' }"
-           :aria-current="activePage === 'ai' ? 'page' : null"
-           @click="navigate($event, 'ai')"
-           href="/index#ai">
-          <svg th:replace="~{shared/icons :: icon('ai')}"></svg>
-          AI 设置
-        </a>
-        <a class="nav-item" :class="{ active: activePage === 'users' }"
-           :aria-current="activePage === 'users' ? 'page' : null"
-           @click="navigate($event, 'users')"
-           href="/index#users">
-          <svg th:replace="~{shared/icons :: icon('user')}"></svg>
-          访问令牌
-        </a>
-        <a class="nav-item" :class="{ active: activePage === 'credentials' }"
-           :aria-current="activePage === 'credentials' ? 'page' : null"
-           @click="navigate($event, 'credentials')"
-           href="/index#credentials">
-          <svg th:replace="~{shared/icons :: icon('key')}"></svg>
-          凭据配置
-        </a>
-        <a class="nav-item" :class="{ active: activePage === 'feishu' }"
-           :aria-current="activePage === 'feishu' ? 'page' : null"
-           @click="navigate($event, 'feishu')"
-           href="/index#feishu">
-          <svg th:replace="~{shared/icons :: icon('send')}"></svg>
-          飞书推送
         </a>
         <a class="nav-item" :class="{ active: activePage === 'health' }"
            :aria-current="activePage === 'health' ? 'page' : null"
@@ -106,8 +62,15 @@
           抓取日志
         </a>
 
+        <div class="nav-label">来源管理</div>
+        <a class="nav-item" :class="{ active: activePage === 'subscriptions' }"
+           :aria-current="activePage === 'subscriptions' ? 'page' : null"
+           @click="navigate($event, 'subscriptions')" href="/index#subscriptions">
+          <svg th:replace="~{shared/icons :: icon('rss')}"></svg>
+          订阅来源
+        </a>
         <details class="console-categories" x-effect="if (activePage.startsWith('cat:')) $el.open = true">
-          <summary>路由分类 <span th:text="${#lists.size(categoryList)}">0</span></summary>
+          <summary><svg th:replace="~{shared/icons :: icon('folder')}"></svg>路由分类 <span th:text="${#lists.size(categoryList)}">0</span></summary>
           <th:block th:each="cat : ${categoryList}">
             <a class="nav-item"
                :class="{ active: activePage === 'cat:' + $el.dataset.cat }"
@@ -119,11 +82,50 @@
               <span class="nav-badge" th:text="${cat.count}">0</span>
               <span th:if="${failingCategories != null and failingCategories.contains(cat.name)}"
                     class="health-dot health-dot--err"
-                    style="margin-left:3px;flex-shrink:0;"
                     title="该分类下有路由抓取失败"></span>
             </a>
           </th:block>
         </details>
+
+        <div class="nav-label">系统设置</div>
+        <a class="nav-item" :class="{ active: activePage === 'ai' }"
+           :aria-current="activePage === 'ai' ? 'page' : null"
+           @click="navigate($event, 'ai')"
+           href="/index#ai">
+          <svg th:replace="~{shared/icons :: icon('ai')}"></svg>
+          AI 设置
+        </a>
+        <a class="nav-item" :class="{ active: activePage === 'credentials' }"
+           :aria-current="activePage === 'credentials' ? 'page' : null"
+           @click="navigate($event, 'credentials')"
+           href="/index#credentials">
+          <svg th:replace="~{shared/icons :: icon('key')}"></svg>
+          凭据配置
+        </a>
+        <a class="nav-item" :class="{ active: activePage === 'feishu' }"
+           :aria-current="activePage === 'feishu' ? 'page' : null"
+           @click="navigate($event, 'feishu')"
+           href="/index#feishu">
+          <svg th:replace="~{shared/icons :: icon('send')}"></svg>
+          飞书推送
+        </a>
+        <a class="nav-item" :class="{ active: activePage === 'users' }"
+           :aria-current="activePage === 'users' ? 'page' : null"
+           @click="navigate($event, 'users')"
+           href="/index#users">
+          <svg th:replace="~{shared/icons :: icon('user')}"></svg>
+          用户管理
+        </a>
+      </div>
+      <div class="console-reading">
+        <a class="nav-item" href="/reader">
+          <svg th:replace="~{shared/icons :: icon('book')}"></svg>
+          今日速览
+        </a>
+        <a class="nav-item" href="/reader/briefing">
+          <svg th:replace="~{shared/icons :: icon('news')}"></svg>
+          每日简报
+        </a>
       </div>
 
     </nav>
@@ -137,10 +139,11 @@
         <button class="hamburger" type="button" @click="sbOpen = !sbOpen"
                 aria-label="打开导航" aria-controls="console-sidebar" :aria-expanded="sbOpen"><svg th:replace="~{shared/icons :: icon('list')}"></svg></button>
         <div class="topbar-heading">
+          <span class="topbar-section" x-text="pageGroup">运行监控</span>
           <h1 class="topbar-title" x-text="pageTitle">数据统计</h1>
         </div>
         <div class="topbar-actions">
-          <a class="topbar-reader-link" href="/reader">开始阅读 <span aria-hidden="true">↗</span></a>
+          <a class="topbar-reader-link" href="/reader"><svg th:replace="~{shared/icons :: icon('book')}"></svg>开始阅读</a>
           <a class="topbar-reader-link console-account" href="/account" th:if="${viewer != null}"
              th:attr="aria-label=${'账户 · ' + viewer.name()}" th:title="${viewer.name()}">
             <svg th:replace="~{shared/icons :: icon('user')}"></svg><span th:text="${viewer.name()}">账户</span>

@@ -4,7 +4,7 @@
 
 fetch-news is a self-hosted news aggregator and RSS proxy.
 
-It receives HTTP requests for route paths, fetches content from source websites or APIs, normalises it into a common feed model, and returns RSS 2.0 or JSON. It also stores fetched items in a local SQLite database, serves a reader UI, and optionally generates AI summaries through Ollama or compatible OpenAI Chat Completions / Anthropic Messages platforms.
+It receives HTTP requests for route paths, fetches content from source websites or APIs, normalises it into a common feed model, and returns RSS 2.0 or JSON. It also stores fetched items in a local SQLite database, serves a reader UI, and optionally generates AI summaries through Ollama, OpenAI-compatible Chat Completions / Responses, Anthropic Messages or Gemini generateContent.
 
 The project is intentionally smaller than RSSHub. Core mechanics:
 
@@ -34,7 +34,7 @@ The project is intentionally smaller than RSSHub. Core mechanics:
 | Parsing | JSoup (HTML/XML) · Jackson (JSON) |
 | Cache | Caffeine — in-memory, per-route TTL |
 | Persistence | SQLite via `sqlite-jdbc` |
-| AI | Ollama / OpenAI Chat Completions / Anthropic Messages — full-text extraction + Chinese summarisation |
+| AI | Ollama / OpenAI Chat Completions and Responses / Anthropic Messages / Gemini generateContent — full-text extraction + Chinese summarisation |
 | Build | Gradle |
 
 ---
@@ -50,22 +50,23 @@ The project is intentionally smaller than RSSHub. Core mechanics:
 | `/reader/bookmarks` | Saved bookmarks |
 | `/reader/search` | History search across saved titles, descriptions, and AI summaries |
 | `/reader/briefing` | Daily briefing grouped by category |
-| `/login` | Token sign-in; sets the HttpOnly `fn_auth` cookie |
-| `/account` | Own feed URLs with feed key, OPML export, feed-key/token rotation, sign-out |
-| `/index#users` | Admin: issue, rotate, disable, and delete access tokens |
+| `/login` | Username/password or access-token sign-in, followed by an HttpOnly browser session |
+| `/account` | Manage your password, named access tokens, RSS key, OPML export and sign-out |
+| `/index#users` | Owner manages members, their credentials, bookmarks, read marks and pick feedback |
 | `/<route-path>` | RSS 2.0 or JSON feed output |
 
 ### Access control
 
 `AuthFilter` gates every request except `/login`, `/logout`, the favicon, and assets listed in `FrontendAssetResource.ASSETS`. It is on by default; `fetch-news.auth.enabled=false` (`FETCH_NEWS_AUTH_ENABLED=false`) attaches the owner account to every request instead.
 
-- **Account** (`users` table) — name, role, SHA-256 hash of the login token, plaintext feed key, last-seen time, disabled flag. Account id 1 is the owner; single-user bookmarks and read state migrate to it.
-- **Login token** (`fn_…`, 256-bit) — shown once at creation/rotation. Accepted from the `fn_auth` cookie (browser), `Authorization: Bearer`, or as the HTTP Basic password.
+- **Account** — one username, one optional salted password hash and a stable ID shared by every login method. The built-in `admin` (ID 1) is the only administrator. It creates members with a password or an initial access token. On upgrade, existing accounts keep their IDs, RSS keys, tokens and reading data. Members with an existing token can use it to sign in and set a password in `/account`.
+- **Access token** — a named credential belonging to one account. Holders can create several, copy each new secret once, and revoke them individually. Only hashes live in `account_tokens`. Clients may use a token for browser login, as a Bearer token, or as an HTTP Basic password.
+- **Browser session** — signing in sets the HttpOnly `fn_auth` cookie to a separate expiring session secret. Logout ends that session. Revoking a token ends the sessions issued from it. Changing the password or disabling the account ends all its browser sessions. The first request with a supported legacy token cookie exchanges it for a session.
 - **Feed key** (`fk_…`) — read-only secret for RSS readers, accepted only on feed GETs via `?key=` or the Basic password. It never opens reader or admin pages, so a leaked feed URL exposes only feed output.
 - **Roles** — `ADMIN` reaches everything; `MEMBER` reaches `/reader/**`, `/account/**`, and feeds. `/index/**` and writes to `/reader/radar/runs/**` are admin-only. Members opening `/` or `/index` are redirected to `/reader`.
-- **Bootstrap** — without an owner token, startup generates one and logs it once. `FETCH_NEWS_ADMIN_TOKEN` (property `fetch-news.admin-token`, ≥16 cookie-safe characters) replaces the owner token on every start and is the recovery path.
-- **Hardening** — cookie-authenticated writes must come from the same host (`Origin`/`Referer` vs `Host`/`X-Forwarded-Host`); the cookie is `SameSite=Lax`, `HttpOnly`, and `Secure` behind HTTPS (`X-Forwarded-Proto`). Paths with matrix parameters, dot segments, or encoded separators are rejected so filter and handler mapping cannot disagree. Redirects are relative so they stay correct behind TLS-terminating tunnels. Feed responses are `Cache-Control: private`.
-- **Per-user state** — controllers read the caller with `CurrentUser.id()`; outside an HTTP request it resolves to the owner. `ReadingState` and article queries always take a user id; there is no implicit owner, so a caller cannot silently write someone else's state.
+- **Bootstrap** — when the owner has neither password nor token, startup generates a token and logs it once. `FETCH_NEWS_ADMIN_TOKEN` (property `fetch-news.admin-token`, ≥16 cookie-safe characters) pins the owner’s primary access token and provides a recovery path.
+- **Hardening** — browser writes using a session cookie or HTTP Basic credentials validate the origin’s scheme, hostname and port, including forwarded values behind a reverse proxy; the cookie is `SameSite=Lax`, `HttpOnly`, and `Secure` behind HTTPS (`X-Forwarded-Proto`). Paths with matrix parameters, dot segments, or encoded separators are rejected so filter and handler mapping cannot disagree. Redirects are relative so they stay correct behind TLS-terminating tunnels. Feed responses are `Cache-Control: private`.
+- **Per-user state** — reader controllers use `CurrentUser.id()` for bookmarks, read marks and pick feedback. The owner can inspect or edit these records for a selected account at `/index/users/{id}/content`, including disabled members.
 
 ### UI behavior
 
@@ -134,7 +135,7 @@ The project is intentionally smaller than RSSHub. Core mechanics:
 
 **FeishuPusher** — optionally sends items immediately per route or as scheduled category digests. Progress advances only after every page is confirmed by HTTP and business status. Partial failure can repeat already delivered pages on retry; cursors are in memory and restart uses a 24-hour lookback.
 
-**OllamaClient** — shared generation facade for explicit Ollama, OpenAI Chat Completions and Anthropic Messages adapters. The active platform is read from `AiConfigStore` on every call; all generation shares one interruptible permit. `ai-config.json` stores multiple named platforms and one global AI switch. Old host/model/enabled files migrate in memory and are written in the new format at the next save. Model identity includes protocol, endpoint and generation options, while credentials remain out of radar snapshots and cache keys. See [AI platform configuration](docs/ai-platforms.md).
+**OllamaClient** — shared generation facade for Ollama, OpenAI Chat Completions and Responses, Anthropic Messages and Gemini generateContent. Each saved model has its own generation settings. Wire compatibility is negotiated within that model and credential scope. Only completed text enters news tasks. The admin generation probe exercises the same transport and checks a structured reply. The active platform is read from `AiConfigStore` on every call; all generation shares one interruptible permit. `ai-config.json` stores multiple named platforms and one global AI switch. Old host/model/enabled files migrate in memory and are written in the new format at the next save. Model identity includes protocol, endpoint and generation options, while credentials remain out of radar snapshots and cache keys. See [AI platform configuration](docs/ai-platforms.md).
 
 **ArticleExtractor** — used by background summary and radar generation when saved article content is insufficient. Reuses cached extracts; otherwise fetches HTML through the shared `FetchClient` and removes navigation and active content with JSoup. Specific article-body containers take precedence over broad article/main regions. A recognized container with more than 200 Unicode code points supplies text directly with paragraph breaks, capped at 4,000 code points and cached in SQLite with model marker `html`. Only when no qualifying container is found does the existing AI cleanup run; its output is cached with the generating model's identity.
 
@@ -266,14 +267,14 @@ The container is stateless; the file is host-mounted at `./data/feed-store.db` i
 | `fetch-news.ai-config` | `./ai-config.json` | AI platforms and the global AI switch |
 | `fetch-news.feishu-config` | `./feishu-config.json` | Feishu webhook and per-category delivery settings |
 | `fetch-news.credential-config` | `./data/credential-config.json` | Saved Bilibili / X cookies |
-| `fetch-news.auth.enabled` | `true` | Token authentication (`FETCH_NEWS_AUTH_ENABLED`) |
+| `fetch-news.auth.enabled` | `true` | Account authentication (`FETCH_NEWS_AUTH_ENABLED`) |
 | `fetch-news.admin-token` | — | Pins/resets the owner login token (`FETCH_NEWS_ADMIN_TOKEN`) |
 
 ---
 
 ## Non-Goals (current version)
 
-- External identity providers, passwords, or self-registration — accounts are created by an admin
+- External identity providers or self-registration — accounts are created by an admin
 - Distributed cache or external queue
 - Browser automation
 - Dynamic plugin loading or classpath scanning

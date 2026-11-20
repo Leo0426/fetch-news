@@ -79,7 +79,7 @@
               <span class="rd-src" th:text="${sourceLabels != null and sourceLabels.get(item.article.routePath()) != null ? sourceLabels.get(item.article.routePath()) : item.article.sourceLabel()}">来源</span>
               <span class="rd-age" th:text="'获取 ' + ${item.article.formattedFetchedAt()}">获取 —</span>
               <span class="rd-age" th:text="'发布 ' + ${item.article.formattedPublishedAt()}">发布 —</span>
-              <a class="reader-article-link" th:href="${'/reader/article?link=' + #uris.escapeQueryParam(item.article.link())}" data-article-link>站内阅读</a>
+              <a class="reader-article-link" th:href="${'/reader/article?link=' + #uris.escapeQueryParam(item.article.link())}" th:data-article-title="${item.article.title()}" data-article-link>站内阅读</a>
               <a class="reader-article-link" th:href="${item.article.link()}" target="_blank"
                  rel="noopener noreferrer">打开原文 <span aria-hidden="true">↗</span></a>
             </div>

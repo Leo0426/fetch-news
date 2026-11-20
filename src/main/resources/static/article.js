@@ -6,10 +6,10 @@
     return window.location.pathname + window.location.search + window.location.hash;
   }
 
-  function savedContext() {
+  function savedContext(listUrl) {
     try {
       const saved = JSON.parse(window.sessionStorage.getItem(contextKey));
-      return saved?.url === currentListUrl() && Number.isFinite(saved.savedAt)
+      return saved?.url === listUrl && Number.isFinite(saved.savedAt)
         && Date.now() - saved.savedAt < 86400000 ? saved : null;
     } catch (_) {
       return null;
@@ -36,27 +36,49 @@
     const links = visibleArticleLinks();
     const index = links.indexOf(link);
     if (index < 0) return;
-    const candidates = [...links.slice(index), ...links.slice(0, index).reverse()];
+    const forward = new Map();
+    for (const anchor of links.slice(index)) {
+      const id = articleId(anchor);
+      if (!forward.has(id)) forward.set(id, anchor.dataset?.articleTitle || '');
+    }
+    const candidates = [...forward.keys(), ...links.slice(0, index).reverse().map(articleId)];
+    const offset = link.getBoundingClientRect().top;
+    const panel = link.closest('.bf-items');
     const context = {
       url: currentListUrl(), savedAt: Date.now(),
-      candidates: [...new Set(candidates.map(articleId))].slice(0, 200),
-      offset: link.getBoundingClientRect().top,
+      candidates: [...new Set(candidates)],
+      forwardTitles: [...forward.values()],
+      offset, panelOffset: panel ? offset - panel.getBoundingClientRect().top : null,
       filters: readerState ? {
-        filter: readerState.filter, activeTag: readerState.activeTag,
+        filter: readerState.filter, activeTag: readerState.activeTag, pickFilter: readerState.pickFilter,
         searchQuery: document.getElementById('reader-search')?.value ?? readerState.searchQuery
       } : null
     };
-    try { window.sessionStorage.setItem(contextKey, JSON.stringify(context)); } catch (_) {}
+    try {
+      window.sessionStorage.setItem(contextKey, JSON.stringify(context));
+    } catch (_) {
+      // Keep the original return position even when a large reading list exceeds the storage quota.
+      delete context.forwardTitles;
+      context.candidates = context.candidates.slice(0, 200);
+      try { window.sessionStorage.setItem(contextKey, JSON.stringify(context)); } catch (_) {}
+    }
   }
 
   function restorePosition() {
-    const saved = savedContext();
+    const saved = savedContext(currentListUrl());
     if (saved) {
       try { window.sessionStorage.removeItem(contextKey); } catch (_) {}
     }
     if (!Array.isArray(saved?.candidates) || !Number.isFinite(saved.offset)) return;
-    const links = [...document.querySelectorAll('[data-article-link]')];
-    const target = saved.candidates.flatMap(id => links.filter(link => articleId(link) === id)).find(link => {
+    const anchors = new Map();
+    for (const link of document.querySelectorAll('[data-article-link]')) {
+      const id = articleId(link);
+      if (!anchors.has(id)) anchors.set(id, []);
+      anchors.get(id).push(link);
+    }
+    const cursor = Math.max(0, saved.candidates.indexOf(saved.current));
+    const order = [...saved.candidates.slice(cursor), ...saved.candidates.slice(0, cursor).reverse()];
+    const target = order.flatMap(id => anchors.get(id) || []).find(link => {
       const opened = [];
       for (let details = link.closest('details:not([open])'); details;
            details = link.closest('details:not([open])')) {
@@ -68,6 +90,14 @@
       return false;
     });
     if (!target) return;
+    const panel = target.closest('.bf-items');
+    if (panel) {
+      const rect = target.getBoundingClientRect();
+      const localTop = rect.top - panel.getBoundingClientRect().top;
+      const savedTop = Number.isFinite(saved.panelOffset) ? saved.panelOffset : localTop;
+      const visibleTop = Math.max(0, Math.min(savedTop, panel.clientHeight - rect.height));
+      panel.scrollTop += localTop - visibleTop;
+    }
     window.scrollTo(0, Math.max(0, window.scrollY + target.getBoundingClientRect().top - saved.offset));
     target.focus({preventScroll: true});
     target.closest('.rd-card')?.classList.add('fn-focused');
@@ -76,9 +106,10 @@
   window.FetchNewsReadingContext = {
     attach(state) {
       readerState = state;
-      const filters = savedContext()?.filters;
+      const filters = savedContext(currentListUrl())?.filters;
       if (filters) {
         if (['all', 'unread', 'read', 'bookmarked'].includes(filters.filter)) state.filter = filters.filter;
+        if (['all', 'must', 'quality'].includes(filters.pickFilter)) state.pickFilter = filters.pickFilter;
         if (typeof filters.activeTag === 'string' && filters.activeTag.length <= 200) state.activeTag = filters.activeTag;
         if (typeof filters.searchQuery === 'string' && filters.searchQuery.length <= 200) state.searchQuery = filters.searchQuery;
       }
@@ -96,6 +127,33 @@
     if (target.origin !== window.location.origin || target.pathname !== '/reader/article') return;
     target.searchParams.set('returnTo', window.location.pathname + window.location.search + window.location.hash);
     link.href = target.pathname + target.search;
+  }
+
+  function nextInList(article) {
+    const context = savedContext(article.dataset.returnUrl);
+    if (!Array.isArray(context?.forwardTitles) || !Array.isArray(context.candidates)) return null;
+    const index = context.candidates.indexOf(article.dataset.link);
+    if (index < 0 || index >= context.forwardTitles.length) return null;
+    context.current = article.dataset.link;
+    try { window.sessionStorage.setItem(contextKey, JSON.stringify(context)); } catch (_) {}
+    const next = index + 1;
+    if (next >= context.forwardTitles.length || typeof context.candidates[next] !== 'string') return null;
+    const query = new URLSearchParams({link: context.candidates[next], returnTo: article.dataset.returnUrl});
+    return {url: '/reader/article?' + query, title: context.forwardTitles[next]};
+  }
+
+  function dismissMenu(menu) {
+    document.addEventListener('click', event => {
+      if (menu.open && !menu.contains(event.target)) menu.open = false;
+    });
+    menu.addEventListener('focusout', event => {
+      if (event.relatedTarget && !menu.contains(event.relatedTarget)) menu.open = false;
+    });
+    menu.addEventListener('keydown', event => {
+      if (event.key !== 'Escape' || !menu.open) return;
+      menu.open = false;
+      menu.querySelector('summary').focus();
+    });
   }
 
   function initializeOutline(article) {
@@ -125,17 +183,7 @@
       heading.focus({preventScroll: true});
       heading.scrollIntoView({block: 'start'});
     });
-    document.addEventListener('click', event => {
-      if (outline.open && !outline.contains(event.target)) outline.open = false;
-    });
-    outline.addEventListener('focusout', event => {
-      if (event.relatedTarget && !outline.contains(event.relatedTarget)) outline.open = false;
-    });
-    outline.addEventListener('keydown', event => {
-      if (event.key !== 'Escape' || !outline.open) return;
-      outline.open = false;
-      outline.querySelector('summary').focus();
-    });
+    dismissMenu(outline);
   }
 
   function initializeArticleSummary(article) {
@@ -268,6 +316,8 @@
       if (!document.body.hasAttribute('data-reader')) restorePosition();
       return;
     }
+    const preferences = document.querySelector('.article-preferences');
+    if (preferences) dismissMenu(preferences);
     initializeOutline(article);
     initializeArticleSummary(article);
     const ui = window.FetchNewsUI;
@@ -277,7 +327,13 @@
     const bookmarkLabel = article.querySelector('[data-article-bookmark-label]');
     const readState = article.querySelector('[data-article-read-state]');
     const status = article.querySelector('[data-article-save-status]');
-    const sizeButtons = [...article.querySelectorAll('[data-article-size]')];
+    const sizeButtons = [...document.querySelectorAll('button[data-article-size]')];
+    const next = nextInList(article);
+    const nextButton = article.querySelector('[data-article-next]');
+    if (next) {
+      nextButton.hidden = false;
+      nextButton.querySelector('[data-article-next-title]').textContent = next.title;
+    }
     let read = article.dataset.read === 'true';
     let bookmarked = article.dataset.bookmarked === 'true';
     let pending = null;
@@ -291,11 +347,17 @@
     setSize(ui?.storage.get('fn-article-font-size'));
     sizeButtons.forEach(button => button.addEventListener('click', () => {
       ui?.storage.set('fn-article-font-size', setSize(button.dataset.articleSize));
+      if (preferences?.open) {
+        preferences.open = false;
+        preferences.querySelector('summary').focus();
+      }
     }));
 
     function render() {
       markButton.disabled = !!pending || read;
       finishButton.disabled = !!pending;
+      nextButton.disabled = !!pending;
+      nextButton.setAttribute('aria-busy', String(pending === 'next'));
       bookmarkButton.disabled = !!pending;
       markButton.setAttribute('aria-busy', String(pending === 'read'));
       finishButton.setAttribute('aria-busy', String(pending === 'finish'));
@@ -332,9 +394,9 @@
       }
     }
 
-    async function markRead(andReturn) {
-      if (pending || (!andReturn && read)) return;
-      pending = andReturn ? 'finish' : 'read';
+    async function markRead(action) {
+      if (pending || (action === 'read' && read)) return;
+      pending = action;
       feedback('正在保存阅读状态…');
       render();
       try {
@@ -342,7 +404,8 @@
         if (result !== 'ok') throw new Error('Unexpected response');
         read = true;
         feedback('已标为已读。');
-        if (andReturn) window.location.assign(article.dataset.returnUrl);
+        if (action === 'finish') window.location.assign(article.dataset.returnUrl);
+        if (action === 'next') window.location.assign(next.url);
       } catch (_) {
         feedback('暂时无法确认已读状态，请重试。', true);
       } finally {
@@ -351,8 +414,9 @@
       }
     }
 
-    markButton.addEventListener('click', () => markRead(false));
-    finishButton.addEventListener('click', () => markRead(true));
+    markButton.addEventListener('click', () => markRead('read'));
+    finishButton.addEventListener('click', () => markRead('finish'));
+    if (next) nextButton.addEventListener('click', () => markRead('next'));
     bookmarkButton.addEventListener('click', async () => {
       if (pending) return;
       pending = 'bookmark';

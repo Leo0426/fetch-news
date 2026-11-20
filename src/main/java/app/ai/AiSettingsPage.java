@@ -1,6 +1,7 @@
 package app.ai;
 
 import java.util.List;
+import java.util.Map;
 import java.util.NoSuchElementException;
 
 public record AiSettingsPage(List<Platform> platforms, String activeId, Platform editing, AiConfig active) {
@@ -14,18 +15,20 @@ public record AiSettingsPage(List<Platform> platforms, String activeId, Platform
                         !p.config().apiKey().isBlank(),
                         p.id().equals(settings.activeProfile()),
                         false,
-                        p.models()))
+                        p.models(),
+                        p.modelCapabilities()))
                 .toList();
         Platform editing;
         if ("new".equals(selectedId))
             editing = new Platform(
                     "",
                     "",
-                    new AiConfig(null, null, settings.enabled(), "openai", "", 4096, false, "max_tokens"),
+                    new AiConfig(null, null, settings.enabled(), "openai", "", 4096, false, "auto"),
                     false,
                     false,
                     true,
-                    List.of());
+                    List.of(),
+                    Map.of());
         else {
             String selected = selectedId == null ? settings.activeProfile() : selectedId;
             editing = platforms.stream()
@@ -52,10 +55,12 @@ public record AiSettingsPage(List<Platform> platforms, String activeId, Platform
             boolean hasKey,
             boolean active,
             boolean fresh,
-            List<String> models) {
+            List<String> models,
+            Map<String, ModelCapabilities> modelCapabilities) {
         public String protocolLabel() {
             return switch (config.protocol()) {
                 case "openai" -> "OpenAI 兼容";
+                case "gemini" -> "Google Gemini";
                 case "anthropic" -> "Anthropic 兼容";
                 default -> "Ollama";
             };

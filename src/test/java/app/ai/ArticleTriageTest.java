@@ -51,6 +51,10 @@ class ArticleTriageTest {
         assertTrue(picks.quality().isEmpty());
         assertThrows(IllegalArgumentException.class, () -> triage.parsePicks("{\"mustKnow\":{}}", batch));
         assertThrows(IllegalArgumentException.class, () -> triage.parsePicks("no json here", batch));
+        assertThrows(IllegalArgumentException.class, () -> triage.parsePicks(
+                "{\"mustKnow\":[],\"quality\":[],\"quality\":[]} ", batch));
+        assertThrows(IllegalArgumentException.class, () -> triage.parsePicks(
+                "{\"mustKnow\":[],\"quality\":[]} trailing", batch));
     }
 
     @Test
